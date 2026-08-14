@@ -1,8 +1,8 @@
 import type { Activity } from "@/types/activity";
 
-// Mock activity feed data. Reps and system entries are original to Margav —
-// customer names are shared with src/data/quotes.ts so the two modules feel
-// like one connected dataset.
+// Mock activity feed data. Reps are the actual Margav team (Damon Clarke,
+// Joe Preston, Lucy Starkey, Matt Gavin) — customer names are shared with
+// src/data/quotes.ts so the two modules feel like one connected dataset.
 export const activities: Activity[] = [
   {
     id: "a-001",
@@ -15,8 +15,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-002",
-    actorName: "Owen Baxter",
-    actorInitials: "OB",
+    actorName: "Damon Clarke",
+    actorInitials: "DC",
     customerName: "David Whitfield",
     description: "Added product AIKO Neostar 3S 485w (10) to the order",
     status: "allocated",
@@ -24,8 +24,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-003",
-    actorName: "Owen Baxter",
-    actorInitials: "OB",
+    actorName: "Damon Clarke",
+    actorInitials: "DC",
     customerName: "David Whitfield",
     description: "Added product EcoFlow OCEAN 3 Inverter 6 kW (1) to the order",
     status: "allocated",
@@ -42,8 +42,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-005",
-    actorName: "Ravi Chandra",
-    actorInitials: "RC",
+    actorName: "Joe Preston",
+    actorInitials: "JP",
     customerName: "Priya Anand",
     description: "Changed the payment method to Finance Monthly Plan (10)",
     status: "allocated",
@@ -51,17 +51,17 @@ export const activities: Activity[] = [
   },
   {
     id: "a-006",
-    actorName: "Ravi Chandra",
-    actorInitials: "RC",
+    actorName: "Joe Preston",
+    actorInitials: "JP",
     customerName: "Priya Anand",
-    description: "Assigned the representative Owen Baxter to the quote",
+    description: "Assigned the representative Damon Clarke to the quote",
     status: "allocated",
     timestamp: "2026-08-12T15:47:00",
   },
   {
     id: "a-007",
-    actorName: "Megan Fairclough",
-    actorInitials: "MF",
+    actorName: "Lucy Starkey",
+    actorInitials: "LS",
     customerName: "Michael O'Rourke",
     description: "Removed product Tigo Optimiser (4) from the order",
     status: "unallocated",
@@ -69,8 +69,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-008",
-    actorName: "Megan Fairclough",
-    actorInitials: "MF",
+    actorName: "Lucy Starkey",
+    actorInitials: "LS",
     customerName: "Michael O'Rourke",
     description: "Updated product AIKO Neostar 3S 485w (14) on the order",
     status: "unallocated",
@@ -87,8 +87,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-010",
-    actorName: "Tariq Hussain",
-    actorInitials: "TH",
+    actorName: "Matt Gavin",
+    actorInitials: "MG",
     customerName: "Sian Hargreaves",
     description: "Added extra Scaffold bridging (1, price £350.00) to the order",
     status: "allocated",
@@ -96,8 +96,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-011",
-    actorName: "Tariq Hussain",
-    actorInitials: "TH",
+    actorName: "Matt Gavin",
+    actorInitials: "MG",
     customerName: "Sian Hargreaves",
     description: "Quote was created with the reference MGV-20260810-SH11",
     status: "allocated",
@@ -114,8 +114,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-013",
-    actorName: "Owen Baxter",
-    actorInitials: "OB",
+    actorName: "Damon Clarke",
+    actorInitials: "DC",
     customerName: "Tom Brannigan",
     description:
       "Changed the property details:\nAnnual consumption: 3200 -> 6100\nOccupancy type: Home all day -> Home most of the day",
@@ -124,8 +124,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-014",
-    actorName: "Ravi Chandra",
-    actorInitials: "RC",
+    actorName: "Joe Preston",
+    actorInitials: "JP",
     customerName: "Amara Okafor",
     description: "Added product EcoFlow OCEAN 2 Battery 5 kWh (2) to the order",
     status: "unallocated",
@@ -133,17 +133,17 @@ export const activities: Activity[] = [
   },
   {
     id: "a-015",
-    actorName: "Ravi Chandra",
-    actorInitials: "RC",
+    actorName: "Joe Preston",
+    actorInitials: "JP",
     customerName: "Amara Okafor",
-    description: "Assigned the representative Megan Fairclough to the quote",
+    description: "Assigned the representative Lucy Starkey to the quote",
     status: "unallocated",
     timestamp: "2026-08-08T15:40:00",
   },
   {
     id: "a-016",
-    actorName: "Megan Fairclough",
-    actorInitials: "MF",
+    actorName: "Lucy Starkey",
+    actorInitials: "LS",
     customerName: "Craig Beaumont",
     description: "Updated product Extra Full Installation Day (2) on the order",
     status: "allocated",
@@ -151,8 +151,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-017",
-    actorName: "Megan Fairclough",
-    actorInitials: "MF",
+    actorName: "Lucy Starkey",
+    actorInitials: "LS",
     customerName: "Craig Beaumont",
     description: "Added extra hand railing (4, price £25.00) to the order",
     status: "allocated",
@@ -169,8 +169,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-019",
-    actorName: "Tariq Hussain",
-    actorInitials: "TH",
+    actorName: "Matt Gavin",
+    actorInitials: "MG",
     customerName: "Freya Nicholson",
     description: "Removed product AIKO Neostar 3S 485w (2) from the order",
     status: "outcome_missing",
@@ -178,8 +178,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-020",
-    actorName: "Tariq Hussain",
-    actorInitials: "TH",
+    actorName: "Matt Gavin",
+    actorInitials: "MG",
     customerName: "Freya Nicholson",
     description: "Quote was created with the reference MGV-20260805-FN08",
     status: "outcome_missing",
@@ -187,8 +187,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-021",
-    actorName: "Owen Baxter",
-    actorInitials: "OB",
+    actorName: "Damon Clarke",
+    actorInitials: "DC",
     customerName: "Imran Qureshi",
     description: "Added product Tigo Optimiser (18) to the order",
     status: "allocated",
@@ -196,8 +196,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-022",
-    actorName: "Owen Baxter",
-    actorInitials: "OB",
+    actorName: "Damon Clarke",
+    actorInitials: "DC",
     customerName: "Imran Qureshi",
     description: "Added product AIKO Neostar 3S 485w (16) to the order",
     status: "allocated",
@@ -205,8 +205,8 @@ export const activities: Activity[] = [
   },
   {
     id: "a-023",
-    actorName: "Ravi Chandra",
-    actorInitials: "RC",
+    actorName: "Joe Preston",
+    actorInitials: "JP",
     customerName: "Holly Sutcliffe",
     description: "Appointment cancelled by the customer",
     status: "cancelled",

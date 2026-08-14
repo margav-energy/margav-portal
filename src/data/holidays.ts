@@ -1,12 +1,13 @@
 import type { HolidayRequest } from "@/types/holiday";
 
-// Mock holiday requests. Reps match those in src/data/activities.ts; postcode
-// areas are drawn from the towns used across src/data/quotes.ts.
+// Mock holiday requests. Reps match the actual Margav team used in
+// src/data/activities.ts; postcode areas are drawn from the towns used
+// across src/data/quotes.ts.
 export const holidays: HolidayRequest[] = [
   {
     id: "h-01",
-    repName: "Owen Baxter",
-    repInitials: "OB",
+    repName: "Damon Clarke",
+    repInitials: "DC",
     postcodes: ["LS", "WF"],
     startDate: "2026-08-18",
     endDate: "2026-08-22",
@@ -14,8 +15,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-02",
-    repName: "Ravi Chandra",
-    repInitials: "RC",
+    repName: "Joe Preston",
+    repInitials: "JP",
     postcodes: ["BD", "HX"],
     startDate: "2026-08-25",
     endDate: "2026-08-29",
@@ -23,8 +24,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-03",
-    repName: "Megan Fairclough",
-    repInitials: "MF",
+    repName: "Lucy Starkey",
+    repInitials: "LS",
     postcodes: ["HD", "S"],
     startDate: "2026-09-01",
     endDate: "2026-09-05",
@@ -32,8 +33,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-04",
-    repName: "Tariq Hussain",
-    repInitials: "TH",
+    repName: "Matt Gavin",
+    repInitials: "MG",
     postcodes: ["DN", "WN", "OL"],
     startDate: "2026-08-20",
     endDate: "2026-08-21",
@@ -41,8 +42,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-05",
-    repName: "Ravi Chandra",
-    repInitials: "RC",
+    repName: "Joe Preston",
+    repInitials: "JP",
     postcodes: ["BD", "HX"],
     startDate: "2026-09-14",
     endDate: "2026-09-18",
@@ -50,8 +51,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-06",
-    repName: "Owen Baxter",
-    repInitials: "OB",
+    repName: "Damon Clarke",
+    repInitials: "DC",
     postcodes: ["LS", "WF"],
     startDate: "2026-07-06",
     endDate: "2026-07-10",
@@ -59,8 +60,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-07",
-    repName: "Ravi Chandra",
-    repInitials: "RC",
+    repName: "Joe Preston",
+    repInitials: "JP",
     postcodes: ["BD", "HX"],
     startDate: "2026-06-15",
     endDate: "2026-06-19",
@@ -68,8 +69,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-08",
-    repName: "Megan Fairclough",
-    repInitials: "MF",
+    repName: "Lucy Starkey",
+    repInitials: "LS",
     postcodes: ["HD", "S"],
     startDate: "2026-05-04",
     endDate: "2026-05-08",
@@ -77,8 +78,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-09",
-    repName: "Tariq Hussain",
-    repInitials: "TH",
+    repName: "Matt Gavin",
+    repInitials: "MG",
     postcodes: ["DN", "WN", "OL"],
     startDate: "2026-04-13",
     endDate: "2026-04-17",
@@ -86,8 +87,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-10",
-    repName: "Megan Fairclough",
-    repInitials: "MF",
+    repName: "Lucy Starkey",
+    repInitials: "LS",
     postcodes: ["HD", "S"],
     startDate: "2026-02-16",
     endDate: "2026-02-20",
@@ -95,8 +96,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-11",
-    repName: "Owen Baxter",
-    repInitials: "OB",
+    repName: "Damon Clarke",
+    repInitials: "DC",
     postcodes: ["LS", "WF"],
     startDate: "2026-03-02",
     endDate: "2026-03-06",
@@ -104,8 +105,8 @@ export const holidays: HolidayRequest[] = [
   },
   {
     id: "h-12",
-    repName: "Tariq Hussain",
-    repInitials: "TH",
+    repName: "Matt Gavin",
+    repInitials: "MG",
     postcodes: ["DN", "WN", "OL"],
     startDate: "2026-08-11",
     endDate: "2026-08-12",
