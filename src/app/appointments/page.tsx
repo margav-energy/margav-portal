@@ -1,5 +1,7 @@
-import { ComingSoon } from "@/components/ui/ComingSoon";
+import { redirect } from "next/navigation";
 
+// The Appointments module is now fully built out into its sub-views; land
+// visitors of the bare route on the calendar rather than a dead end.
 export default function AppointmentsPage() {
-  return <ComingSoon title="Appointments" />;
+  redirect("/appointments/calendar");
 }

@@ -1,3 +1,5 @@
+import { ordinal } from "@/lib/date-utils";
+
 const currencyFormatter = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
@@ -45,4 +47,21 @@ export function formatDateTime(isoDateTime: string): string {
 export function formatDateRange(startIsoDate: string, endIsoDate: string): string {
   if (startIsoDate === endIsoDate) return formatDate(startIsoDate);
   return `${formatDate(startIsoDate)} – ${formatDate(endIsoDate)}`;
+}
+
+/** @param isoDateTime e.g. "2026-08-12T14:30:00" -> "Wednesday 12th, August" */
+export function formatWeekdayOrdinal(isoDateTime: string): string {
+  const date = new Date(isoDateTime);
+  const weekday = date.toLocaleDateString("en-GB", { weekday: "long" });
+  const month = date.toLocaleDateString("en-GB", { month: "long" });
+  return `${weekday} ${ordinal(date.getDate())}, ${month}`;
+}
+
+/** @param isoDateTime e.g. "2026-08-12T14:30:00" -> "2:30 PM" */
+export function formatTimeOnly(isoDateTime: string): string {
+  return new Date(isoDateTime).toLocaleTimeString("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
 }

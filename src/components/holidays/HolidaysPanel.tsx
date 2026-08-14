@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
+import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
+import { TableSearchInput } from "@/components/ui/TableSearchInput";
+import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { HolidayRow } from "@/components/holidays/HolidayRow";
-import { RepresentativeFilter } from "@/components/holidays/RepresentativeFilter";
-import { cn } from "@/lib/utils";
 import type { HolidayRequest } from "@/types/holiday";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
@@ -47,51 +48,15 @@ export function HolidaysPanel({
   return (
     <Card>
       <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:flex-wrap sm:items-center">
-        <select
-          value={pageSize}
-          onChange={(event) => setPageSize(Number(event.target.value))}
-          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700"
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-
-        <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-400 sm:max-w-xs">
-          <Search className="h-4 w-4 shrink-0" />
-          <input
-            type="search"
-            placeholder="Search.."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none placeholder:text-slate-400"
-          />
-        </label>
-
-        <RepresentativeFilter reps={reps} selected={selectedReps} onChange={setSelectedReps} />
-
-        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showAll}
-            onClick={() => setShowAll((value) => !value)}
-            className={cn(
-              "relative h-6 w-11 shrink-0 rounded-full transition-colors",
-              showAll ? "bg-brand-blue" : "bg-slate-200",
-            )}
-          >
-            <span
-              className={cn(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-                showAll ? "translate-x-5" : "translate-x-0.5",
-              )}
-            />
-          </button>
-          All holidays
-        </label>
+        <PageSizeSelect value={pageSize} options={PAGE_SIZE_OPTIONS} onChange={setPageSize} />
+        <TableSearchInput value={search} onChange={setSearch} />
+        <MultiSelectFilter
+          label="Representative"
+          options={reps}
+          selected={selectedReps}
+          onChange={setSelectedReps}
+        />
+        <ToggleSwitch checked={showAll} onChange={setShowAll} label="All holidays" />
       </div>
 
       <div className="hidden grid-cols-[1.5fr_1.3fr_1.6fr_1fr_1.2fr] gap-4 border-b border-slate-100 px-5 py-3 text-xs font-semibold tracking-wide text-slate-400 uppercase sm:grid">

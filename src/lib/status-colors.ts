@@ -2,6 +2,8 @@ import type { InstallStatus } from "@/types/quote";
 import type { ActivityStatus } from "@/types/activity";
 import type { HolidayStatus } from "@/types/holiday";
 import type { AppointmentStage } from "@/types/calendar-appointment";
+import type { ConfirmationStatus } from "@/types/ready-to-confirm";
+import type { AcceptanceStatus } from "@/types/allocated-appointment";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -100,6 +102,38 @@ export const APPOINTMENT_STAGE_STYLES: Record<
   sold: {
     label: "Sold",
     blockClassName: "bg-brand-green-end/10 text-emerald-700 border-brand-green-end/30",
+  },
+};
+
+export const CONFIRMATION_STATUS_STYLES: Record<
+  ConfirmationStatus,
+  { label: string; className: string }
+> = {
+  awaiting: {
+    label: "Awaiting",
+    className: "bg-amber-100 text-amber-700",
+  },
+  confirmed: {
+    label: "Confirmed",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  declined: {
+    label: "Declined",
+    className: "bg-red-100 text-red-700",
+  },
+};
+
+export const ACCEPTANCE_STATUS_STYLES: Record<
+  AcceptanceStatus,
+  { label: string; className: string }
+> = {
+  pending: {
+    label: "Pending",
+    className: "bg-amber-100 text-amber-700",
+  },
+  overdue: {
+    label: "Overdue",
+    className: "bg-red-100 text-red-700",
   },
 };
 

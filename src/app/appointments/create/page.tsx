@@ -1,4 +1,5 @@
-import { CreateAppointmentForm } from "@/components/appointments/CreateAppointmentForm";
+import { Suspense } from "react";
+import { CreateAppointmentFormLoader } from "@/components/appointments/CreateAppointmentFormLoader";
 
 export default function CreateAppointmentPage() {
   return (
@@ -6,7 +7,9 @@ export default function CreateAppointmentPage() {
       <h2 className="text-2xl font-semibold text-slate-900">
         Create a Calendar Appointment
       </h2>
-      <CreateAppointmentForm />
+      <Suspense fallback={null}>
+        <CreateAppointmentFormLoader />
+      </Suspense>
     </div>
   );
 }

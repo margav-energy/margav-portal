@@ -84,8 +84,18 @@ const FIELD_LABELS: Record<keyof FormValues, string> = {
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
-export function CreateAppointmentForm() {
-  const [values, setValues] = useState<FormValues>(EMPTY_FORM);
+export function CreateAppointmentForm({
+  initialFirstName,
+  initialLastName,
+}: {
+  initialFirstName?: string;
+  initialLastName?: string;
+} = {}) {
+  const [values, setValues] = useState<FormValues>(() => ({
+    ...EMPTY_FORM,
+    firstName: initialFirstName ?? "",
+    lastName: initialLastName ?? "",
+  }));
   const [errors, setErrors] = useState<FormErrors>({});
   const [addressNoticeVisible, setAddressNoticeVisible] = useState(false);
   const [isSaved, setIsSaved] = useState(false);

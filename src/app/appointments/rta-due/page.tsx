@@ -1,5 +1,5 @@
 import { getAllRtaLeads } from "@/data/rta-leads-service";
-import { RtaDueTable } from "@/components/appointments/RtaDueTable";
+import { LeadTable } from "@/components/appointments/LeadTable";
 
 export default async function RtaDuePage() {
   const leads = await getAllRtaLeads();
@@ -7,7 +7,7 @@ export default async function RtaDuePage() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">
       <h2 className="text-2xl font-semibold text-slate-900">RTA due</h2>
-      <RtaDueTable leads={leads} />
+      <LeadTable leads={leads} />
     </div>
   );
 }
