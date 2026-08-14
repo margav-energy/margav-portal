@@ -1,4 +1,4 @@
-import { Globe, Image, MapPin, Star, type LucideIcon } from "lucide-react";
+import { Award, Globe, Image, Map, type LucideIcon } from "lucide-react";
 
 export interface QuickLink {
   label: string;
@@ -9,7 +9,7 @@ export interface QuickLink {
 // Placeholder hrefs until Margav supplies the real destinations for each.
 export const QUICK_LINKS: QuickLink[] = [
   { label: "Margav Website", href: "#", icon: Globe },
-  { label: "Trustpilot", href: "#", icon: Star },
+  { label: "Trustpilot", href: "#", icon: Award },
   { label: "Install Gallery", href: "#", icon: Image },
-  { label: "Installs Map", href: "#", icon: MapPin },
+  { label: "Installs Map", href: "#", icon: Map },
 ];

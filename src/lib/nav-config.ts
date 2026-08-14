@@ -28,13 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { type: "link", label: "Dashboard", href: "/", icon: LayoutDashboard },
   { type: "link", label: "Activity Feed", href: "/activity-feed", icon: Activity },
   { type: "link", label: "Holidays", href: "/holidays", icon: CalendarDays },
-  {
-    type: "link",
-    label: "Quick Links",
-    href: "/quick-links",
-    icon: Link2,
-    comingSoon: true,
-  },
+  { type: "link", label: "Quick Links", href: "/quick-links", icon: Link2 },
   {
     type: "link",
     label: "Create Appointment",

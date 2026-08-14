@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(node screenshot-holidays.js)"
+      "Bash(node screenshot-holidays.js)",
+      "Bash(npx tsc *)",
+      "Bash(node screenshot-quicklinks.js)"
     ]
   }
 }
