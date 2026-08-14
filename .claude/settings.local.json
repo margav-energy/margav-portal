@@ -4,7 +4,12 @@
       "Bash(npm run *)",
       "Bash(node screenshot-holidays.js)",
       "Bash(npx tsc *)",
-      "Bash(node screenshot-quicklinks.js)"
+      "Bash(node screenshot-quicklinks.js)",
+      "Bash(node screenshot-create-appointment.js)",
+      "Bash(lsof -ti:3000 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'Add Create Appointment form *)"
     ]
   }
 }
