@@ -1,4 +1,5 @@
 import type { InstallStatus } from "@/types/quote";
+import type { ActivityStatus } from "@/types/activity";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -19,6 +20,32 @@ export const INSTALL_STATUS_STYLES: Record<
   completed_install: {
     label: "Completed Install",
     className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  cancelled: {
+    label: "Cancelled",
+    className: "bg-red-100 text-red-700",
+  },
+};
+
+export const ACTIVITY_STATUS_STYLES: Record<
+  ActivityStatus,
+  { label: string; className: string }
+> = {
+  allocated: {
+    label: "Allocated",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  unallocated: {
+    label: "Unallocated",
+    className: "bg-slate-100 text-slate-600",
+  },
+  ready_to_confirm: {
+    label: "Ready to Confirm",
+    className: "bg-brand-blue/10 text-brand-blue",
+  },
+  outcome_missing: {
+    label: "Outcome Missing",
+    className: "bg-amber-100 text-amber-700",
   },
   cancelled: {
     label: "Cancelled",

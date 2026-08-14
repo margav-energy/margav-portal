@@ -26,13 +26,7 @@ export type NavItem =
 
 export const NAV_ITEMS: NavItem[] = [
   { type: "link", label: "Dashboard", href: "/", icon: LayoutDashboard },
-  {
-    type: "link",
-    label: "Activity Feed",
-    href: "/activity-feed",
-    icon: Activity,
-    comingSoon: true,
-  },
+  { type: "link", label: "Activity Feed", href: "/activity-feed", icon: Activity },
   {
     type: "link",
     label: "Holidays",

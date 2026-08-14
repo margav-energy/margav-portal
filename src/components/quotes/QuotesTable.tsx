@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StatusPill } from "@/components/ui/StatusPill";
+import { Pill } from "@/components/ui/Pill";
 import { Pagination } from "@/components/ui/Pagination";
 import { PAYMENT_TYPE_LABELS } from "@/lib/status-colors";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -44,9 +45,7 @@ function QuoteRow({ quote }: { quote: Quote }) {
         {quote.installStatus ? (
           <StatusPill status={quote.installStatus} />
         ) : (
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-slate-500">
-            Sent to Sign
-          </span>
+          <Pill label="Sent to Sign" className="bg-slate-100 text-slate-500" />
         )}
       </div>
     </Link>
