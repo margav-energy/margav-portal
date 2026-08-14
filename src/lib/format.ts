@@ -40,3 +40,9 @@ export function formatDate(isoDate: string): string {
 export function formatDateTime(isoDateTime: string): string {
   return dateTimeFormatter.format(new Date(isoDateTime)).replace(",", " at");
 }
+
+/** @param startIsoDate, endIsoDate bare "YYYY-MM-DD" dates */
+export function formatDateRange(startIsoDate: string, endIsoDate: string): string {
+  if (startIsoDate === endIsoDate) return formatDate(startIsoDate);
+  return `${formatDate(startIsoDate)} – ${formatDate(endIsoDate)}`;
+}

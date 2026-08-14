@@ -1,5 +1,6 @@
 import type { InstallStatus } from "@/types/quote";
 import type { ActivityStatus } from "@/types/activity";
+import type { HolidayStatus } from "@/types/holiday";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -49,6 +50,24 @@ export const ACTIVITY_STATUS_STYLES: Record<
   },
   cancelled: {
     label: "Cancelled",
+    className: "bg-red-100 text-red-700",
+  },
+};
+
+export const HOLIDAY_STATUS_STYLES: Record<
+  HolidayStatus,
+  { label: string; className: string }
+> = {
+  pending: {
+    label: "Pending",
+    className: "bg-amber-100 text-amber-700",
+  },
+  approved: {
+    label: "Approved",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  rejected: {
+    label: "Rejected",
     className: "bg-red-100 text-red-700",
   },
 };
