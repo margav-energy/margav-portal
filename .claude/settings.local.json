@@ -11,7 +11,8 @@
       "Bash(git add *)",
       "Bash(git commit -q -m 'Add Create Appointment form *)",
       "Bash(node screenshot-calendar.js)",
-      "Bash(git commit -q -m 'Add View Calendar \\(Week/Day/Month\\) under Appointments *)"
+      "Bash(git commit -q -m 'Add View Calendar \\(Week/Day/Month\\) under Appointments *)",
+      "Bash(node screenshot-rta-due.js)"
     ]
   }
 }

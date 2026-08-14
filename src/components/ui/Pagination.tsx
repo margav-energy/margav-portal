@@ -29,7 +29,7 @@ export function Pagination({
   const pageRows = rows.slice(start, end);
 
   if (rows.length === 0) {
-    return <p className="px-5 py-6 text-sm text-slate-500">{emptyMessage}</p>;
+    return <p className="px-5 py-16 text-center text-sm text-slate-500">{emptyMessage}</p>;
   }
 
   return (

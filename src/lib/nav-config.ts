@@ -37,7 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
     comingSoon: true,
     children: [
       { label: "View calendar", href: "/appointments/calendar" },
-      { label: "RTA due", href: "/appointments" },
+      { label: "RTA due", href: "/appointments/rta-due" },
       { label: "Ready to Confirm", href: "/appointments" },
       { label: "Unallocated", href: "/appointments" },
       { label: "Allocated, not accepted", href: "/appointments" },
