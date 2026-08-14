@@ -9,7 +9,9 @@
       "Bash(lsof -ti:3000 -sTCP:LISTEN)",
       "Bash(xargs -r kill)",
       "Bash(git add *)",
-      "Bash(git commit -q -m 'Add Create Appointment form *)"
+      "Bash(git commit -q -m 'Add Create Appointment form *)",
+      "Bash(node screenshot-calendar.js)",
+      "Bash(git commit -q -m 'Add View Calendar \\(Week/Day/Month\\) under Appointments *)"
     ]
   }
 }

@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { NotificationBanner } from "@/components/layout/NotificationBanner";
 import type { CurrentUser } from "@/data/current-user";
+
+// Routes that manage their own full-screen layout (no persistent sidebar/topbar).
+const FULL_BLEED_ROUTES = ["/appointments/calendar"];
 
 export function AppShellClient({
   user,
@@ -13,7 +17,12 @@ export function AppShellClient({
   user: CurrentUser;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  if (FULL_BLEED_ROUTES.includes(pathname)) {
+    return <div className="min-h-screen bg-slate-50">{children}</div>;
+  }
 
   return (
     <div className="flex min-h-screen">

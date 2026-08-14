@@ -36,7 +36,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: CalendarClock,
     comingSoon: true,
     children: [
-      { label: "View calendar", href: "/appointments" },
+      { label: "View calendar", href: "/appointments/calendar" },
       { label: "RTA due", href: "/appointments" },
       { label: "Ready to Confirm", href: "/appointments" },
       { label: "Unallocated", href: "/appointments" },

@@ -1,6 +1,7 @@
 import type { InstallStatus } from "@/types/quote";
 import type { ActivityStatus } from "@/types/activity";
 import type { HolidayStatus } from "@/types/holiday";
+import type { AppointmentStage } from "@/types/calendar-appointment";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -69,6 +70,36 @@ export const HOLIDAY_STATUS_STYLES: Record<
   rejected: {
     label: "Rejected",
     className: "bg-red-100 text-red-700",
+  },
+};
+
+export const APPOINTMENT_STAGE_STYLES: Record<
+  AppointmentStage,
+  { label: string; blockClassName: string }
+> = {
+  allocated: {
+    label: "Allocated",
+    blockClassName: "bg-slate-100 text-slate-700 border-slate-300",
+  },
+  booked: {
+    label: "Booked",
+    blockClassName: "bg-brand-blue/10 text-brand-blue border-brand-blue/30",
+  },
+  confirmed: {
+    label: "Confirmed",
+    blockClassName: "bg-brand-green-mid/10 text-brand-green-mid border-brand-green-mid/30",
+  },
+  not_pitched: {
+    label: "Not Pitched",
+    blockClassName: "bg-amber-100 text-amber-700 border-amber-300",
+  },
+  pitch_and_miss: {
+    label: "Pitch & Miss",
+    blockClassName: "bg-red-100 text-red-700 border-red-300",
+  },
+  sold: {
+    label: "Sold",
+    blockClassName: "bg-brand-green-end/10 text-emerald-700 border-brand-green-end/30",
   },
 };
 
