@@ -246,33 +246,6 @@ export function CreateAppointmentForm({
         </FormField>
       </FormSection>
 
-      <FormSection title="Marketing details">
-        <FormField label="Source" htmlFor="source">
-          <input
-            id="source"
-            className={inputClassName}
-            value={values.source}
-            onChange={(event) => update("source", event.target.value)}
-          />
-        </FormField>
-        <FormField label="Medium" htmlFor="medium">
-          <input
-            id="medium"
-            className={inputClassName}
-            value={values.medium}
-            onChange={(event) => update("medium", event.target.value)}
-          />
-        </FormField>
-        <FormField label="Term" htmlFor="term">
-          <input
-            id="term"
-            className={inputClassName}
-            value={values.term}
-            onChange={(event) => update("term", event.target.value)}
-          />
-        </FormField>
-      </FormSection>
-
       <FormSection title="Lead notes">
         <FormField label="Notes" required htmlFor="notes" error={errors.notes}>
           <textarea

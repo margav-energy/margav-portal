@@ -1,4 +1,4 @@
-import type { InstallStatus } from "@/types/quote";
+import type { InstallStatus, QuotePipelineStatus } from "@/types/quote";
 import type { ActivityStatus } from "@/types/activity";
 import type { HolidayStatus } from "@/types/holiday";
 import type { AppointmentStage } from "@/types/calendar-appointment";
@@ -142,4 +142,27 @@ export const PAYMENT_TYPE_LABELS: Record<string, string> = {
   finance: "Finance",
   card: "Card",
   bacs: "BACS",
+};
+
+export const PRODUCT_TYPE_LABELS: Record<"solar" | "boiler", string> = {
+  solar: "Solar",
+  boiler: "Boiler",
+};
+
+export const QUOTE_PIPELINE_STATUS_STYLES: Record<
+  QuotePipelineStatus,
+  { label: string; className: string }
+> = {
+  new_lead: {
+    label: "New Lead",
+    className: "bg-sky-100 text-sky-700",
+  },
+  ready_to_pitch: {
+    label: "Ready to Pitch",
+    className: "bg-brand-blue/10 text-brand-blue",
+  },
+  locked: {
+    label: "Locked",
+    className: "bg-slate-100 text-slate-600",
+  },
 };

@@ -1,19 +1,24 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getQuoteById } from "@/data/quotes-service";
-import { QuoteDetailCard } from "@/components/quotes/QuoteDetailCard";
+import { getQuoteDetail } from "@/data/quotes-service";
+import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
+import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
+import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
+import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
 
 export default async function QuoteDetailPage({
   params,
 }: PageProps<"/quotes/[id]">) {
   const { id } = await params;
-  const quote = await getQuoteById(id);
+  const result = await getQuoteDetail(id);
 
-  if (!quote) notFound();
+  if (!result) notFound();
+
+  const { quote, detail } = result;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-4">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4">
       <Link
         href="/quotes"
         className="flex w-fit items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
@@ -21,7 +26,11 @@ export default async function QuoteDetailPage({
         <ArrowLeft className="h-4 w-4" />
         Back to all quotes
       </Link>
-      <QuoteDetailCard quote={quote} />
+      {quote.productType === "boiler" ? (
+        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} />
+      ) : (
+        <SolarQuoteDetail detail={detail as SolarQuoteDetailData} />
+      )}
     </div>
   );
 }

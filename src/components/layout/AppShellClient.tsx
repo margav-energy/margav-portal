@@ -10,6 +10,12 @@ import type { CurrentUser } from "@/data/current-user";
 // Routes that manage their own full-screen layout (no persistent sidebar/topbar).
 const FULL_BLEED_ROUTES = ["/appointments/calendar"];
 
+// The quote Presenter (/quotes/[id]/presenter) needs the same treatment but
+// is a dynamic route, so it's matched separately rather than added above.
+function isFullBleedRoute(pathname: string): boolean {
+  return FULL_BLEED_ROUTES.includes(pathname) || pathname.endsWith("/presenter");
+}
+
 export function AppShellClient({
   user,
   children,
@@ -20,7 +26,7 @@ export function AppShellClient({
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  if (FULL_BLEED_ROUTES.includes(pathname)) {
+  if (isFullBleedRoute(pathname)) {
     return <div className="min-h-screen bg-slate-50">{children}</div>;
   }
 

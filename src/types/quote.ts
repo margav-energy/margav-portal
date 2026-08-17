@@ -1,5 +1,7 @@
 export type QuoteStage = "sent_to_sign" | "signed";
 
+export type ProductType = "solar" | "boiler";
+
 export type InstallStatus =
   | "awaiting_scaffold"
   | "scaffold_removal"
@@ -9,10 +11,18 @@ export type InstallStatus =
 
 export type PaymentType = "cash" | "finance" | "card" | "bacs";
 
+/**
+ * The "All Quotes" list's own pipeline status — independent of `QuoteStage`/
+ * `InstallStatus` above (which the Dashboard's quick panels still key off).
+ */
+export type QuotePipelineStatus = "new_lead" | "ready_to_pitch" | "locked";
+
 export interface Quote {
   id: string;
   customerName: string;
   postcode: string;
+  /** Full postal address, e.g. "53 Swan Bank, Wolverhampton, WV4 5PZ" */
+  address: string;
   amount: number;
   paymentType: PaymentType;
   stage: QuoteStage;
@@ -23,4 +33,9 @@ export interface Quote {
   /** Present only when stage === "signed" */
   installStatus?: InstallStatus;
   notes?: string;
+  /** Absent means "solar" — the app's original (and still default) product line. */
+  productType?: ProductType;
+  pipelineStatus: QuotePipelineStatus;
+  /** Absent means unassigned — shown as "None" in the quotes list. */
+  representative?: string;
 }
