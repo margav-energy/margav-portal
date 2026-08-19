@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
@@ -12,6 +13,7 @@ import { PricingCard } from "@/components/quotes/detail/PricingCard";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
 import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
+import { SendForSignatureModal } from "@/components/quotes/detail/SendForSignatureModal";
 import { SolarPropertyCard } from "@/components/quotes/solar/SolarPropertyCard";
 import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
@@ -20,27 +22,17 @@ import {
   logStaxPortalAction,
   logSurveyAction,
   recordPitchOutcome,
-  sendQuote,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
-import type { CustomerDetails, FreeTextExtra, LineItem, PaymentMethodOption, QuoteNote } from "@/types/quote-detail-shared";
+import type {
+  CustomerDetails,
+  LineItem,
+  PaymentMethodOption,
+  ProfitBreakdown,
+  QuoteNote,
+} from "@/types/quote-detail-shared";
 import type { RepProfile } from "@/data/profiles-service";
-
-interface DisplayItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-}
-
-function toFreeTextDisplay(items: FreeTextExtra[]): DisplayItem[] {
-  return items.map((item) => ({ id: item.id, name: item.description, quantity: item.quantity, unitPrice: item.unitPrice }));
-}
-
-function fromFreeTextDisplay(items: DisplayItem[]): FreeTextExtra[] {
-  return items.map((item) => ({ id: item.id, description: item.name, quantity: item.quantity, unitPrice: item.unitPrice }));
-}
 
 export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailData; reps: RepProfile[] }) {
   const [locked, setLocked] = useState(detail.locked);
@@ -50,8 +42,6 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
   const [property, setProperty] = useState(detail.property);
   const [solarArrays, setSolarArrays] = useState(detail.solarArrays);
   const [extras, setExtras] = useState<LineItem[]>(detail.extras);
-  const [standardAdditionals, setStandardAdditionals] = useState<LineItem[]>(detail.standardAdditionals);
-  const [freeTextExtras, setFreeTextExtras] = useState<FreeTextExtra[]>(detail.freeTextExtras);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodOption>(
     detail.selectedPaymentMethod,
   );
@@ -59,7 +49,12 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
     detail.monthlyPlanTermYears,
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
+  const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const router = useRouter();
+
+  const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
     setSelectedPaymentMethod(method);
@@ -82,7 +77,7 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
     quoteId: detail.quoteId,
     customerName: customer.name,
     secondaryPortalLabel: "STAX Portal",
-    onSendQuote: () => void sendQuote(detail.quoteId, customer.name),
+    onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => void logStaxPortalAction(detail.quoteId, customer.name),
     onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
     onSurvey: () => void logSurveyAction(detail.quoteId, customer.name),
@@ -137,26 +132,6 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
             addLabel="Add extra"
             onItemsChange={setExtras}
           />
-          <LineItemsSection
-            quoteId={detail.quoteId}
-            customerName={customer.name}
-            section="standard_additional"
-            title="Standard Additionals"
-            items={standardAdditionals}
-            addLabel="Add standard additional"
-            onItemsChange={setStandardAdditionals}
-          />
-          <LineItemsSection
-            quoteId={detail.quoteId}
-            customerName={customer.name}
-            section="free_text"
-            title="Free-text Extras"
-            items={toFreeTextDisplay(freeTextExtras)}
-            addLabel="Add a free-text extra"
-            onItemsChange={(items) => setFreeTextExtras(fromFreeTextDisplay(items))}
-            isFreeText
-          />
-
           <NotesPanel
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -170,16 +145,33 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
           <PaymentMethodCard
             selected={selectedPaymentMethod}
             termYears={monthlyPlanTermYears}
+            totalCost={totalCost}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
           />
           <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
           <PricingCard items={detail.pricingBreakdown} />
-          <ProfitCard profit={detail.profitBreakdown} />
+          <ProfitCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            profit={profit}
+            onUpdated={setProfit}
+          />
         </div>
       </div>
 
       {isHistoryOpen && <HistoryModal history={detail.history} onClose={() => setIsHistoryOpen(false)} />}
+      {isSendModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          onClose={() => {
+            setIsSendModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { QuotePipelineStatusPill } from "@/components/ui/QuotePipelineStatusPill";
-import { PAYMENT_TYPE_LABELS, QUOTE_PIPELINE_STATUS_STYLES } from "@/lib/status-colors";
+import { PAYMENT_TYPE_LABELS, PRODUCT_TYPE_LABELS, QUOTE_PIPELINE_STATUS_STYLES } from "@/lib/status-colors";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getInitials, cn } from "@/lib/utils";
 import type { Quote } from "@/types/quote";
@@ -20,6 +20,7 @@ type SortDirection = "asc" | "desc";
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
 const GRID_COLS = "grid-cols-[2fr_1fr_1fr_1fr_1fr]";
 const STATUS_OPTIONS = Object.values(QUOTE_PIPELINE_STATUS_STYLES).map((style) => style.label);
+const PRODUCT_OPTIONS = Object.values(PRODUCT_TYPE_LABELS);
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "customerName", label: "Customer" },
@@ -35,6 +36,11 @@ function repLabel(quote: Quote): string {
 
 function statusLabel(quote: Quote): string {
   return QUOTE_PIPELINE_STATUS_STYLES[quote.pipelineStatus].label;
+}
+
+/** Absent `productType` means "solar" — see the field's doc comment on `Quote`. */
+function productLabel(quote: Quote): string {
+  return PRODUCT_TYPE_LABELS[quote.productType ?? "solar"];
 }
 
 function compareQuotes(a: Quote, b: Quote, key: SortKey): number {
@@ -59,6 +65,7 @@ export function QuotesTable({ quotes }: { quotes: Quote[] }) {
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedReps, setSelectedReps] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey | null>("sentDate");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
@@ -86,6 +93,7 @@ export function QuotesTable({ quotes }: { quotes: Quote[] }) {
     const filtered = quotes.filter((quote) => {
       if (selectedReps.length > 0 && !selectedReps.includes(repLabel(quote))) return false;
       if (selectedStatuses.length > 0 && !selectedStatuses.includes(statusLabel(quote))) return false;
+      if (selectedProducts.length > 0 && !selectedProducts.includes(productLabel(quote))) return false;
       if (
         query &&
         !quote.customerName.toLowerCase().includes(query) &&
@@ -102,7 +110,7 @@ export function QuotesTable({ quotes }: { quotes: Quote[] }) {
       const comparison = compareQuotes(a, b, sortKey);
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [quotes, search, selectedReps, selectedStatuses, sortKey, sortDirection]);
+  }, [quotes, search, selectedReps, selectedStatuses, selectedProducts, sortKey, sortDirection]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -120,6 +128,12 @@ export function QuotesTable({ quotes }: { quotes: Quote[] }) {
           options={STATUS_OPTIONS}
           selected={selectedStatuses}
           onChange={setSelectedStatuses}
+        />
+        <MultiSelectFilter
+          label="Product"
+          options={PRODUCT_OPTIONS}
+          selected={selectedProducts}
+          onChange={setSelectedProducts}
         />
       </div>
 

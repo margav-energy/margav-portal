@@ -72,6 +72,7 @@ export interface QuoteRow {
   reference: string | null;
   version: number;
   status_label: string | null;
+  dropbox_sign_request_id: string | null;
 }
 
 export function mapQuoteRow(row: QuoteRow, profiles: ProfileMap): Quote {
@@ -90,6 +91,8 @@ export function mapQuoteRow(row: QuoteRow, profiles: ProfileMap): Quote {
     productType: (row.product_type as ProductType | null) ?? undefined,
     pipelineStatus: row.pipeline_status as QuotePipelineStatus,
     representative: repName(profiles, row.representative_id),
+    sentAt: row.sent_at ?? undefined,
+    dropboxSignRequestId: row.dropbox_sign_request_id ?? undefined,
   };
 }
 
@@ -119,24 +122,25 @@ export function monthlyPlanTermYearsFor(row: QuoteRow): number | undefined {
   return row.monthly_plan_term_years ?? undefined;
 }
 
-export function mapProfitBreakdown(raw: unknown): ProfitBreakdown {
+/**
+ * `sellPrice` always mirrors the Pricing card's total (boiler/solar +
+ * install, extras, standard additionals, free-text extras) rather than
+ * being stored — only `costPrice` is a value a rep enters (persisted in
+ * `quotes.profit_breakdown` via `updateQuoteCostPrice`). `profit` and
+ * `marginPercent` derive from the two.
+ */
+export function buildProfitBreakdown(raw: unknown, sellPrice: number): ProfitBreakdown {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Partial<ProfitBreakdown>;
-  return {
-    costPrice: Number(obj.costPrice ?? 0),
-    sellPrice: Number(obj.sellPrice ?? 0),
-    profit: Number(obj.profit ?? 0),
-    marginPercent: Number(obj.marginPercent ?? 0),
-  };
+  const costPrice = Number(obj.costPrice ?? 0);
+  const profit = sellPrice - costPrice;
+  const marginPercent = sellPrice > 0 ? Math.round((profit / sellPrice) * 1000) / 10 : 0;
+  return { costPrice, sellPrice, profit, marginPercent };
 }
 
 export function mapBoilerKeyDetails(raw: unknown): BoilerKeyDetails {
   const obj = (raw && typeof raw === "object" ? raw : {}) as Partial<BoilerKeyDetails>;
   return {
     estInstallDays: Number(obj.estInstallDays ?? 1),
-    price: Number(obj.price ?? 0),
-    profit: Number(obj.profit ?? 0),
-    marginPercent: Number(obj.marginPercent ?? 0),
-    specSheetUrl: typeof obj.specSheetUrl === "string" && obj.specSheetUrl ? obj.specSheetUrl : undefined,
   };
 }
 
@@ -230,6 +234,7 @@ export interface BoilerUnitRow {
   install_type: string;
   cylinder_litres: number | string | null;
   warranty_years: number;
+  price: number | string;
   items: unknown;
   sort_order: number;
 }
@@ -246,6 +251,7 @@ export function mapBoilerUnitRow(row: BoilerUnitRow) {
     installType: row.install_type as "Combi" | "System" | "Open Vent",
     cylinderLitres: row.cylinder_litres != null ? Number(row.cylinder_litres) : undefined,
     warrantyYears: row.warranty_years,
+    price: Number(row.price ?? 0),
     items: parseLineItems(row.items),
   };
 }

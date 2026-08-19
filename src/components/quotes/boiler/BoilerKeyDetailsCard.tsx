@@ -1,15 +1,18 @@
-import { Button } from "@/components/ui/Button";
 import { Collapsible } from "@/components/quotes/detail/Collapsible";
 import { KeyDetailField } from "@/components/quotes/detail/KeyDetailField";
 import { formatCurrency } from "@/lib/format";
 import type { BoilerKeyDetails, BoilerUnit } from "@/types/boiler-quote";
+import type { ProfitBreakdown } from "@/types/quote-detail-shared";
 
 export function BoilerKeyDetailsCard({
   unit,
   keyDetails,
+  profit,
 }: {
   unit: BoilerUnit;
   keyDetails: BoilerKeyDetails;
+  /** Price/profit/margin come from here (same numbers as the Profit card below) rather than `keyDetails` — there's no data entry point that ever populates a separate copy of these on `keyDetails`, so that copy always reads as zero. */
+  profit: ProfitBreakdown;
 }) {
   return (
     <Collapsible title="Key details">
@@ -22,24 +25,10 @@ export function BoilerKeyDetailsCard({
           label="Est. Install"
           value={`${keyDetails.estInstallDays} day${keyDetails.estInstallDays === 1 ? "" : "s"}`}
         />
-        <KeyDetailField label="Price" value={formatCurrency(keyDetails.price)} />
-        <KeyDetailField label="Profit" value={formatCurrency(keyDetails.profit)} />
-        <KeyDetailField label="Margin" value={`${keyDetails.marginPercent}%`} />
+        <KeyDetailField label="Price" value={formatCurrency(profit.sellPrice)} />
+        <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} />
+        <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} />
       </div>
-      {keyDetails.specSheetUrl ? (
-        <Button
-          variant="secondary"
-          className="mt-4 w-full justify-center text-xs"
-          href={keyDetails.specSheetUrl}
-          target="_blank"
-        >
-          View spec sheet
-        </Button>
-      ) : (
-        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
-          No spec sheet uploaded yet.
-        </p>
-      )}
     </Collapsible>
   );
 }

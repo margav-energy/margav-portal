@@ -15,6 +15,7 @@ import {
   logOutcome,
   type CreateAppointmentInput,
 } from "@/data/appointments-service";
+import { createQuoteForAppointment } from "@/components/quotes/actions";
 
 const APPOINTMENT_PATHS = [
   "/appointments/calendar",
@@ -42,16 +43,33 @@ export async function createAppointmentAction(
     return { ok: false, error: "Could not save the appointment. Please try again." };
   }
 
-  await logActivity({
-    actorId: user?.id,
-    customerName: `${input.firstName} ${input.lastName}`.trim(),
-    description: input.rebookedFromId
-      ? "Rebooked a cancelled appointment"
-      : "Created a new appointment",
-    status: "unallocated",
-    entityType: "appointment",
-    entityId: result.id,
-  });
+  const customerName = `${input.firstName} ${input.lastName}`.trim();
+
+  await Promise.all([
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: input.rebookedFromId
+        ? "Rebooked a cancelled appointment"
+        : "Created a new appointment",
+      status: "unallocated",
+      entityType: "appointment",
+      entityId: result.id,
+    }),
+    // Keeps the Quotes section in sync — every new appointment gets a
+    // matching "new_lead" quote a rep can pick up once they pitch it.
+    // Wrapped so a failure here can never fail the appointment itself.
+    createQuoteForAppointment({
+      appointmentId: result.id,
+      customerName,
+      customerEmail: input.email,
+      customerPhone: input.phone,
+      postcode: input.postcode,
+      address: result.address,
+      productType: result.productType,
+      notes: input.notes,
+    }).catch((error) => console.error("createQuoteForAppointment failed", error)),
+  ]);
 
   revalidateAppointmentPaths();
   return { ok: true };

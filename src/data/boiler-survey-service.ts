@@ -1,0 +1,330 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
+import {
+  emptyBoilerSurveyAnswers,
+  type BoilerSurveyAnswers,
+  type BoilerSurveyDetail,
+  type BoilerSurveyJobContext,
+  type BoilerSurveyPhoto,
+  type BoilerSurveyStatus,
+  type PhotoChecklistItemKey,
+} from "@/types/boiler-survey";
+
+export const SURVEY_PHOTOS_BUCKET = "boiler-survey-photos";
+
+/** Every `boiler_surveys` column this module reads — kept in one place since both the authenticated and service-role paths select the same shape. */
+const SURVEY_COLUMNS = `
+  id, quote_id, access_token, status, submitted_at,
+  property_type, property_age, occupancy, landlord_permission_confirmed, access_notes, is_hmo,
+  current_boiler_make_model, current_boiler_age, current_boiler_type, current_fuel_type, known_faults,
+  current_boiler_location, current_boiler_working,
+  desired_boiler_location, reason_for_replacement, bedrooms, bathrooms, radiators, occupants,
+  simultaneous_hot_water_demand, planned_extension,
+  existing_gas_supply, gas_meter_size, current_flue_termination, flue_route_obstructions,
+  mains_water_pressure, existing_cold_water_tank, low_pressure_hard_water_history, scale_reducer_required,
+  fused_spur_present, smart_controls_requested,
+  asbestos_concerns, responsible_person_signoff, additional_notes,
+  surveyor_name, survey_date
+`;
+
+interface SurveyRow {
+  id: string;
+  quote_id: string;
+  access_token: string;
+  status: BoilerSurveyStatus;
+  submitted_at: string | null;
+  property_type: string | null;
+  property_age: string | null;
+  occupancy: string | null;
+  landlord_permission_confirmed: string | null;
+  access_notes: string | null;
+  is_hmo: string | null;
+  current_boiler_make_model: string | null;
+  current_boiler_age: string | null;
+  current_boiler_type: string | null;
+  current_fuel_type: string | null;
+  known_faults: string | null;
+  current_boiler_location: string | null;
+  current_boiler_working: string | null;
+  desired_boiler_location: string | null;
+  reason_for_replacement: string | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  radiators: number | null;
+  occupants: number | null;
+  simultaneous_hot_water_demand: string | null;
+  planned_extension: string | null;
+  existing_gas_supply: string | null;
+  gas_meter_size: string | null;
+  current_flue_termination: string | null;
+  flue_route_obstructions: string | null;
+  mains_water_pressure: string | null;
+  existing_cold_water_tank: string | null;
+  low_pressure_hard_water_history: string | null;
+  scale_reducer_required: string | null;
+  fused_spur_present: string | null;
+  smart_controls_requested: string | null;
+  asbestos_concerns: string | null;
+  responsible_person_signoff: string | null;
+  additional_notes: string | null;
+  surveyor_name: string | null;
+  survey_date: string | null;
+}
+
+function mapAnswers(row: SurveyRow): BoilerSurveyAnswers {
+  return {
+    propertyType: row.property_type ?? "",
+    propertyAge: row.property_age ?? "",
+    occupancy: row.occupancy ?? "",
+    landlordPermissionConfirmed: row.landlord_permission_confirmed ?? "",
+    accessNotes: row.access_notes ?? "",
+    isHmo: row.is_hmo ?? "",
+    currentBoilerMakeModel: row.current_boiler_make_model ?? "",
+    currentBoilerAge: row.current_boiler_age ?? "",
+    currentBoilerType: row.current_boiler_type ?? "",
+    currentFuelType: row.current_fuel_type ?? "",
+    knownFaults: row.known_faults ?? "",
+    currentBoilerLocation: row.current_boiler_location ?? "",
+    currentBoilerWorking: row.current_boiler_working ?? "",
+    desiredBoilerLocation: row.desired_boiler_location ?? "",
+    reasonForReplacement: row.reason_for_replacement ?? "",
+    bedrooms: row.bedrooms,
+    bathrooms: row.bathrooms,
+    radiators: row.radiators,
+    occupants: row.occupants,
+    simultaneousHotWaterDemand: row.simultaneous_hot_water_demand ?? "",
+    plannedExtension: row.planned_extension ?? "",
+    existingGasSupply: row.existing_gas_supply ?? "",
+    gasMeterSize: row.gas_meter_size ?? "",
+    currentFlueTermination: row.current_flue_termination ?? "",
+    flueRouteObstructions: row.flue_route_obstructions ?? "",
+    mainsWaterPressure: row.mains_water_pressure ?? "",
+    existingColdWaterTank: row.existing_cold_water_tank ?? "",
+    lowPressureHardWaterHistory: row.low_pressure_hard_water_history ?? "",
+    scaleReducerRequired: row.scale_reducer_required ?? "",
+    fusedSpurPresent: row.fused_spur_present ?? "",
+    smartControlsRequested: row.smart_controls_requested ?? "",
+    asbestosConcerns: row.asbestos_concerns ?? "",
+    responsiblePersonSignoff: row.responsible_person_signoff ?? "",
+    additionalNotes: row.additional_notes ?? "",
+    surveyorName: row.surveyor_name ?? "",
+    surveyDate: row.survey_date ?? "",
+  };
+}
+
+/** camelCase `BoilerSurveyAnswers` → the snake_case column patch `submitBoilerSurvey` writes. */
+export function serializeAnswersPatch(answers: BoilerSurveyAnswers): Record<string, unknown> {
+  return {
+    property_type: answers.propertyType || null,
+    property_age: answers.propertyAge || null,
+    occupancy: answers.occupancy || null,
+    landlord_permission_confirmed: answers.landlordPermissionConfirmed || null,
+    access_notes: answers.accessNotes || null,
+    is_hmo: answers.isHmo || null,
+    current_boiler_make_model: answers.currentBoilerMakeModel || null,
+    current_boiler_age: answers.currentBoilerAge || null,
+    current_boiler_type: answers.currentBoilerType || null,
+    current_fuel_type: answers.currentFuelType || null,
+    known_faults: answers.knownFaults || null,
+    current_boiler_location: answers.currentBoilerLocation || null,
+    current_boiler_working: answers.currentBoilerWorking || null,
+    desired_boiler_location: answers.desiredBoilerLocation || null,
+    reason_for_replacement: answers.reasonForReplacement || null,
+    bedrooms: answers.bedrooms,
+    bathrooms: answers.bathrooms,
+    radiators: answers.radiators,
+    occupants: answers.occupants,
+    simultaneous_hot_water_demand: answers.simultaneousHotWaterDemand || null,
+    planned_extension: answers.plannedExtension || null,
+    existing_gas_supply: answers.existingGasSupply || null,
+    gas_meter_size: answers.gasMeterSize || null,
+    current_flue_termination: answers.currentFlueTermination || null,
+    flue_route_obstructions: answers.flueRouteObstructions || null,
+    mains_water_pressure: answers.mainsWaterPressure || null,
+    existing_cold_water_tank: answers.existingColdWaterTank || null,
+    low_pressure_hard_water_history: answers.lowPressureHardWaterHistory || null,
+    scale_reducer_required: answers.scaleReducerRequired || null,
+    fused_spur_present: answers.fusedSpurPresent || null,
+    smart_controls_requested: answers.smartControlsRequested || null,
+    asbestos_concerns: answers.asbestosConcerns || null,
+    responsible_person_signoff: answers.responsiblePersonSignoff || null,
+    additional_notes: answers.additionalNotes || null,
+    surveyor_name: answers.surveyorName || null,
+    survey_date: answers.surveyDate || null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Portal side (authenticated) — used from the quote detail page.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Called when a rep clicks "Survey" on a boiler quote. Reuses the existing
+ * row for that quote if one already exists (one survey per quote — see the
+ * migration), otherwise creates a fresh one, and returns its access token
+ * for the launch-form QR code / link.
+ */
+export async function getOrCreateBoilerSurveyToken(
+  quoteId: string,
+): Promise<{ accessToken: string; status: BoilerSurveyStatus; created: boolean }> {
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("boiler_surveys")
+    .select("access_token, status")
+    .eq("quote_id", quoteId)
+    .maybeSingle();
+
+  if (existing) {
+    return { accessToken: existing.access_token, status: existing.status as BoilerSurveyStatus, created: false };
+  }
+
+  const { data, error } = await supabase
+    .from("boiler_surveys")
+    .insert({ quote_id: quoteId })
+    .select("access_token, status")
+    .single();
+
+  if (error || !data) {
+    throw new Error(`getOrCreateBoilerSurveyToken failed: ${error?.message ?? "no row returned"}`);
+  }
+
+  return { accessToken: data.access_token, status: data.status as BoilerSurveyStatus, created: true };
+}
+
+/** For the "Survey" card on the quote detail page. Returns `undefined` if "Survey" has never been clicked for this quote. */
+export async function getBoilerSurveyForQuote(quoteId: string): Promise<BoilerSurveyDetail | undefined> {
+  const supabase = await createClient();
+
+  const { data: row, error } = await supabase
+    .from("boiler_surveys")
+    .select(SURVEY_COLUMNS)
+    .eq("quote_id", quoteId)
+    .maybeSingle();
+
+  if (error) console.error("getBoilerSurveyForQuote failed", error);
+  if (!row) return undefined;
+
+  const surveyRow = row as SurveyRow;
+  const photos = await loadSignedPhotos(supabase, surveyRow.id);
+
+  return {
+    id: surveyRow.id,
+    status: surveyRow.status,
+    accessToken: surveyRow.access_token,
+    answers: mapAnswers(surveyRow),
+    photos,
+    submittedAt: surveyRow.submitted_at ?? undefined,
+  };
+}
+
+async function loadSignedPhotos(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `createServerClient` (ssr) and `createClient` (supabase-js) both satisfy this shape but resolve to slightly different generic instantiations.
+  supabase: SupabaseClient<any>,
+  surveyId: string,
+): Promise<BoilerSurveyPhoto[]> {
+  const { data: photoRows, error } = await supabase
+    .from("boiler_survey_photos")
+    .select("item_key, storage_path, uploaded_at")
+    .eq("survey_id", surveyId);
+
+  if (error) {
+    console.error("loadSignedPhotos failed", error);
+    return [];
+  }
+
+  const rows = (photoRows ?? []) as { item_key: PhotoChecklistItemKey; storage_path: string; uploaded_at: string }[];
+
+  const photos = await Promise.all(
+    rows.map(async (row) => {
+      const { data: signed, error: signError } = await supabase.storage
+        .from(SURVEY_PHOTOS_BUCKET)
+        .createSignedUrl(row.storage_path, 60 * 60);
+      if (signError || !signed) {
+        console.error("createSignedUrl failed", row.storage_path, signError);
+        return null;
+      }
+      return { itemKey: row.item_key, url: signed.signedUrl, uploadedAt: row.uploaded_at };
+    }),
+  );
+
+  return photos.filter((photo): photo is BoilerSurveyPhoto => photo !== null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Public side (unauthenticated, token-gated) — used by /survey/[token].
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface PublicBoilerSurvey {
+  surveyId: string;
+  status: BoilerSurveyStatus;
+  answers: BoilerSurveyAnswers;
+  photos: BoilerSurveyPhoto[];
+  job: BoilerSurveyJobContext;
+}
+
+/**
+ * Looks up a survey by its unguessable `access_token`. Returns `undefined`
+ * for an unknown/expired token — the page renders a generic "link not
+ * found" state, never a reason why.
+ *
+ * Fetches `boiler_surveys` → `quotes` → `profiles` as three separate
+ * queries rather than a PostgREST relational embed, matching how
+ * `quotes-service.ts` joins related tables everywhere else in this app.
+ */
+export async function getPublicBoilerSurvey(token: string): Promise<PublicBoilerSurvey | undefined> {
+  if (!token) return undefined;
+  const supabase = createServiceRoleClient();
+
+  const { data: row, error } = await supabase
+    .from("boiler_surveys")
+    .select(SURVEY_COLUMNS)
+    .eq("access_token", token)
+    .maybeSingle();
+
+  if (error) console.error("getPublicBoilerSurvey failed", error);
+  if (!row) return undefined;
+
+  const surveyRow = row as SurveyRow;
+
+  const [{ data: quote, error: quoteError }, photos] = await Promise.all([
+    supabase
+      .from("quotes")
+      .select("id, reference, customer_name, customer_phone, customer_email, customer_address_lines, representative_id")
+      .eq("id", surveyRow.quote_id)
+      .maybeSingle(),
+    loadSignedPhotos(supabase, surveyRow.id),
+  ]);
+
+  if (quoteError) console.error("getPublicBoilerSurvey quote lookup failed", quoteError);
+
+  let repName = "Unassigned";
+  if (quote?.representative_id) {
+    const { data: rep } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", quote.representative_id)
+      .maybeSingle();
+    repName = rep?.full_name || repName;
+  }
+
+  return {
+    surveyId: surveyRow.id,
+    status: surveyRow.status,
+    answers: mapAnswers(surveyRow),
+    photos,
+    job: {
+      quoteId: quote?.id ?? "",
+      reference: quote?.reference || quote?.id || "",
+      repName,
+      customerName: quote?.customer_name ?? "",
+      phone: quote?.customer_phone ?? "",
+      email: quote?.customer_email ?? "",
+      addressLines: quote?.customer_address_lines ?? [],
+    },
+  };
+}
+
+export { emptyBoilerSurveyAnswers };

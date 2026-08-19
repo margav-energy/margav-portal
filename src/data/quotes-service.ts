@@ -4,6 +4,7 @@ import { getAllProfiles } from "@/data/profiles-service";
 import {
   buildPricingBreakdown,
   buildProfileMap,
+  buildProfitBreakdown,
   mapBoilerKeyDetails,
   mapBoilerPropertyDetails,
   mapBoilerUnitRow,
@@ -12,7 +13,6 @@ import {
   mapHistoryRow,
   mapLineItemRow,
   mapNoteRow,
-  mapProfitBreakdown,
   mapQuoteRow,
   mapSolarArrayRow,
   mapSolarKeyDetails,
@@ -41,7 +41,7 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  */
 
 const QUOTE_COLUMNS =
-  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label";
+  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
 
 const ARCHIVE_AFTER_YEARS = 5;
 
@@ -148,7 +148,7 @@ export async function getQuoteDetail(
     isBoiler
       ? supabase
           .from("boiler_units")
-          .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, items, sort_order")
+          .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, price, items, sort_order")
           .eq("quote_id", id)
           .order("sort_order", { ascending: true })
       : supabase
@@ -208,7 +208,6 @@ export async function getQuoteDetail(
     selectedPaymentMethod: selectedPaymentMethodFor(row),
     monthlyPlanTermYears: monthlyPlanTermYearsFor(row),
     pricingBreakdown: [] as BoilerQuoteDetail["pricingBreakdown"],
-    profitBreakdown: mapProfitBreakdown(row.profit_breakdown),
     notes,
     history,
   };
@@ -222,7 +221,10 @@ export async function getQuoteDetail(
   if (isBoiler) {
     const unitRows = (unitsResult.data ?? []) as BoilerUnitRow[];
     const boilerUnits = unitRows.map(mapBoilerUnitRow);
-    const unitsTotal = sumLineItems(boilerUnits.flatMap((unit) => unit.items));
+    const unitsTotal =
+      boilerUnits.reduce((sum, unit) => sum + unit.price, 0) +
+      sumLineItems(boilerUnits.flatMap((unit) => unit.items));
+    const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
 
     const detail: BoilerQuoteDetail = {
       quoteId: row.id,
@@ -236,6 +238,7 @@ export async function getQuoteDetail(
         { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
         { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
       ]),
+      profitBreakdown: buildProfitBreakdown(row.profit_breakdown, sellPrice),
     };
 
     return { quote, detail };
@@ -244,6 +247,7 @@ export async function getQuoteDetail(
   const arrayRows = (unitsResult.data ?? []) as SolarArrayRow[];
   const solarArrays = arrayRows.map(mapSolarArrayRow);
   const arraysTotal = sumLineItems(solarArrays.flatMap((array) => array.items));
+  const sellPrice = arraysTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
 
   const detail: SolarQuoteDetail = {
     quoteId: row.id,
@@ -257,6 +261,7 @@ export async function getQuoteDetail(
       { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
       { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
     ]),
+    profitBreakdown: buildProfitBreakdown(row.profit_breakdown, sellPrice),
   };
 
   return { quote, detail };

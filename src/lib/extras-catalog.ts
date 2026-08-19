@@ -9,20 +9,21 @@ export interface ExtraCatalogEntry {
   defaultUnitPrice: number;
   /** Always £0 — shown struck through rather than editable. */
   lockedPrice?: boolean;
-  /** At most one entry from the same group can be on a quote at once. */
-  group?: string;
 }
 
-export const INSTALLATION_ALTERNATIVE_GROUP = "installation-alternative";
-
 export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
-  { name: "Gateway with Comfort Touch", defaultUnitPrice: 0, lockedPrice: true },
-  { name: "Roof kit", defaultUnitPrice: 0 },
-  { name: "Gas run", defaultUnitPrice: 0 },
-  { name: "Flue extension", defaultUnitPrice: 0 },
-  { name: "Relocation", defaultUnitPrice: 0, group: INSTALLATION_ALTERNATIVE_GROUP },
-  { name: "Extra half-day installation", defaultUnitPrice: 0, group: INSTALLATION_ALTERNATIVE_GROUP },
-  { name: "Extra full-day installation", defaultUnitPrice: 0, group: INSTALLATION_ALTERNATIVE_GROUP },
+  /** Worth £120, but included at no extra charge — shown struck through, charged as £0. */
+  { name: "Gateway with Comfort Touch", defaultUnitPrice: 120, lockedPrice: true },
+  /** £150 one-off — quantity stays 1. */
+  { name: "Roof kit", defaultUnitPrice: 150 },
+  /** £55 per metre — quantity is the number of metres. */
+  { name: "Gas run", defaultUnitPrice: 55 },
+  /** £100 per metre (vertical flue) — quantity is the number of metres. */
+  { name: "Flue extension", defaultUnitPrice: 100 },
+  /** £500 one-off — quantity stays 1. Independent of the two "Extra ... installation" entries below — a quote can carry any combination of these three. */
+  { name: "Relocation", defaultUnitPrice: 500 },
+  { name: "Extra half-day installation", defaultUnitPrice: 0 },
+  { name: "Extra full-day installation", defaultUnitPrice: 0 },
 ];
 
 export function findCatalogEntry(name: string): ExtraCatalogEntry | undefined {

@@ -333,8 +333,16 @@ function combineAddress(input: CreateAppointmentInput): string {
     .join(", ");
 }
 
-export async function createAppointment(input: CreateAppointmentInput): Promise<{ id: string } | null> {
+export interface CreatedAppointment {
+  id: string;
+  address: string;
+  productType: "solar" | "boiler";
+}
+
+export async function createAppointment(input: CreateAppointmentInput): Promise<CreatedAppointment | null> {
   const supabase = await createClient();
+  const address = combineAddress(input);
+  const productType = mapProductToType(input.product);
 
   const { data, error } = await supabase
     .from("appointments")
@@ -344,11 +352,11 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
       phone: input.phone,
       email: input.email || null,
       postcode: input.postcode,
-      address: combineAddress(input),
+      address,
       source: input.source || null,
       medium: input.medium || null,
       term: input.term || null,
-      product_type: mapProductToType(input.product),
+      product_type: productType,
       notes: input.notes,
       appointment_date: input.date,
       start_time: input.time,
@@ -366,7 +374,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
     return null;
   }
 
-  return { id: data.id as string };
+  return { id: data.id as string, address, productType };
 }
 
 export async function allocateAppointment(id: string, repId: string): Promise<boolean> {

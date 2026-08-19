@@ -38,4 +38,8 @@ export interface Quote {
   pipelineStatus: QuotePipelineStatus;
   /** Absent means unassigned — shown as "None" in the quotes list. */
   representative?: string;
+  /** ISO datetime — set when "Send Quote" last successfully sent this quote for e-signature. Absent if never sent. */
+  sentAt?: string;
+  /** Dropbox Sign's signature_request_id, for audit/support lookup — the e-sign webhook keys off `metadata.quoteId` instead, not this. */
+  dropboxSignRequestId?: string;
 }

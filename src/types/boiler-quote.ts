@@ -34,6 +34,8 @@ export interface BoilerUnit {
   /** Litres. Absent for combi boilers, which have no separate cylinder. */
   cylinderLitres?: number;
   warrantyYears: number;
+  /** The boiler's own price — separate from `items`, which are its add-ons. */
+  price: number;
   items: LineItem[];
 }
 
@@ -52,11 +54,6 @@ export interface BoilerPropertyDetails {
 
 export interface BoilerKeyDetails {
   estInstallDays: number;
-  price: number;
-  profit: number;
-  marginPercent: number;
-  /** Optional external URL, stored in `quotes.key_details`. No upload UI — set manually/by another integration. */
-  specSheetUrl?: string;
 }
 
 export interface BoilerQuoteDetail {

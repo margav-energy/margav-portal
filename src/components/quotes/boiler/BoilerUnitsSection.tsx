@@ -14,8 +14,19 @@ import type { LineItem } from "@/types/quote-detail-shared";
 const FUEL_TYPES: FuelType[] = ["Mains Gas", "LPG", "Oil"];
 const FLUE_TYPES: FlueType[] = ["Horizontal", "Vertical"];
 const INSTALL_TYPES: BoilerInstallType[] = ["Combi", "System", "Open Vent"];
+/** The only output sizes Margav stocks. */
+const OUTPUT_KW_OPTIONS = [24, 30, 36];
+/** Common cylinder sizes — combi boilers leave this unset instead. */
+const CYLINDER_LITRE_OPTIONS = [120, 150, 180, 210, 250, 300];
 
 let localIdCounter = 0;
+
+/** Preset options plus a legacy value that predates the preset list, so editing an old unit never silently changes it. */
+function withLegacyValue(options: number[], current: string): number[] {
+  const parsed = Number(current);
+  if (!current || !Number.isFinite(parsed) || options.includes(parsed)) return options;
+  return [...options, parsed].sort((a, b) => a - b);
+}
 
 function specLine(unit: BoilerUnit): string {
   const parts = [`${unit.outputKw}kW`, unit.installType, unit.fuelType, `${unit.flueType} Flue`];
@@ -24,10 +35,11 @@ function specLine(unit: BoilerUnit): string {
   return parts.join(" · ");
 }
 
-type UnitForm = Omit<BoilerUnit, "id" | "outputKw" | "cylinderLitres" | "warrantyYears" | "items"> & {
+type UnitForm = Omit<BoilerUnit, "id" | "outputKw" | "cylinderLitres" | "warrantyYears" | "price" | "items"> & {
   outputKw: string;
   cylinderLitres: string;
   warrantyYears: string;
+  price: string;
   items: LineItem[];
 };
 
@@ -36,12 +48,13 @@ function toForm(unit?: BoilerUnit): UnitForm {
     label: unit?.label ?? "",
     make: unit?.make ?? "",
     model: unit?.model ?? "",
-    outputKw: unit ? String(unit.outputKw) : "",
+    outputKw: unit ? String(unit.outputKw) : String(OUTPUT_KW_OPTIONS[0]),
     fuelType: unit?.fuelType ?? "Mains Gas",
     flueType: unit?.flueType ?? "Horizontal",
     installType: unit?.installType ?? "Combi",
     cylinderLitres: unit?.cylinderLitres != null ? String(unit.cylinderLitres) : "",
     warrantyYears: unit ? String(unit.warrantyYears) : "",
+    price: unit ? String(unit.price) : "",
     items: unit?.items ?? [],
   };
 }
@@ -93,6 +106,7 @@ function UnitFormModal({
       installType: form.installType,
       cylinderLitres: form.cylinderLitres ? Number(form.cylinderLitres) : undefined,
       warrantyYears: Number(form.warrantyYears) || 0,
+      price: Number(form.price) || 0,
       items: form.items.filter((item) => item.name.trim().length > 0),
     });
     onClose();
@@ -126,12 +140,28 @@ function UnitFormModal({
           />
         </FormField>
         <FormField label="Output (kW)" htmlFor="unit-output">
-          <input
+          <select
             id="unit-output"
-            type="number"
             className={inputClassName}
             value={form.outputKw}
             onChange={(event) => set("outputKw", event.target.value)}
+          >
+            {withLegacyValue(OUTPUT_KW_OPTIONS, form.outputKw).map((kw) => (
+              <option key={kw} value={kw}>
+                {kw}kW
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Price (£)" htmlFor="unit-price">
+          <input
+            id="unit-price"
+            type="number"
+            min="0"
+            step="0.01"
+            className={inputClassName}
+            value={form.price}
+            onChange={(event) => set("price", event.target.value)}
           />
         </FormField>
         <FormField label="Fuel Type" htmlFor="unit-fuel">
@@ -177,14 +207,19 @@ function UnitFormModal({
           </select>
         </FormField>
         <FormField label="Cylinder (L)" htmlFor="unit-cylinder">
-          <input
+          <select
             id="unit-cylinder"
-            type="number"
             className={inputClassName}
             value={form.cylinderLitres}
             onChange={(event) => set("cylinderLitres", event.target.value)}
-            placeholder="Leave blank for combi"
-          />
+          >
+            <option value="">None (combi)</option>
+            {withLegacyValue(CYLINDER_LITRE_OPTIONS, form.cylinderLitres).map((litres) => (
+              <option key={litres} value={litres}>
+                {litres}L
+              </option>
+            ))}
+          </select>
         </FormField>
         <FormField label="Warranty (years)" htmlFor="unit-warranty">
           <input
@@ -295,13 +330,16 @@ export function BoilerUnitsSection({
               </p>
               <p className="text-sm text-slate-500">{specLine(unit)}</p>
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setEditingUnit(unit)}>
-                Edit
-              </Button>
-              <Button variant="danger" className="px-3 py-1.5 text-xs" onClick={() => handleRemove(unit)}>
-                Remove
-              </Button>
+            <div className="flex shrink-0 items-center gap-3">
+              <p className="text-sm font-semibold text-slate-900">{formatCurrency(unit.price)}</p>
+              <div className="flex shrink-0 gap-2">
+                <Button variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setEditingUnit(unit)}>
+                  Edit
+                </Button>
+                <Button variant="danger" className="px-3 py-1.5 text-xs" onClick={() => handleRemove(unit)}>
+                  Remove
+                </Button>
+              </div>
             </div>
           </div>
           {unit.items.map((item) => (

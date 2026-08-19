@@ -1,7 +1,8 @@
 import { Card } from "@/components/ui/Card";
 import { inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
-import { aprForTermYears, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
+import { formatCurrency } from "@/lib/format";
+import { aprForTermYears, monthlyRepayment, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
 import type { PaymentMethodOption } from "@/types/quote-detail-shared";
 
 const PAYMENT_OPTIONS: { value: PaymentMethodOption; heading: string; category: string }[] = [
@@ -12,12 +13,15 @@ const PAYMENT_OPTIONS: { value: PaymentMethodOption; heading: string; category: 
 export function PaymentMethodCard({
   selected,
   termYears,
+  totalCost,
   onSelect,
   onChangeTermYears,
 }: {
   selected: PaymentMethodOption;
   /** Only meaningful when `selected === "monthly_plan"`. */
   termYears: number | undefined;
+  /** The quote's total (Pricing card sum) — the principal the monthly repayment is calculated on. */
+  totalCost: number;
   onSelect: (option: PaymentMethodOption) => void;
   onChangeTermYears: (years: number) => void;
 }) {
@@ -57,25 +61,36 @@ export function PaymentMethodCard({
       </div>
 
       {selected === "monthly_plan" && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-          <label htmlFor="monthly-plan-term" className="text-sm text-slate-600">
-            Term
-          </label>
-          <div className="flex items-center gap-2">
-            <select
-              id="monthly-plan-term"
-              className={cn(inputClassName, "w-auto py-1.5")}
-              value={termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1]}
-              onChange={(event) => onChangeTermYears(Number(event.target.value))}
-            >
-              {MONTHLY_PLAN_TERM_YEARS.map((years) => (
-                <option key={years} value={years}>
-                  {years} year{years === 1 ? "" : "s"}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs font-medium text-slate-400">
-              {aprForTermYears(termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1])}% APR
+        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="monthly-plan-term" className="text-sm text-slate-600">
+              Term
+            </label>
+            <div className="flex items-center gap-2">
+              <select
+                id="monthly-plan-term"
+                className={cn(inputClassName, "w-auto py-1.5")}
+                value={termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1]}
+                onChange={(event) => onChangeTermYears(Number(event.target.value))}
+              >
+                {MONTHLY_PLAN_TERM_YEARS.map((years) => (
+                  <option key={years} value={years}>
+                    {years} year{years === 1 ? "" : "s"}
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs font-medium text-slate-400">
+                {aprForTermYears(termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1])}% APR
+              </span>
+            </div>
+          </div>
+          <div className="flex items-baseline justify-between border-t border-slate-200 pt-2">
+            <span className="text-sm text-slate-600">Monthly payment</span>
+            <span className="text-sm font-semibold text-slate-900">
+              {formatCurrency(
+                monthlyRepayment(totalCost, termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1]),
+              )}
+              /mo
             </span>
           </div>
         </div>

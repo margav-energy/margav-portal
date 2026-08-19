@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
@@ -12,38 +13,39 @@ import { PricingCard } from "@/components/quotes/detail/PricingCard";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
 import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
+import { SendForSignatureModal } from "@/components/quotes/detail/SendForSignatureModal";
 import { BoilerPropertyCard } from "@/components/quotes/boiler/BoilerPropertyCard";
 import { BoilerUnitsSection } from "@/components/quotes/boiler/BoilerUnitsSection";
 import { BoilerKeyDetailsCard } from "@/components/quotes/boiler/BoilerKeyDetailsCard";
+import { BoilerSurveyCard } from "@/components/quotes/boiler/BoilerSurveyCard";
+import { BoilerSurveyLaunchModal } from "@/components/quotes/boiler/BoilerSurveyLaunchModal";
 import { EXTRAS_CATALOG } from "@/lib/extras-catalog";
 import {
   cancelQuoteAppointment,
-  logSurveyAction,
   logWarrantyRegistration,
   recordPitchOutcome,
-  sendQuote,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
-import type { CustomerDetails, FreeTextExtra, LineItem, PaymentMethodOption, QuoteNote } from "@/types/quote-detail-shared";
+import type { BoilerSurveyDetail } from "@/types/boiler-survey";
+import type {
+  CustomerDetails,
+  LineItem,
+  PaymentMethodOption,
+  ProfitBreakdown,
+  QuoteNote,
+} from "@/types/quote-detail-shared";
 import type { RepProfile } from "@/data/profiles-service";
 
-interface DisplayItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unitPrice: number;
-}
-
-function toFreeTextDisplay(items: FreeTextExtra[]): DisplayItem[] {
-  return items.map((item) => ({ id: item.id, name: item.description, quantity: item.quantity, unitPrice: item.unitPrice }));
-}
-
-function fromFreeTextDisplay(items: DisplayItem[]): FreeTextExtra[] {
-  return items.map((item) => ({ id: item.id, description: item.name, quantity: item.quantity, unitPrice: item.unitPrice }));
-}
-
-export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailData; reps: RepProfile[] }) {
+export function BoilerQuoteDetail({
+  detail,
+  reps,
+  survey,
+}: {
+  detail: BoilerQuoteDetailData;
+  reps: RepProfile[];
+  survey: BoilerSurveyDetail | undefined;
+}) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
@@ -51,8 +53,6 @@ export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailD
   const [property, setProperty] = useState(detail.property);
   const [boilerUnits, setBoilerUnits] = useState(detail.boilerUnits);
   const [extras, setExtras] = useState<LineItem[]>(detail.extras);
-  const [standardAdditionals, setStandardAdditionals] = useState<LineItem[]>(detail.standardAdditionals);
-  const [freeTextExtras, setFreeTextExtras] = useState<FreeTextExtra[]>(detail.freeTextExtras);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodOption>(
     detail.selectedPaymentMethod,
   );
@@ -60,7 +60,13 @@ export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailD
     detail.monthlyPlanTermYears,
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
+  const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const router = useRouter();
+
+  const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
     setSelectedPaymentMethod(method);
@@ -85,10 +91,10 @@ export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailD
     quoteId: detail.quoteId,
     customerName: customer.name,
     secondaryPortalLabel: "Warranty Registration",
-    onSendQuote: () => void sendQuote(detail.quoteId, customer.name),
+    onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => void logWarrantyRegistration(detail.quoteId, customer.name),
     onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
-    onSurvey: () => void logSurveyAction(detail.quoteId, customer.name),
+    onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
   });
 
@@ -141,26 +147,6 @@ export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailD
             onItemsChange={setExtras}
             catalog={EXTRAS_CATALOG}
           />
-          <LineItemsSection
-            quoteId={detail.quoteId}
-            customerName={customer.name}
-            section="standard_additional"
-            title="Standard Additionals"
-            items={standardAdditionals}
-            addLabel="Add standard additional"
-            onItemsChange={setStandardAdditionals}
-          />
-          <LineItemsSection
-            quoteId={detail.quoteId}
-            customerName={customer.name}
-            section="free_text"
-            title="Free-text Extras"
-            items={toFreeTextDisplay(freeTextExtras)}
-            addLabel="Add a free-text extra"
-            onItemsChange={(items) => setFreeTextExtras(fromFreeTextDisplay(items))}
-            isFreeText
-          />
-
           <NotesPanel
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -174,16 +160,45 @@ export function BoilerQuoteDetail({ detail, reps }: { detail: BoilerQuoteDetailD
           <PaymentMethodCard
             selected={selectedPaymentMethod}
             termYears={monthlyPlanTermYears}
+            totalCost={totalCost}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
           />
-          {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} />}
+          {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
           <PricingCard items={detail.pricingBreakdown} />
-          <ProfitCard profit={detail.profitBreakdown} />
+          <ProfitCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            profit={profit}
+            onUpdated={setProfit}
+          />
+          <BoilerSurveyCard survey={survey} />
         </div>
       </div>
 
       {isHistoryOpen && <HistoryModal history={detail.history} onClose={() => setIsHistoryOpen(false)} />}
+      {isSurveyModalOpen && (
+        <BoilerSurveyLaunchModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          survey={survey}
+          onClose={() => {
+            setIsSurveyModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isSendModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          onClose={() => {
+            setIsSendModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getAllProfiles } from "@/data/profiles-service";
+import { getBoilerSurveyForQuote } from "@/data/boiler-survey-service";
 import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
 import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
@@ -17,6 +18,8 @@ export default async function QuoteDetailPage({
   if (!result) notFound();
 
   const { quote, detail } = result;
+  const isBoiler = quote.productType === "boiler";
+  const survey = isBoiler ? await getBoilerSurveyForQuote(id) : undefined;
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
@@ -27,8 +30,8 @@ export default async function QuoteDetailPage({
         <ArrowLeft className="h-4 w-4" />
         Back to all quotes
       </Link>
-      {quote.productType === "boiler" ? (
-        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} reps={reps} />
+      {isBoiler ? (
+        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} reps={reps} survey={survey} />
       ) : (
         <SolarQuoteDetail detail={detail as SolarQuoteDetailData} reps={reps} />
       )}

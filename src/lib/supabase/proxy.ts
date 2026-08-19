@@ -3,7 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 // Routes reachable while signed out. Everything else redirects to /login.
-const PUBLIC_PATHS = ["/login"];
+// `/survey` is the on-site pre-installation survey form — surveyors open it
+// via a QR code / link with no portal account, authenticated instead by the
+// unguessable token in the URL (see supabase/migrations/0007_boiler_surveys.sql).
+// `/api/dropbox-sign` is the Dropbox Sign webhook (src/app/api/dropbox-sign/webhook/route.ts)
+// — Dropbox Sign's servers call it directly with no Supabase session, and
+// verify authenticity themselves via an HMAC signature instead.
+const PUBLIC_PATHS = ["/login", "/survey", "/api/dropbox-sign"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

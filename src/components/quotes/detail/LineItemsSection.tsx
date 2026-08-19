@@ -24,7 +24,6 @@ function ItemFormModal({
   fieldLabel,
   initial,
   catalog,
-  currentItems,
   onClose,
   onSave,
 }: {
@@ -33,7 +32,6 @@ function ItemFormModal({
   initial?: DisplayItem;
   /** When set, shows a "Preset" picker above the free-text field (used by the Extras section). */
   catalog?: ExtraCatalogEntry[];
-  currentItems?: DisplayItem[];
   onClose: () => void;
   onSave: (item: { name: string; quantity: number; unitPrice: number }) => void;
 }) {
@@ -75,21 +73,11 @@ function ItemFormModal({
               onChange={(event) => handleSelectPreset(event.target.value)}
             >
               <option value={CUSTOM_OPTION}>Custom…</option>
-              {catalog.map((entry) => {
-                const conflicting = Boolean(
-                  entry.group &&
-                    entry.name !== initial?.name &&
-                    currentItems?.some(
-                      (item) => item.name !== initial?.name && findCatalogEntry(item.name)?.group === entry.group,
-                    ),
-                );
-                return (
-                  <option key={entry.name} value={entry.name} disabled={conflicting}>
-                    {entry.name}
-                    {conflicting ? " (already added — pick one)" : ""}
-                  </option>
-                );
-              })}
+              {catalog.map((entry) => (
+                <option key={entry.name} value={entry.name}>
+                  {entry.name}
+                </option>
+              ))}
             </select>
           </FormField>
         )}
@@ -268,7 +256,6 @@ export function LineItemsSection({
           title={addLabel}
           fieldLabel={fieldLabel}
           catalog={catalog}
-          currentItems={items}
           onClose={() => setIsAdding(false)}
           onSave={handleAdd}
         />
@@ -279,7 +266,6 @@ export function LineItemsSection({
           fieldLabel={fieldLabel}
           initial={editingItem}
           catalog={catalog}
-          currentItems={items}
           onClose={() => setEditingItem(null)}
           onSave={handleEdit}
         />

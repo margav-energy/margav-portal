@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
+import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
+import { getQuoteDetail } from "@/data/quotes-service";
+import { buildMergeFields, isDropboxSignConfigured, sendQuoteForSignature } from "@/lib/dropbox-sign";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
+import { formatCurrency } from "@/lib/format";
 import {
   mapFreeTextRow,
   mapLineItemRow,
@@ -52,6 +56,17 @@ async function insertQuoteHistory(params: {
   } catch (error) {
     console.error("insertQuoteHistory failed", error);
   }
+}
+
+/**
+ * The Customer details card (CustomerCard.tsx) reads its address from
+ * `customer_address_lines`, not the flat `address`/`postcode` columns —
+ * without this, a quote created here shows a blank address on its own
+ * detail page even though the Quotes list (which reads `address` directly)
+ * displays it fine.
+ */
+function buildCustomerAddressLines(address: string, postcode: string): string[] {
+  return [address.trim(), postcode.trim()].filter(Boolean);
 }
 
 function revalidateQuote(quoteId: string) {
@@ -111,6 +126,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
       customer_name: customerName,
       postcode: input.postcode.trim(),
       address: input.address.trim(),
+      customer_address_lines: buildCustomerAddressLines(input.address, input.postcode),
       product_type: input.productType,
       amount: input.amount,
       payment_type: input.paymentType,
@@ -138,6 +154,77 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
     status: "allocated",
     entityType: "quote",
     entityId: data.id,
+  });
+
+  revalidatePath("/quotes");
+
+  return { id: data.id as string };
+}
+
+export interface CreateQuoteForAppointmentInput {
+  appointmentId: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  postcode: string;
+  address: string;
+  productType: "solar" | "boiler";
+  notes?: string | null;
+}
+
+/**
+ * Auto-creates the placeholder "new_lead" quote that backs a freshly
+ * created appointment — called from `createAppointmentAction` in
+ * `src/components/appointments/actions.ts` so the Quotes section stays in
+ * sync with the Appointments pipeline. Unassigned and £0 until a rep pitches
+ * it, same shape as a manual "Quick-create" quote. `appointment_id` is
+ * unique per appointment (see migration `0006_quotes_appointment_link.sql`),
+ * so a retried call for the same appointment fails the unique index instead
+ * of creating a second quote.
+ */
+export async function createQuoteForAppointment(
+  input: CreateQuoteForAppointmentInput,
+): Promise<CreateQuoteResult> {
+  const customerName = input.customerName.trim();
+  if (!customerName) return { error: "Customer name is required." };
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("quotes")
+    .insert({
+      appointment_id: input.appointmentId,
+      customer_name: customerName,
+      customer_email: input.customerEmail || null,
+      customer_phone: input.customerPhone || null,
+      postcode: input.postcode.trim(),
+      address: input.address.trim(),
+      customer_address_lines: buildCustomerAddressLines(input.address, input.postcode),
+      product_type: input.productType,
+      notes: input.notes || null,
+      pipeline_status: "new_lead",
+      sent_date: new Date().toISOString().slice(0, 10),
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    console.error("createQuoteForAppointment failed", error);
+    return { error: "Could not create the linked quote. Please try again." };
+  }
+
+  await insertQuoteHistory({
+    quoteId: data.id,
+    isSystem: true,
+    description: "Quote auto-created from a new appointment",
+  });
+  await logActivity({
+    customerName,
+    description: `New appointment auto-created a quote for ${customerName}`,
+    status: "unallocated",
+    entityType: "quote",
+    entityId: data.id,
+    isSystem: true,
   });
 
   revalidatePath("/quotes");
@@ -331,6 +418,45 @@ export async function updateQuotePropertyDetails(
 }
 
 /**
+ * The only value a rep enters for the Profit card — `sellPrice` always
+ * mirrors the Pricing card's total instead of being stored (see
+ * `buildProfitBreakdown` in `src/data/quotes-mappers.ts`), so this is the
+ * one write needed to make `profit`/`marginPercent` calculate.
+ */
+export async function updateQuoteCostPrice(
+  quoteId: string,
+  costPrice: number,
+  customerName: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({ profit_breakdown: { costPrice } })
+    .eq("id", quoteId);
+
+  if (error) {
+    console.error("updateQuoteCostPrice failed", error);
+    return false;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: `Set cost price to ${formatCurrency(costPrice)}` }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Updated cost price — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return true;
+}
+
+/**
  * `termYears` is only meaningful (and only persisted) when `method` is
  * "monthly_plan" — see src/lib/finance.ts for the term/APR rule.
  */
@@ -401,6 +527,7 @@ export async function createBoilerUnit(
       install_type: unit.installType,
       cylinder_litres: unit.cylinderLitres ?? null,
       warranty_years: unit.warrantyYears,
+      price: unit.price,
       items: serializeLineItems(unit.items),
       sort_order: sortOrder,
     })
@@ -443,6 +570,7 @@ export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, custom
       install_type: unit.installType,
       cylinder_litres: unit.cylinderLitres ?? null,
       warranty_years: unit.warrantyYears,
+      price: unit.price,
       items: serializeLineItems(unit.items),
     })
     .eq("id", unit.id);
@@ -802,38 +930,69 @@ export async function addQuoteNote(quoteId: string, body: string, customerName: 
 // (see BoilerQuoteDetail.tsx / SolarQuoteDetail.tsx) and need no action.
 // ─────────────────────────────────────────────────────────────────────────
 
+export type SendQuoteResult = { ok: true } | { ok: false; error: string };
+
 /**
- * No email/SMS provider is wired up yet. This is the integration point:
- * swap this for a real "send" call later, keeping the same `sent_at` stamp
- * on success.
+ * Sends the quote to the customer for e-signature via Dropbox Sign (see
+ * `src/lib/dropbox-sign.ts`). Re-fetches the quote server-side instead of
+ * trusting client-passed strings, since the customer's email is now
+ * load-bearing (it's who Dropbox Sign sends the signing request to).
  */
-export async function sendQuote(quoteId: string, customerName: string): Promise<boolean> {
+export async function sendQuote(quoteId: string): Promise<SendQuoteResult> {
+  if (!isDropboxSignConfigured()) {
+    return {
+      ok: false,
+      error: "E-signature sending isn't configured yet. Ask an admin to set up Dropbox Sign (see .env.local.example).",
+    };
+  }
+
+  const result = await getQuoteDetail(quoteId);
+  if (!result) return { ok: false, error: "Quote not found." };
+  const { quote, detail } = result;
+
+  const email = detail.customer.email.trim();
+  if (!email) {
+    return {
+      ok: false,
+      error: "This customer has no email address on file. Add one on the Customer card before sending for signature.",
+    };
+  }
+
+  let signatureRequestId: string;
+  try {
+    signatureRequestId = await sendQuoteForSignature({
+      quoteId,
+      signerName: detail.customer.name,
+      signerEmail: email,
+      customFields: buildMergeFields(quote, detail),
+    });
+  } catch (error) {
+    console.error("sendQuote: Dropbox Sign request failed", error);
+    return { ok: false, error: "Couldn't send the quote for signature. Please try again or contact support." };
+  }
+
   const supabase = await createClient();
   const user = await getCurrentUser();
 
   const { error } = await supabase
     .from("quotes")
-    .update({ sent_at: new Date().toISOString() })
+    .update({ sent_at: new Date().toISOString(), dropbox_sign_request_id: signatureRequestId })
     .eq("id", quoteId);
-
-  if (error) {
-    console.error("sendQuote failed", error);
-    return false;
-  }
+  if (error) console.error("sendQuote: failed to record sent_at/dropbox_sign_request_id", error);
 
   await Promise.all([
-    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the quote to the customer" }),
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the quote for e-signature (Dropbox Sign)" }),
     logActivity({
       actorId: user?.id,
-      customerName,
-      description: `Sent quote — ${customerName}`,
+      customerName: detail.customer.name,
+      description: `Sent quote for signature — ${detail.customer.name}`,
       status: "allocated",
       entityType: "quote",
       entityId: quoteId,
     }),
   ]);
   revalidateQuote(quoteId);
-  return true;
+  return { ok: true };
 }
 
 /** No warranty-registration provider is integrated yet — this is that integration point. */
@@ -846,9 +1005,25 @@ export async function logStaxPortalAction(quoteId: string, customerName: string)
   await logExternalPortalAction(quoteId, customerName, "STAX Portal opened");
 }
 
-/** No survey-provider integration exists yet — this is that integration point. */
+/** No survey-provider integration exists yet — this is that integration point. Kept for the solar vertical, which doesn't have its own survey form yet (see `requestBoilerSurvey` for boiler quotes). */
 export async function logSurveyAction(quoteId: string, customerName: string): Promise<void> {
   await logExternalPortalAction(quoteId, customerName, "Survey requested");
+}
+
+/**
+ * Backs the boiler "Survey" button — creates (or reuses) the on-site survey
+ * record for this quote and returns its access token so the caller can
+ * build the `/survey/[token]` QR code / link. See
+ * `src/data/boiler-survey-service.ts` and `supabase/migrations/0007_boiler_surveys.sql`.
+ */
+export async function requestBoilerSurvey(quoteId: string, customerName: string): Promise<{ accessToken: string }> {
+  const { accessToken, created } = await getOrCreateBoilerSurveyToken(quoteId);
+
+  if (created) {
+    await logExternalPortalAction(quoteId, customerName, "Survey link generated");
+  }
+
+  return { accessToken };
 }
 
 async function logExternalPortalAction(quoteId: string, customerName: string, description: string): Promise<void> {
