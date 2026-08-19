@@ -24,9 +24,13 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "appointmentAt", label: "Appointment" },
 ];
 
-function rebookHref(customerName: string): string {
-  const [firstName, ...rest] = customerName.split(" ");
-  const params = new URLSearchParams({ firstName, lastName: rest.join(" ") });
+function rebookHref(appointment: CancelledAppointment): string {
+  const [firstName, ...rest] = appointment.customerName.split(" ");
+  const params = new URLSearchParams({
+    firstName,
+    lastName: rest.join(" "),
+    rebookFrom: appointment.id,
+  });
   return `/appointments/create?${params.toString()}`;
 }
 
@@ -133,7 +137,7 @@ export function RecentlyCancelledTable({
               <p className="text-sm text-slate-600">{formatDateTime(appointment.appointmentAt)}</p>
               <p className="text-sm text-slate-600">{appointment.reason}</p>
               <div className="sm:justify-self-end">
-                <Button href={rebookHref(appointment.customerName)} className="px-3 py-1.5 text-xs">
+                <Button href={rebookHref(appointment)} className="px-3 py-1.5 text-xs">
                   Rebook
                 </Button>
               </div>

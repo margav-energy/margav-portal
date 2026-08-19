@@ -48,6 +48,8 @@ export interface SolarKeyDetails {
   roiPercent: number;
   gridIndependencePercent: number;
   paybackYears: number;
+  /** Optional external URL, stored in `quotes.key_details`. No upload UI — set manually/by another integration. */
+  sapTableUrl?: string;
 }
 
 export interface SolarQuoteDetail {
@@ -57,6 +59,9 @@ export interface SolarQuoteDetail {
   version: number;
   statusLabel: string;
   assignedRep: string;
+  /** Absent when unassigned. */
+  assignedRepId?: string;
+  isFavourite: boolean;
   locked: boolean;
   customer: CustomerDetails;
   property: SolarPropertyDetails;
@@ -65,6 +70,8 @@ export interface SolarQuoteDetail {
   standardAdditionals: LineItem[];
   freeTextExtras: FreeTextExtra[];
   selectedPaymentMethod: PaymentMethodOption;
+  /** Only meaningful when `selectedPaymentMethod === "monthly_plan"`. */
+  monthlyPlanTermYears?: number;
   keyDetails: SolarKeyDetails;
   pricingBreakdown: LineItem[];
   profitBreakdown: ProfitBreakdown;

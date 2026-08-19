@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
@@ -8,6 +8,8 @@ import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { AcceptanceStatusPill } from "@/components/ui/AcceptanceStatusPill";
+import { Button } from "@/components/ui/Button";
+import { acceptAppointmentAction, declineAppointmentAction } from "@/components/appointments/actions";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AllocatedAppointment } from "@/types/allocated-appointment";
@@ -16,15 +18,18 @@ type SortKey = "customerName" | "representativeName" | "appointmentAt";
 type SortDirection = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
-const GRID_COLS = "grid-cols-[1.6fr_1fr_1.3fr_1.3fr_1.5fr]";
+const GRID_COLS = "grid-cols-[1.4fr_0.9fr_1.1fr_1.2fr_1.1fr_1.3fr]";
 
 export function AllocatedNotAcceptedTable({
-  appointments,
+  appointments: initialAppointments,
   reps,
 }: {
   appointments: AllocatedAppointment[];
   reps: string[];
 }) {
+  const [appointments, setAppointments] = useState(initialAppointments);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedReps, setSelectedReps] = useState<string[]>([]);
@@ -43,6 +48,28 @@ export function AllocatedNotAcceptedTable({
       return;
     }
     setSortKey(null);
+  }
+
+  function handleAccept(id: string) {
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await acceptAppointmentAction(id);
+      if (result.ok) {
+        setAppointments((current) => current.filter((appointment) => appointment.id !== id));
+      }
+      setPendingId(null);
+    });
+  }
+
+  function handleDecline(id: string) {
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await declineAppointmentAction(id);
+      if (result.ok) {
+        setAppointments((current) => current.filter((appointment) => appointment.id !== id));
+      }
+      setPendingId(null);
+    });
   }
 
   const rows = useMemo(() => {
@@ -111,6 +138,7 @@ export function AllocatedNotAcceptedTable({
             />
           </button>
           <span>Response</span>
+          <span>Actions</span>
         </div>
 
         <Pagination
@@ -126,6 +154,24 @@ export function AllocatedNotAcceptedTable({
               <p className="text-sm text-slate-600">{appointment.representativeName}</p>
               <p className="text-sm text-slate-600">{formatDateTime(appointment.appointmentAt)}</p>
               <p className="truncate text-sm text-slate-400">{appointment.response ?? "—"}</p>
+              <div className="flex gap-2">
+                <Button
+                  variant="success"
+                  className="px-3 py-1.5 text-xs"
+                  disabled={isPending && pendingId === appointment.id}
+                  onClick={() => handleAccept(appointment.id)}
+                >
+                  Accept
+                </Button>
+                <Button
+                  variant="danger"
+                  className="px-3 py-1.5 text-xs"
+                  disabled={isPending && pendingId === appointment.id}
+                  onClick={() => handleDecline(appointment.id)}
+                >
+                  Decline
+                </Button>
+              </div>
             </div>
           ))}
           pageSize={pageSize}

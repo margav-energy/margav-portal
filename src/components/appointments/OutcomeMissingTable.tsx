@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
@@ -9,6 +9,7 @@ import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { PhoneLink } from "@/components/ui/PhoneLink";
 import { OutcomePopover } from "@/components/appointments/OutcomePopover";
+import { logOutcomeAction } from "@/components/appointments/actions";
 import { formatTimeOnly, formatWeekdayOrdinal } from "@/lib/format";
 import { isSameDay } from "@/lib/date-utils";
 import { getInitials, cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ export function OutcomeMissingTable({
   reps: string[];
 }) {
   const [leads, setLeads] = useState(initialLeads);
+  const [, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedReps, setSelectedReps] = useState<string[]>([]);
@@ -65,9 +67,14 @@ export function OutcomeMissingTable({
     setSortKey(null);
   }
 
-  function handleLogOutcome(id: string) {
-    // Mock-data only — logging an outcome just removes it from this list.
+  function handleLogOutcome(id: string, outcome: string) {
+    // Optimistically drop the row — a logged outcome moves the appointment's
+    // lifecycle_stage to "completed" so it won't match this view's query
+    // again on the next real fetch either.
     setLeads((current) => current.filter((lead) => lead.id !== id));
+    startTransition(async () => {
+      await logOutcomeAction(id, outcome);
+    });
   }
 
   const rows = useMemo(() => {
@@ -149,7 +156,7 @@ export function OutcomeMissingTable({
                 <p className="text-slate-500">{formatTimeOnly(lead.appointmentAt)}</p>
               </div>
               <div className="sm:justify-self-end">
-                <OutcomePopover onSelect={() => handleLogOutcome(lead.id)} />
+                <OutcomePopover onSelect={(outcome) => handleLogOutcome(lead.id, outcome)} />
               </div>
             </div>
           ))}

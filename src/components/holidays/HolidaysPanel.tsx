@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Card } from "@/components/ui/Card";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
@@ -8,6 +8,7 @@ import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { HolidayRow } from "@/components/holidays/HolidayRow";
+import { updateHolidayStatusAction } from "@/app/holidays/actions";
 import type { HolidayRequest } from "@/types/holiday";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
@@ -24,6 +25,8 @@ export function HolidaysPanel({
   const [selectedReps, setSelectedReps] = useState<string[]>([]);
   const [showAll, setShowAll] = useState(true);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [errorId, setErrorId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -39,10 +42,19 @@ export function HolidaysPanel({
   }, [holidays, search, selectedReps, showAll]);
 
   function updateStatus(id: string, status: "approved" | "rejected") {
-    // Mock-data only — this doesn't persist past a page refresh.
+    const previous = holidays;
+    setErrorId(null);
+    // Optimistic update — reverted below if the Server Action fails.
     setHolidays((current) =>
       current.map((holiday) => (holiday.id === id ? { ...holiday, status } : holiday)),
     );
+    startTransition(async () => {
+      const result = await updateHolidayStatusAction(id, status);
+      if (result.error) {
+        setHolidays(previous);
+        setErrorId(id);
+      }
+    });
   }
 
   return (
@@ -58,6 +70,12 @@ export function HolidaysPanel({
         />
         <ToggleSwitch checked={showAll} onChange={setShowAll} label="All holidays" />
       </div>
+
+      {errorId && (
+        <p className="border-b border-red-100 bg-red-50 px-5 py-2 text-sm text-red-600">
+          Could not update that holiday request. Please try again.
+        </p>
+      )}
 
       <div className="hidden grid-cols-[1.5fr_1.3fr_1.6fr_1fr_1.2fr] gap-4 border-b border-slate-100 px-5 py-3 text-xs font-semibold tracking-wide text-slate-400 uppercase sm:grid">
         <span>User</span>

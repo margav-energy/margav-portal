@@ -32,9 +32,9 @@ export function Topbar({
       <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
       <div className="ml-auto flex items-center gap-2 sm:gap-4">
         <SearchBar />
-        <NotificationBell />
+        <NotificationBell userId={user.id} />
         <TeamMembersBadge count={user.teamMemberCount} />
-        <UserMenu firstName={user.firstName} initials={user.initials} />
+        <UserMenu firstName={user.firstName} initials={user.initials} email={user.email} />
       </div>
     </header>
   );

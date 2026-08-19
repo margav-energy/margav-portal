@@ -19,12 +19,11 @@ export interface FreeTextExtra {
   unitPrice: number;
 }
 
-export type PaymentMethodOption =
-  | "bacs"
-  | "monthly_plan_15yr"
-  | "interest_free_credit_3yr"
-  | "hometree_25yr"
-  | "buy_now_pay_later";
+/** Matches `quote_line_items.section` in `supabase/schema.sql`. */
+export type LineItemSection = "extra" | "standard_additional" | "free_text";
+
+/** See `src/lib/finance.ts` for the Monthly Plan's selectable terms + APR rule. */
+export type PaymentMethodOption = "bacs" | "monthly_plan";
 
 export interface CustomerDetails {
   name: string;

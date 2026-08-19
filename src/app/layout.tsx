@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import { AppShellClient } from "@/components/layout/AppShellClient";
+import { SupabaseSetupNotice } from "@/components/setup/SupabaseSetupNotice";
 import { getCurrentUser } from "@/data/current-user";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -21,12 +23,17 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getCurrentUser();
+  const configured = isSupabaseConfigured();
+  const user = configured ? await getCurrentUser() : null;
 
   return (
     <html lang="en" className={poppins.variable}>
       <body className="min-h-screen font-sans antialiased">
-        <AppShellClient user={user}>{children}</AppShellClient>
+        {configured ? (
+          <AppShellClient user={user}>{children}</AppShellClient>
+        ) : (
+          <SupabaseSetupNotice />
+        )}
       </body>
     </html>
   );

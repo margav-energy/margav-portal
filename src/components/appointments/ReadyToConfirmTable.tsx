@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { ArrowUpDown } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
 import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { ConfirmationStatusPill } from "@/components/ui/ConfirmationStatusPill";
+import { Button } from "@/components/ui/Button";
+import { confirmAppointmentAction, declineConfirmationAction } from "@/components/appointments/actions";
 import { CONFIRMATION_STATUS_STYLES } from "@/lib/status-colors";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,7 @@ type SortKey = "leadName" | "phone" | "appointmentAt";
 type SortDirection = "asc" | "desc";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
-const GRID_COLS = "grid-cols-[1.6fr_1fr_1.2fr_1fr_1fr]";
+const GRID_COLS = "grid-cols-[1.4fr_0.9fr_1.1fr_0.9fr_0.9fr_1.2fr]";
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "leadName", label: "Lead" },
@@ -31,7 +33,10 @@ const STATUS_BY_LABEL = Object.fromEntries(
   ),
 );
 
-export function ReadyToConfirmTable({ leads }: { leads: ReadyToConfirmLead[] }) {
+export function ReadyToConfirmTable({ leads: initialLeads }: { leads: ReadyToConfirmLead[] }) {
+  const [leads, setLeads] = useState(initialLeads);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedStatusLabels, setSelectedStatusLabels] = useState<string[]>([]);
@@ -49,6 +54,28 @@ export function ReadyToConfirmTable({ leads }: { leads: ReadyToConfirmLead[] }) 
       return;
     }
     setSortKey(null);
+  }
+
+  function handleConfirm(id: string) {
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await confirmAppointmentAction(id);
+      if (result.ok) {
+        setLeads((current) => current.filter((lead) => lead.id !== id));
+      }
+      setPendingId(null);
+    });
+  }
+
+  function handleDecline(id: string) {
+    setPendingId(id);
+    startTransition(async () => {
+      const result = await declineConfirmationAction(id);
+      if (result.ok) {
+        setLeads((current) => current.filter((lead) => lead.id !== id));
+      }
+      setPendingId(null);
+    });
   }
 
   const rows = useMemo(() => {
@@ -109,6 +136,7 @@ export function ReadyToConfirmTable({ leads }: { leads: ReadyToConfirmLead[] }) 
           ))}
           <span>Occupancy</span>
           <span>Confirmation</span>
+          <span>Actions</span>
         </div>
 
         <Pagination
@@ -120,6 +148,24 @@ export function ReadyToConfirmTable({ leads }: { leads: ReadyToConfirmLead[] }) 
               <p className="text-sm text-slate-600">{lead.occupancy}</p>
               <div>
                 <ConfirmationStatusPill status={lead.confirmation} />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="success"
+                  className="px-3 py-1.5 text-xs"
+                  disabled={isPending && pendingId === lead.id}
+                  onClick={() => handleConfirm(lead.id)}
+                >
+                  Confirm
+                </Button>
+                <Button
+                  variant="danger"
+                  className="px-3 py-1.5 text-xs"
+                  disabled={isPending && pendingId === lead.id}
+                  onClick={() => handleDecline(lead.id)}
+                >
+                  Decline
+                </Button>
               </div>
             </div>
           ))}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { useState, useTransition } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { FormSection } from "@/components/ui/FormSection";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { APPOINTMENT_PRODUCTS } from "@/lib/appointment-products";
+import { createAppointmentAction } from "@/components/appointments/actions";
 import { cn } from "@/lib/utils";
 
 interface FormValues {
@@ -87,9 +88,11 @@ type FormErrors = Partial<Record<keyof FormValues, string>>;
 export function CreateAppointmentForm({
   initialFirstName,
   initialLastName,
+  rebookFrom,
 }: {
   initialFirstName?: string;
   initialLastName?: string;
+  rebookFrom?: string;
 } = {}) {
   const [values, setValues] = useState<FormValues>(() => ({
     ...EMPTY_FORM,
@@ -99,11 +102,14 @@ export function CreateAppointmentForm({
   const [errors, setErrors] = useState<FormErrors>({});
   const [addressNoticeVisible, setAddressNoticeVisible] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
   function update<K extends keyof FormValues>(field: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setIsSaved(false);
+    setSaveError(null);
   }
 
   function handleFindAddress() {
@@ -129,10 +135,38 @@ export function CreateAppointmentForm({
       return;
     }
 
-    // No backend yet — this just confirms the form was filled in correctly.
-    setIsSaved(true);
-    setValues(EMPTY_FORM);
-    setAddressNoticeVisible(false);
+    setSaveError(null);
+    startTransition(async () => {
+      const result = await createAppointmentAction({
+        firstName: values.firstName,
+        lastName: values.lastName,
+        phone: values.phone,
+        email: values.email,
+        postcode: values.postcode,
+        addressLine1: values.addressLine1,
+        addressLine2: values.addressLine2,
+        addressLine3: values.addressLine3,
+        city: values.city,
+        county: values.county,
+        source: values.source,
+        medium: values.medium,
+        term: values.term,
+        notes: values.notes,
+        product: values.product,
+        date: values.date,
+        time: values.time,
+        rebookedFromId: rebookFrom ?? null,
+      });
+
+      if (!result.ok) {
+        setSaveError(result.error ?? "Could not save the appointment. Please try again.");
+        return;
+      }
+
+      setIsSaved(true);
+      setValues(EMPTY_FORM);
+      setAddressNoticeVisible(false);
+    });
   }
 
   function handleCancel() {
@@ -140,6 +174,7 @@ export function CreateAppointmentForm({
     setErrors({});
     setAddressNoticeVisible(false);
     setIsSaved(false);
+    setSaveError(null);
   }
 
   return (
@@ -148,6 +183,12 @@ export function CreateAppointmentForm({
         <div className="flex items-center gap-2 rounded-lg border border-brand-green-mid/20 bg-brand-green-mid/10 px-4 py-3 text-sm font-medium text-brand-green-mid">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           Appointment saved.
+        </div>
+      )}
+      {saveError && (
+        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <XCircle className="h-4 w-4 shrink-0" />
+          {saveError}
         </div>
       )}
 
@@ -297,11 +338,11 @@ export function CreateAppointmentForm({
       </FormSection>
 
       <div className="flex justify-end gap-3">
-        <Button type="button" variant="secondary" onClick={handleCancel}>
+        <Button type="button" variant="secondary" onClick={handleCancel} disabled={isPending}>
           Cancel
         </Button>
-        <Button type="submit" variant="success">
-          Save appointment
+        <Button type="submit" variant="success" disabled={isPending}>
+          {isPending ? "Saving…" : "Save appointment"}
         </Button>
       </div>
     </form>

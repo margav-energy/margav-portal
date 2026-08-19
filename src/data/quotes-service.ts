@@ -1,44 +1,263 @@
-import { quotes } from "@/data/quotes";
-import { boilerQuoteDetails } from "@/data/boiler-quote-details";
-import { buildSolarQuoteDetail } from "@/data/solar-quote-details";
+import "server-only";
+import { createClient } from "@/lib/supabase/server";
+import { getAllProfiles } from "@/data/profiles-service";
+import {
+  buildPricingBreakdown,
+  buildProfileMap,
+  mapBoilerKeyDetails,
+  mapBoilerPropertyDetails,
+  mapBoilerUnitRow,
+  mapCustomerDetails,
+  mapFreeTextRow,
+  mapHistoryRow,
+  mapLineItemRow,
+  mapNoteRow,
+  mapProfitBreakdown,
+  mapQuoteRow,
+  mapSolarArrayRow,
+  mapSolarKeyDetails,
+  mapSolarPropertyDetails,
+  monthlyPlanTermYearsFor,
+  referenceFor,
+  selectedPaymentMethodFor,
+  statusLabelFor,
+  sumLineItems,
+  type BoilerUnitRow,
+  type LineItemRow,
+  type ProfileMap,
+  type QuoteHistoryRow,
+  type QuoteNoteRow,
+  type QuoteRow,
+  type SolarArrayRow,
+} from "@/data/quotes-mappers";
 import type { Quote, QuoteStage } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
 
 /**
- * Thin data-access layer over the mock quotes array. Every function is
- * `async` even though today's implementation is synchronous, so call sites
- * already look like they're hitting an API — swapping this file out for a
- * real backend later shouldn't require touching anything that calls it.
+ * Data-access layer for the Quotes module, backed by Supabase (see
+ * `supabase/schema.sql`). Row → app-type mapping lives in
+ * `quotes-mappers.ts`; mutations live in `src/components/quotes/actions.ts`.
  */
 
+const QUOTE_COLUMNS =
+  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label";
+
+const ARCHIVE_AFTER_YEARS = 5;
+
+/**
+ * There's no manual "Archive" button anymore — quotes drop out of every
+ * list view on their own once they're this many years old. `archived_at`
+ * still exists for a possible future manual override; this is the
+ * automatic half of archiving.
+ */
+function autoArchiveCutoffIso(): string {
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - ARCHIVE_AFTER_YEARS);
+  return cutoff.toISOString().slice(0, 10);
+}
+
+async function fetchProfileMap(): Promise<ProfileMap> {
+  const profiles = await getAllProfiles();
+  return buildProfileMap(profiles);
+}
+
 export async function getAllQuotes(): Promise<Quote[]> {
-  return quotes;
+  const supabase = await createClient();
+  const [{ data, error }, profiles] = await Promise.all([
+    supabase
+      .from("quotes")
+      .select(QUOTE_COLUMNS)
+      .is("archived_at", null)
+      .gte("sent_date", autoArchiveCutoffIso())
+      .order("sent_date", { ascending: false }),
+    fetchProfileMap(),
+  ]);
+
+  if (error) {
+    console.error("getAllQuotes failed", error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => mapQuoteRow(row as QuoteRow, profiles));
 }
 
 export async function getQuotesByStage(stage: QuoteStage): Promise<Quote[]> {
-  return quotes.filter((quote) => quote.stage === stage);
+  const supabase = await createClient();
+  const [{ data, error }, profiles] = await Promise.all([
+    supabase
+      .from("quotes")
+      .select(QUOTE_COLUMNS)
+      .is("archived_at", null)
+      .gte("sent_date", autoArchiveCutoffIso())
+      .eq("stage", stage)
+      .order("sent_date", { ascending: false }),
+    fetchProfileMap(),
+  ]);
+
+  if (error) {
+    console.error("getQuotesByStage failed", error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => mapQuoteRow(row as QuoteRow, profiles));
 }
 
 export async function getQuoteById(id: string): Promise<Quote | undefined> {
-  return quotes.find((quote) => quote.id === id);
+  const supabase = await createClient();
+  const [{ data, error }, profiles] = await Promise.all([
+    supabase.from("quotes").select(QUOTE_COLUMNS).eq("id", id).maybeSingle(),
+    fetchProfileMap(),
+  ]);
+
+  if (error || !data) {
+    if (error) console.error("getQuoteById failed", error);
+    return undefined;
+  }
+
+  return mapQuoteRow(data as QuoteRow, profiles);
 }
 
 /**
- * Every quote has a rich detail view — boiler quotes read from hand-authored
- * mock data (`boiler-quote-details.ts`), everything else (the default,
- * "solar" product line) is derived on the fly from the quote's own fields
- * (`solar-quote-details.ts`). This is the single entry point the detail
- * page calls; it returns `undefined` only if the quote itself doesn't exist.
+ * Every quote has a rich detail view assembled from several tables:
+ * `boiler_units`/`solar_arrays` (depending on `product_type`),
+ * `quote_line_items` (extras / standard additionals / free-text extras),
+ * `quote_notes`, and `quote_history`. This is the single entry point the
+ * detail page calls; it returns `undefined` only if the quote itself
+ * doesn't exist.
  */
 export async function getQuoteDetail(
   id: string,
 ): Promise<{ quote: Quote; detail: BoilerQuoteDetail | SolarQuoteDetail } | undefined> {
-  const quote = await getQuoteById(id);
-  if (!quote) return undefined;
+  const supabase = await createClient();
 
-  const detail = quote.productType === "boiler" ? boilerQuoteDetails[id] : buildSolarQuoteDetail(quote);
-  if (!detail) return undefined;
+  const [{ data: quoteRow, error: quoteError }, profiles] = await Promise.all([
+    supabase.from("quotes").select(QUOTE_COLUMNS).eq("id", id).maybeSingle(),
+    fetchProfileMap(),
+  ]);
+
+  if (quoteError || !quoteRow) {
+    if (quoteError) console.error("getQuoteDetail failed", quoteError);
+    return undefined;
+  }
+
+  const row = quoteRow as QuoteRow;
+  const isBoiler = row.product_type === "boiler";
+
+  const [unitsResult, lineItemsResult, notesResult, historyResult] = await Promise.all([
+    isBoiler
+      ? supabase
+          .from("boiler_units")
+          .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, items, sort_order")
+          .eq("quote_id", id)
+          .order("sort_order", { ascending: true })
+      : supabase
+          .from("solar_arrays")
+          .select("id, label, shade_factor, orientation, pitch_degrees, items, sort_order")
+          .eq("quote_id", id)
+          .order("sort_order", { ascending: true }),
+    supabase
+      .from("quote_line_items")
+      .select("id, section, name, description, quantity, unit_price, sort_order")
+      .eq("quote_id", id)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("quote_notes")
+      .select("id, author_id, body, created_at")
+      .eq("quote_id", id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("quote_history")
+      .select("id, actor_id, is_system, description, created_at")
+      .eq("quote_id", id)
+      .order("created_at", { ascending: false }),
+  ]);
+
+  if (unitsResult.error) console.error("getQuoteDetail units failed", unitsResult.error);
+  if (lineItemsResult.error) console.error("getQuoteDetail line items failed", lineItemsResult.error);
+  if (notesResult.error) console.error("getQuoteDetail notes failed", notesResult.error);
+  if (historyResult.error) console.error("getQuoteDetail history failed", historyResult.error);
+
+  const lineItemRows = (lineItemsResult.data ?? []) as LineItemRow[];
+  const extras = lineItemRows.filter((item) => item.section === "extra").map(mapLineItemRow);
+  const standardAdditionals = lineItemRows
+    .filter((item) => item.section === "standard_additional")
+    .map(mapLineItemRow);
+  const freeTextExtras = lineItemRows.filter((item) => item.section === "free_text").map(mapFreeTextRow);
+
+  const notes = (notesResult.data ?? []).map((noteRow) => mapNoteRow(noteRow as QuoteNoteRow, profiles));
+  const history = (historyResult.data ?? []).map((historyRow) =>
+    mapHistoryRow(historyRow as QuoteHistoryRow, profiles),
+  );
+
+  const assignedRepId = row.representative_id ?? undefined;
+  const assignedRep = assignedRepId ? (profiles.get(assignedRepId)?.fullName ?? "Unassigned") : "Unassigned";
+
+  const shared = {
+    reference: referenceFor(row),
+    version: row.version,
+    statusLabel: statusLabelFor(row),
+    assignedRep,
+    assignedRepId,
+    isFavourite: row.is_favourite,
+    locked: row.is_locked,
+    customer: mapCustomerDetails(row),
+    extras,
+    standardAdditionals,
+    freeTextExtras,
+    selectedPaymentMethod: selectedPaymentMethodFor(row),
+    monthlyPlanTermYears: monthlyPlanTermYearsFor(row),
+    pricingBreakdown: [] as BoilerQuoteDetail["pricingBreakdown"],
+    profitBreakdown: mapProfitBreakdown(row.profit_breakdown),
+    notes,
+    history,
+  };
+
+  const extrasTotal = sumLineItems(extras);
+  const standardAdditionalsTotal = sumLineItems(standardAdditionals);
+  const freeTextTotal = sumLineItems(freeTextExtras);
+
+  const quote = mapQuoteRow(row, profiles);
+
+  if (isBoiler) {
+    const unitRows = (unitsResult.data ?? []) as BoilerUnitRow[];
+    const boilerUnits = unitRows.map(mapBoilerUnitRow);
+    const unitsTotal = sumLineItems(boilerUnits.flatMap((unit) => unit.items));
+
+    const detail: BoilerQuoteDetail = {
+      quoteId: row.id,
+      ...shared,
+      property: mapBoilerPropertyDetails(row.property_details),
+      boilerUnits,
+      keyDetails: mapBoilerKeyDetails(row.key_details),
+      pricingBreakdown: buildPricingBreakdown([
+        { name: "Boiler + install", total: unitsTotal, count: boilerUnits.length },
+        { name: "Extras", total: extrasTotal, count: extras.length },
+        { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
+        { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
+      ]),
+    };
+
+    return { quote, detail };
+  }
+
+  const arrayRows = (unitsResult.data ?? []) as SolarArrayRow[];
+  const solarArrays = arrayRows.map(mapSolarArrayRow);
+  const arraysTotal = sumLineItems(solarArrays.flatMap((array) => array.items));
+
+  const detail: SolarQuoteDetail = {
+    quoteId: row.id,
+    ...shared,
+    property: mapSolarPropertyDetails(row.property_details),
+    solarArrays,
+    keyDetails: mapSolarKeyDetails(row.key_details),
+    pricingBreakdown: buildPricingBreakdown([
+      { name: "Solar array + install", total: arraysTotal, count: solarArrays.length },
+      { name: "Extras", total: extrasTotal, count: extras.length },
+      { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
+      { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
+    ]),
+  };
 
   return { quote, detail };
 }
@@ -47,8 +266,27 @@ export async function getQuoteSummary(): Promise<{
   totalQuotes: number;
   totalSigned: number;
 }> {
+  const supabase = await createClient();
+  const cutoff = autoArchiveCutoffIso();
+  const [totalResult, signedResult] = await Promise.all([
+    supabase
+      .from("quotes")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .gte("sent_date", cutoff),
+    supabase
+      .from("quotes")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null)
+      .gte("sent_date", cutoff)
+      .eq("stage", "signed"),
+  ]);
+
+  if (totalResult.error) console.error("getQuoteSummary failed", totalResult.error);
+  if (signedResult.error) console.error("getQuoteSummary failed", signedResult.error);
+
   return {
-    totalQuotes: quotes.length,
-    totalSigned: quotes.filter((quote) => quote.stage === "signed").length,
+    totalQuotes: totalResult.count ?? 0,
+    totalSigned: signedResult.count ?? 0,
   };
 }

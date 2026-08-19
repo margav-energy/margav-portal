@@ -12,6 +12,7 @@ export function CalendarSidebarFilters({
   onRepsChange,
   favourites,
   onApplyFavourite,
+  onDeleteFavourite,
 }: {
   isOpen: boolean;
   stageOptions: FilterOption[];
@@ -22,6 +23,7 @@ export function CalendarSidebarFilters({
   onRepsChange: (value: string[]) => void;
   favourites: FavouriteView[];
   onApplyFavourite: (favourite: FavouriteView) => void;
+  onDeleteFavourite: (favourite: FavouriteView) => void;
 }) {
   return (
     <aside
@@ -43,7 +45,7 @@ export function CalendarSidebarFilters({
           selected={selectedReps}
           onChange={onRepsChange}
         />
-        <FavouritesPanel favourites={favourites} onApply={onApplyFavourite} />
+        <FavouritesPanel favourites={favourites} onApply={onApplyFavourite} onDelete={onDeleteFavourite} />
       </div>
     </aside>
   );

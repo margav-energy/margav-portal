@@ -1,12 +1,13 @@
 import { getAllCancelledAppointments } from "@/data/cancelled-appointments-service";
-import { getActivityActors } from "@/data/activities-service";
+import { getAllProfiles } from "@/data/profiles-service";
 import { RecentlyCancelledTable } from "@/components/appointments/RecentlyCancelledTable";
 
 export default async function RecentlyCancelledPage() {
-  const [appointments, reps] = await Promise.all([
+  const [appointments, profiles] = await Promise.all([
     getAllCancelledAppointments(),
-    getActivityActors(),
+    getAllProfiles(),
   ]);
+  const reps = profiles.map((profile) => profile.fullName);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">

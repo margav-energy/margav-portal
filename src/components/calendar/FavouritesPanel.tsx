@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Star, Trash2 } from "lucide-react";
 
 export interface FavouriteView {
   id: string;
@@ -10,9 +10,11 @@ export interface FavouriteView {
 export function FavouritesPanel({
   favourites,
   onApply,
+  onDelete,
 }: {
   favourites: FavouriteView[];
   onApply: (favourite: FavouriteView) => void;
+  onDelete: (favourite: FavouriteView) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -26,15 +28,27 @@ export function FavouritesPanel({
       ) : (
         <div className="flex flex-col gap-0.5">
           {favourites.map((favourite) => (
-            <button
+            <div
               key={favourite.id}
-              type="button"
-              onClick={() => onApply(favourite)}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-600 hover:bg-slate-100"
+              className="group flex items-center gap-1 rounded-md pr-1 hover:bg-slate-100"
             >
-              <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              <span className="truncate">{favourite.name}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onApply(favourite)}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-slate-600"
+              >
+                <Star className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span className="truncate">{favourite.name}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(favourite)}
+                aria-label={`Delete ${favourite.name}`}
+                className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-slate-200 hover:text-red-600 group-hover:flex"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       )}

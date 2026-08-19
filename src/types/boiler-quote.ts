@@ -55,6 +55,8 @@ export interface BoilerKeyDetails {
   price: number;
   profit: number;
   marginPercent: number;
+  /** Optional external URL, stored in `quotes.key_details`. No upload UI — set manually/by another integration. */
+  specSheetUrl?: string;
 }
 
 export interface BoilerQuoteDetail {
@@ -64,6 +66,9 @@ export interface BoilerQuoteDetail {
   version: number;
   statusLabel: string;
   assignedRep: string;
+  /** Absent when unassigned. */
+  assignedRepId?: string;
+  isFavourite: boolean;
   locked: boolean;
   customer: CustomerDetails;
   property: BoilerPropertyDetails;
@@ -72,6 +77,8 @@ export interface BoilerQuoteDetail {
   standardAdditionals: LineItem[];
   freeTextExtras: FreeTextExtra[];
   selectedPaymentMethod: PaymentMethodOption;
+  /** Only meaningful when `selectedPaymentMethod === "monthly_plan"`. */
+  monthlyPlanTermYears?: number;
   keyDetails: BoilerKeyDetails;
   pricingBreakdown: LineItem[];
   profitBreakdown: ProfitBreakdown;

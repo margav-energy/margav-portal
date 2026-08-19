@@ -1,12 +1,13 @@
 import { getAllAllocatedAppointments } from "@/data/allocated-appointments-service";
-import { getActivityActors } from "@/data/activities-service";
+import { getAllProfiles } from "@/data/profiles-service";
 import { AllocatedNotAcceptedTable } from "@/components/appointments/AllocatedNotAcceptedTable";
 
 export default async function AllocatedNotAcceptedPage() {
-  const [appointments, reps] = await Promise.all([
+  const [appointments, profiles] = await Promise.all([
     getAllAllocatedAppointments(),
-    getActivityActors(),
+    getAllProfiles(),
   ]);
+  const reps = profiles.map((profile) => profile.fullName);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">

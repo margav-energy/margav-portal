@@ -8,7 +8,7 @@ export interface QuickLink {
 
 // Placeholder hrefs until Margav supplies the real destinations for each.
 export const QUICK_LINKS: QuickLink[] = [
-  { label: "Margav Website", href: "#", icon: Globe },
+  { label: "Margav Website", href: "https://www.margavheating.com", icon: Globe },
   { label: "Trustpilot", href: "#", icon: Award },
   { label: "Install Gallery", href: "#", icon: Image },
   { label: "Installs Map", href: "#", icon: Map },

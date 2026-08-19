@@ -19,6 +19,8 @@ interface ButtonProps {
   variant?: ButtonVariant;
   className?: string;
   href?: string;
+  /** Pass "_blank" to open an external `href` in a new tab (e.g. an uploaded spec sheet URL). */
+  target?: string;
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
@@ -29,6 +31,7 @@ export function Button({
   variant = "primary",
   className,
   href,
+  target,
   onClick,
   type = "button",
   disabled = false,
@@ -42,7 +45,7 @@ export function Button({
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link href={href} target={target} rel={target === "_blank" ? "noopener noreferrer" : undefined} className={classes}>
         {children}
       </Link>
     );

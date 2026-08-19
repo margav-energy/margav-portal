@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
+import { getAllProfiles } from "@/data/profiles-service";
 import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
 import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
@@ -11,7 +12,7 @@ export default async function QuoteDetailPage({
   params,
 }: PageProps<"/quotes/[id]">) {
   const { id } = await params;
-  const result = await getQuoteDetail(id);
+  const [result, reps] = await Promise.all([getQuoteDetail(id), getAllProfiles()]);
 
   if (!result) notFound();
 
@@ -27,9 +28,9 @@ export default async function QuoteDetailPage({
         Back to all quotes
       </Link>
       {quote.productType === "boiler" ? (
-        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} />
+        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} reps={reps} />
       ) : (
-        <SolarQuoteDetail detail={detail as SolarQuoteDetailData} />
+        <SolarQuoteDetail detail={detail as SolarQuoteDetailData} reps={reps} />
       )}
     </div>
   );

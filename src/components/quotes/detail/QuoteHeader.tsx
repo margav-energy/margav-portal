@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
+import { Modal } from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
-
-const REP_ROSTER = ["Damon Clarke", "Lucy Starkey", "Kiefer Phillips", "Jordan Reeves"];
+import {
+  logCommunicationsOpened,
+  setQuoteLocked,
+  toggleQuoteFavourite,
+  assignQuoteRepresentative,
+} from "@/components/quotes/actions";
+import type { RepProfile } from "@/data/profiles-service";
 
 function initialsFor(name: string): string {
   return name
@@ -78,6 +84,24 @@ function DropdownButton({
   );
 }
 
+function CommunicationsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="Communications" onClose={onClose}>
+      <div className="flex flex-col gap-3 px-5 py-5 text-sm text-slate-600">
+        <p>
+          Sending emails/SMS from the portal isn&apos;t connected to a provider yet, so nothing was sent.
+        </p>
+        <p className="text-slate-400">
+          This click has been recorded on the quote&apos;s History and the Activity Feed.
+        </p>
+        <Button variant="secondary" className="w-fit self-end" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 /**
  * Reference/status/lock/rep header used by every product vertical's quote
  * detail page. The action-button grid lives separately in the right
@@ -85,6 +109,8 @@ function DropdownButton({
  * method / Key details there, not in this top bar.
  */
 export function QuoteHeader({
+  quoteId,
+  customerName,
   reference,
   version,
   statusLabel,
@@ -92,23 +118,61 @@ export function QuoteHeader({
   onToggleLocked,
   favorite,
   onToggleFavorite,
-  assignedRep,
+  assignedRepName,
+  reps,
   onChangeRep,
   onOpenHistory,
   noteCount,
 }: {
+  quoteId: string;
+  customerName: string;
   reference: string;
   version: number;
   statusLabel: string;
   locked: boolean;
   onToggleLocked: (locked: boolean) => void;
   favorite: boolean;
-  onToggleFavorite: () => void;
-  assignedRep: string;
-  onChangeRep: (rep: string) => void;
+  onToggleFavorite: (favorite: boolean) => void;
+  assignedRepName: string;
+  reps: RepProfile[];
+  onChangeRep: (repId: string, repName: string) => void;
   onOpenHistory: () => void;
   noteCount: number;
 }) {
+  const [, startTransition] = useTransition();
+  const [isCommsOpen, setIsCommsOpen] = useState(false);
+
+  function handleToggleFavorite() {
+    const next = !favorite;
+    onToggleFavorite(next);
+    startTransition(() => {
+      void toggleQuoteFavourite(quoteId, next, customerName);
+    });
+  }
+
+  function handleToggleLocked(nextLocked: boolean) {
+    onToggleLocked(nextLocked);
+    startTransition(() => {
+      void setQuoteLocked(quoteId, nextLocked, customerName);
+    });
+  }
+
+  function handleChangeRep(repName: string) {
+    const rep = reps.find((candidate) => candidate.fullName === repName);
+    if (!rep) return;
+    onChangeRep(rep.id, rep.fullName);
+    startTransition(() => {
+      void assignQuoteRepresentative(quoteId, rep.id, customerName);
+    });
+  }
+
+  function handleOpenCommunications() {
+    setIsCommsOpen(true);
+    startTransition(() => {
+      void logCommunicationsOpened(quoteId, customerName);
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -121,14 +185,14 @@ export function QuoteHeader({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={onToggleFavorite}
+            onClick={handleToggleFavorite}
             aria-label="Toggle favourite"
             aria-pressed={favorite}
             className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:bg-slate-50"
           >
             <Star className={cn("h-4 w-4", favorite && "fill-amber-400 text-amber-400")} />
           </button>
-          <Button variant="secondary" className="gap-1.5">
+          <Button variant="secondary" className="gap-1.5" onClick={handleOpenCommunications}>
             <Mail className="h-4 w-4" />
             Communications
           </Button>
@@ -150,13 +214,19 @@ export function QuoteHeader({
               Lock: "Restrict changes that can be made",
               Unlock: "No restrictions on changes that can be made",
             }}
-            onSelect={(option) => onToggleLocked(option === "Lock")}
+            onSelect={(option) => handleToggleLocked(option === "Lock")}
           />
           <DropdownButton
-            label={assignedRep}
-            icon={<InitialsAvatar name={assignedRep} initials={initialsFor(assignedRep)} className="h-5 w-5 text-[10px]" />}
-            options={REP_ROSTER}
-            onSelect={onChangeRep}
+            label={assignedRepName}
+            icon={
+              <InitialsAvatar
+                name={assignedRepName}
+                initials={initialsFor(assignedRepName)}
+                className="h-5 w-5 text-[10px]"
+              />
+            }
+            options={reps.map((rep) => rep.fullName)}
+            onSelect={handleChangeRep}
           />
         </div>
       </div>
@@ -167,6 +237,8 @@ export function QuoteHeader({
           There {noteCount === 1 ? "is" : "are"} {noteCount} note{noteCount === 1 ? "" : "s"} against this quote.
         </div>
       )}
+
+      {isCommsOpen && <CommunicationsModal onClose={() => setIsCommsOpen(false)} />}
     </div>
   );
 }

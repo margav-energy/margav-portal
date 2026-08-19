@@ -26,9 +26,20 @@ export function BoilerKeyDetailsCard({
         <KeyDetailField label="Profit" value={formatCurrency(keyDetails.profit)} />
         <KeyDetailField label="Margin" value={`${keyDetails.marginPercent}%`} />
       </div>
-      <Button variant="secondary" className="mt-4 w-full justify-center text-xs">
-        View spec sheet
-      </Button>
+      {keyDetails.specSheetUrl ? (
+        <Button
+          variant="secondary"
+          className="mt-4 w-full justify-center text-xs"
+          href={keyDetails.specSheetUrl}
+          target="_blank"
+        >
+          View spec sheet
+        </Button>
+      ) : (
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
+          No spec sheet uploaded yet.
+        </p>
+      )}
     </Collapsible>
   );
 }

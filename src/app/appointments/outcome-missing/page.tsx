@@ -1,9 +1,10 @@
 import { getAllOutcomeMissingLeads } from "@/data/outcome-missing-service";
-import { getActivityActors } from "@/data/activities-service";
+import { getAllProfiles } from "@/data/profiles-service";
 import { OutcomeMissingTable } from "@/components/appointments/OutcomeMissingTable";
 
 export default async function OutcomeMissingPage() {
-  const [leads, reps] = await Promise.all([getAllOutcomeMissingLeads(), getActivityActors()]);
+  const [leads, profiles] = await Promise.all([getAllOutcomeMissingLeads(), getAllProfiles()]);
+  const reps = profiles.map((profile) => profile.fullName);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">

@@ -7,23 +7,34 @@ import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { inputClassName } from "@/components/ui/FormField";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { addQuoteNote } from "@/components/quotes/actions";
 import type { QuoteNote } from "@/types/quote-detail-shared";
 
 export function NotesPanel({
+  quoteId,
+  customerName,
   notes,
-  onAddNote,
+  onNoteAdded,
 }: {
+  quoteId: string;
+  customerName: string;
   notes: QuoteNote[];
-  onAddNote: (body: string) => void;
+  onNoteAdded: (note: QuoteNote) => void;
 }) {
   const [isComposing, setIsComposing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  function handleSave() {
+  async function handleSave() {
     if (!draft.trim()) return;
-    onAddNote(draft.trim());
-    setDraft("");
-    setIsComposing(false);
+    setIsSaving(true);
+    const note = await addQuoteNote(quoteId, draft.trim(), customerName);
+    setIsSaving(false);
+    if (note) {
+      onNoteAdded(note);
+      setDraft("");
+      setIsComposing(false);
+    }
   }
 
   return (
@@ -63,8 +74,8 @@ export function NotesPanel({
             >
               Cancel
             </Button>
-            <Button variant="success" onClick={handleSave}>
-              Save note
+            <Button variant="success" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving…" : "Save note"}
             </Button>
           </div>
         </Card>

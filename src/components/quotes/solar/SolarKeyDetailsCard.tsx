@@ -19,9 +19,20 @@ export function SolarKeyDetailsCard({ keyDetails }: { keyDetails: SolarKeyDetail
         <KeyDetailField label="Grid Ind." value={`${keyDetails.gridIndependencePercent}%`} />
         <KeyDetailField label="Payback per." value={`${keyDetails.paybackYears} years`} />
       </div>
-      <Button variant="secondary" className="mt-4 w-full justify-center text-xs">
-        View SAP table
-      </Button>
+      {keyDetails.sapTableUrl ? (
+        <Button
+          variant="secondary"
+          className="mt-4 w-full justify-center text-xs"
+          href={keyDetails.sapTableUrl}
+          target="_blank"
+        >
+          View SAP table
+        </Button>
+      ) : (
+        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
+          No SAP table uploaded yet.
+        </p>
+      )}
     </Collapsible>
   );
 }

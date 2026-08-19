@@ -4,65 +4,19 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { STATIC_SLIDES_BEFORE, THANK_YOU_SLIDE } from "@/components/quotes/presenter/slides/StaticSlides";
-import {
-  MonthlyCostSlide,
-  QuotationSlide,
-  SystemSummarySlide,
-  defaultTermMonthsFor,
-} from "@/components/quotes/presenter/slides/PersonalizedSlides";
-import type { PresenterSlide } from "@/components/quotes/presenter/types";
+import { MonthlyCostSlide, PricingSlide, SystemSummarySlide } from "@/components/quotes/presenter/slides/PersonalizedSlides";
+import type { PresenterDeck } from "@/data/presenter-deck-service";
 import { cn } from "@/lib/utils";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 
-export function BoilerPresenter({ detail }: { detail: BoilerQuoteDetail }) {
+export function PresenterViewer({ deck, detail }: { deck: PresenterDeck; detail: BoilerQuoteDetail }) {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [installDate, setInstallDate] = useState("");
-  const [examplePrice, setExamplePrice] = useState(detail.keyDetails.price);
-  const [termMonths, setTermMonths] = useState(defaultTermMonthsFor(detail.selectedPaymentMethod));
-  const [monthlyPayment, setMonthlyPayment] = useState(
-    Math.round(detail.keyDetails.price / defaultTermMonthsFor(detail.selectedPaymentMethod)),
-  );
 
+  const total = deck.slides.length;
+  const currentSlide = deck.slides[currentIndex];
   const quoteHref = `/quotes/${detail.quoteId}`;
-
-  function handleChangeExamplePrice(value: number) {
-    setExamplePrice(value);
-    if (termMonths > 0) setMonthlyPayment(Math.round(value / termMonths));
-  }
-
-  function handleChangeTermMonths(value: number) {
-    const safeTerm = Math.max(1, value);
-    setTermMonths(safeTerm);
-    setMonthlyPayment(Math.round(examplePrice / safeTerm));
-  }
-
-  const slides: PresenterSlide[] = [
-    ...STATIC_SLIDES_BEFORE,
-    {
-      id: "system-summary",
-      node: <SystemSummarySlide detail={detail} installDate={installDate} onChangeInstallDate={setInstallDate} />,
-    },
-    { id: "quotation", node: <QuotationSlide detail={detail} /> },
-    {
-      id: "monthly-cost",
-      node: (
-        <MonthlyCostSlide
-          examplePrice={examplePrice}
-          termMonths={termMonths}
-          monthlyPayment={monthlyPayment}
-          onChangeExamplePrice={handleChangeExamplePrice}
-          onChangeTermMonths={handleChangeTermMonths}
-          onChangeMonthlyPayment={setMonthlyPayment}
-        />
-      ),
-    },
-    THANK_YOU_SLIDE,
-  ];
-
-  const total = slides.length;
-  const currentSlide = slides[currentIndex];
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -73,6 +27,25 @@ export function BoilerPresenter({ detail }: { detail: BoilerQuoteDetail }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [total, router, quoteHref]);
+
+  function renderSlide() {
+    switch (currentSlide.slideType) {
+      case "quote_system_summary":
+        return <SystemSummarySlide detail={detail} installDate={installDate} onChangeInstallDate={setInstallDate} />;
+      case "quote_pricing":
+        return <PricingSlide detail={detail} />;
+      case "quote_monthly_cost":
+        return <MonthlyCostSlide detail={detail} />;
+      case "image":
+      default:
+        return currentSlide.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- fixed-size uploaded slide image, not a responsive content image next/image is built for.
+          <img src={currentSlide.imageUrl} alt={`Slide ${currentSlide.position}`} className="h-full w-full object-contain" />
+        ) : (
+          <p className="text-sm text-slate-400">This slide is missing its image.</p>
+        );
+    }
+  }
 
   return (
     <div className="flex h-screen w-screen flex-col bg-white">
@@ -89,9 +62,7 @@ export function BoilerPresenter({ detail }: { detail: BoilerQuoteDetail }) {
         </Link>
       </div>
 
-      <div className={cn("flex-1 overflow-y-auto", !currentSlide.fullBleed && "p-10")}>
-        <div className={currentSlide.fullBleed ? "h-full" : "mx-auto w-full max-w-5xl"}>{currentSlide.node}</div>
-      </div>
+      <div className="flex flex-1 items-center justify-center overflow-y-auto bg-slate-50 p-6">{renderSlide()}</div>
 
       <div className="flex shrink-0 items-center justify-center gap-6 border-t border-slate-100 px-6 py-4">
         <button
@@ -105,7 +76,7 @@ export function BoilerPresenter({ detail }: { detail: BoilerQuoteDetail }) {
         </button>
 
         <div className="flex gap-1.5">
-          {slides.map((slide, index) => (
+          {deck.slides.map((slide, index) => (
             <span
               key={slide.id}
               className={cn(

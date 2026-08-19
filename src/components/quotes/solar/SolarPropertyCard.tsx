@@ -1,5 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { FormField, inputClassName } from "@/components/ui/FormField";
+import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { SolarPropertyDetails } from "@/types/solar-quote";
 
 // Electric unit rates carry more precision than `formatCurrency` shows
@@ -17,12 +23,130 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function SolarPropertyCard({ property }: { property: SolarPropertyDetails }) {
+function EditPropertyModal({
+  property,
+  onClose,
+  onSave,
+}: {
+  property: SolarPropertyDetails;
+  onClose: () => void;
+  onSave: (property: SolarPropertyDetails) => void;
+}) {
+  const [form, setForm] = useState(property);
+
+  function set<K extends keyof SolarPropertyDetails>(key: K, value: SolarPropertyDetails[K]) {
+    setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleSave() {
+    onSave(form);
+    onClose();
+  }
+
+  return (
+    <Modal title="Edit property details" onClose={onClose}>
+      <div className="flex flex-col gap-4 px-5 py-5">
+        <FormField label="Occupancy Archetype" htmlFor="occupancyArchetype">
+          <input
+            id="occupancyArchetype"
+            className={inputClassName}
+            value={form.occupancyArchetype}
+            onChange={(event) => set("occupancyArchetype", event.target.value)}
+          />
+        </FormField>
+        <FormField label="Annual Consumption (kWh)" htmlFor="annualConsumptionKwh">
+          <input
+            id="annualConsumptionKwh"
+            type="number"
+            className={inputClassName}
+            value={form.annualConsumptionKwh}
+            onChange={(event) => set("annualConsumptionKwh", Number(event.target.value))}
+          />
+        </FormField>
+        <FormField label="Electric Unit Rate (£)" htmlFor="electricUnitRate">
+          <input
+            id="electricUnitRate"
+            type="number"
+            step="0.0001"
+            className={inputClassName}
+            value={form.electricUnitRate}
+            onChange={(event) => set("electricUnitRate", Number(event.target.value))}
+          />
+        </FormField>
+        <FormField label="Estimated Bill" htmlFor="estimatedBill">
+          <select
+            id="estimatedBill"
+            className={inputClassName}
+            value={form.estimatedBill}
+            onChange={(event) => set("estimatedBill", event.target.value as "Yes" | "No")}
+          >
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </FormField>
+        <FormField label="Estimated Reason" htmlFor="estimatedReason">
+          <input
+            id="estimatedReason"
+            className={inputClassName}
+            value={form.estimatedReason}
+            onChange={(event) => set("estimatedReason", event.target.value)}
+          />
+        </FormField>
+        <FormField label="Spray Foam" htmlFor="sprayFoam">
+          <select
+            id="sprayFoam"
+            className={inputClassName}
+            value={form.sprayFoam}
+            onChange={(event) => set("sprayFoam", event.target.value as "Yes" | "No")}
+          >
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </FormField>
+        <FormField label="MPAN" htmlFor="mpan">
+          <input
+            id="mpan"
+            className={inputClassName}
+            value={form.mpan}
+            onChange={(event) => set("mpan", event.target.value)}
+          />
+        </FormField>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="success" onClick={handleSave}>
+          Save
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+export function SolarPropertyCard({
+  quoteId,
+  customerName,
+  property,
+  onUpdated,
+}: {
+  quoteId: string;
+  customerName: string;
+  property: SolarPropertyDetails;
+  onUpdated: (property: SolarPropertyDetails) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  function handleSave(updated: SolarPropertyDetails) {
+    onUpdated(updated);
+    void updateQuotePropertyDetails(quoteId, updated, customerName);
+  }
+
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Property details</h3>
-        <Button variant="secondary" className="px-3 py-1.5 text-xs">
+        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setIsEditing(true)}>
           Edit
         </Button>
       </div>
@@ -35,6 +159,10 @@ export function SolarPropertyCard({ property }: { property: SolarPropertyDetails
         <Field label="Spray Foam" value={property.sprayFoam} />
         <Field label="MPAN" value={property.mpan} />
       </div>
+
+      {isEditing && (
+        <EditPropertyModal property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />
+      )}
     </Card>
   );
 }

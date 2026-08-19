@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { FileText, CheckCircle2 } from "lucide-react";
 import { getCurrentUser } from "@/data/current-user";
 import { getQuoteSummary, getQuotesByStage } from "@/data/quotes-service";
@@ -14,6 +15,11 @@ export default async function DashboardPage() {
     getQuotesByStage("sent_to_sign"),
     getQuotesByStage("signed"),
   ]);
+
+  // Belt-and-braces: src/proxy.ts already redirects signed-out requests to
+  // /login before this ever renders, but every data-fetching entry point
+  // should check for itself too (see node_modules/next/dist/docs/01-app/02-guides/authentication.md).
+  if (!user) redirect("/login");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
