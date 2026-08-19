@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info } from "lucide-react";
+import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { Modal } from "@/components/ui/Modal";
+import { FormField, inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
 import {
   logCommunicationsOpened,
+  sendCommunicationEmail,
   setQuoteLocked,
   toggleQuoteFavourite,
   assignQuoteRepresentative,
@@ -84,20 +86,86 @@ function DropdownButton({
   );
 }
 
-function CommunicationsModal({ onClose }: { onClose: () => void }) {
+function CommunicationsModal({
+  quoteId,
+  customerName,
+  customerEmail,
+  onClose,
+}: {
+  quoteId: string;
+  customerName: string;
+  customerEmail: string;
+  onClose: () => void;
+}) {
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSent, setIsSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSend(event: React.FormEvent) {
+    event.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const result = await sendCommunicationEmail(quoteId, customerName, customerEmail, subject, message);
+      if (!result.ok) {
+        setError(result.error ?? "Could not send the email. Please try again.");
+        return;
+      }
+      setIsSent(true);
+    });
+  }
+
   return (
     <Modal title="Communications" onClose={onClose}>
-      <div className="flex flex-col gap-3 px-5 py-5 text-sm text-slate-600">
-        <p>
-          Sending emails/SMS from the portal isn&apos;t connected to a provider yet, so nothing was sent.
-        </p>
-        <p className="text-slate-400">
-          This click has been recorded on the quote&apos;s History and the Activity Feed.
-        </p>
-        <Button variant="secondary" className="w-fit self-end" onClick={onClose}>
-          Close
-        </Button>
-      </div>
+      <form onSubmit={handleSend} className="flex flex-col gap-4 px-5 py-5">
+        {isSent && (
+          <div className="flex items-center gap-2 rounded-lg border border-brand-green-mid/20 bg-brand-green-mid/10 px-4 py-3 text-sm font-medium text-brand-green-mid">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Email sent to {customerEmail}.
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <XCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <FormField label="To" htmlFor="comms-to">
+          <input id="comms-to" className={inputClassName} value={customerEmail} disabled />
+        </FormField>
+        <FormField label="Subject" htmlFor="comms-subject" required>
+          <input
+            id="comms-subject"
+            className={inputClassName}
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            disabled={isSent}
+          />
+        </FormField>
+        <FormField label="Message" htmlFor="comms-message" required>
+          <textarea
+            id="comms-message"
+            rows={6}
+            className={cn(inputClassName, "resize-y")}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            disabled={isSent}
+          />
+        </FormField>
+
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            {isSent ? "Close" : "Cancel"}
+          </Button>
+          {!isSent && (
+            <Button type="submit" variant="success" disabled={isPending || !subject.trim() || !message.trim()}>
+              {isPending ? "Sending…" : "Send"}
+            </Button>
+          )}
+        </div>
+      </form>
     </Modal>
   );
 }
@@ -111,6 +179,7 @@ function CommunicationsModal({ onClose }: { onClose: () => void }) {
 export function QuoteHeader({
   quoteId,
   customerName,
+  customerEmail,
   reference,
   version,
   statusLabel,
@@ -126,6 +195,7 @@ export function QuoteHeader({
 }: {
   quoteId: string;
   customerName: string;
+  customerEmail: string;
   reference: string;
   version: number;
   statusLabel: string;
@@ -238,7 +308,14 @@ export function QuoteHeader({
         </div>
       )}
 
-      {isCommsOpen && <CommunicationsModal onClose={() => setIsCommsOpen(false)} />}
+      {isCommsOpen && (
+        <CommunicationsModal
+          quoteId={quoteId}
+          customerName={customerName}
+          customerEmail={customerEmail}
+          onClose={() => setIsCommsOpen(false)}
+        />
+      )}
     </div>
   );
 }

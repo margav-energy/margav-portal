@@ -7,6 +7,7 @@ import { getProfileById } from "@/data/profiles-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { buildMergeFields, isDropboxSignConfigured, sendQuoteForSignature } from "@/lib/dropbox-sign";
+import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
@@ -344,6 +345,45 @@ export async function logCommunicationsOpened(quoteId: string, customerName: str
       entityId: quoteId,
     }),
   ]);
+}
+
+/** Sends the actual email from the Communications modal — see `src/lib/resend.ts`. Always from lucy@margav.energy. */
+export async function sendCommunicationEmail(
+  quoteId: string,
+  customerName: string,
+  customerEmail: string,
+  subject: string,
+  message: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isResendConfigured()) {
+    return { ok: false, error: "Email isn't set up yet — add RESEND_API_KEY to .env.local to enable this." };
+  }
+  if (!customerEmail.trim()) {
+    return { ok: false, error: "This customer has no email address on file." };
+  }
+
+  const user = await getCurrentUser();
+
+  try {
+    await sendEmail({ to: customerEmail, subject, text: message });
+  } catch (error) {
+    console.error("sendCommunicationEmail failed", error);
+    return { ok: false, error: "Could not send the email. Please try again." };
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: `Sent email: "${subject}"` }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Sent email to ${customerName}: "${subject}"`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return { ok: true };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

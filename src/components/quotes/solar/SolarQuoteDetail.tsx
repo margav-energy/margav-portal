@@ -89,6 +89,7 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
       <QuoteHeader
         quoteId={detail.quoteId}
         customerName={customer.name}
+        customerEmail={customer.email}
         reference={detail.reference}
         version={detail.version}
         statusLabel={detail.statusLabel}
