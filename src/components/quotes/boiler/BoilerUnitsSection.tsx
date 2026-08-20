@@ -19,6 +19,25 @@ const OUTPUT_KW_OPTIONS = [24, 30, 36];
 /** Common cylinder sizes — combi boilers leave this unset instead. */
 const CYLINDER_LITRE_OPTIONS = [120, 150, 180, 210, 250, 300];
 
+/**
+ * Starting suggestion for a System/Open Vent unit's cylinder, keyed off
+ * output (kW) — the only structured "size" signal this form has. Bedrooms/
+ * bathrooms are the more precise real-world driver for cylinder sizing, but
+ * the boiler still has to be able to reheat whatever cylinder it's paired
+ * with in a reasonable time, so the two aren't unrelated. Loosely follows
+ * standard UK unvented-cylinder sizing guidance for the property size each
+ * output typically serves:
+ *   24kW ≈ 2-3 bed, 1-2 bathrooms  → 180L
+ *   30kW ≈ 3-4 bed, 2 bathrooms    → 210L
+ *   36kW ≈ 4-5+ bed, 2-3 bathrooms → 250L
+ * Always just a starting point — the dropdown stays fully editable.
+ */
+const SUGGESTED_CYLINDER_LITRES_BY_KW: Record<number, number> = {
+  24: 180,
+  30: 210,
+  36: 250,
+};
+
 let localIdCounter = 0;
 
 /** Preset options plus a legacy value that predates the preset list, so editing an old unit never silently changes it. */
@@ -74,6 +93,27 @@ function UnitFormModal({
 
   function set<K extends keyof UnitForm>(key: K, value: UnitForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  /** Re-suggests the cylinder for a new output — only while there's actually a cylinder to have (not a Combi). */
+  function handleOutputKwChange(value: string) {
+    const suggestion = SUGGESTED_CYLINDER_LITRES_BY_KW[Number(value)];
+    setForm((current) => ({
+      ...current,
+      outputKw: value,
+      cylinderLitres:
+        current.installType === "Combi" || suggestion === undefined ? current.cylinderLitres : String(suggestion),
+    }));
+  }
+
+  /** Combi never has a cylinder; switching *to* System/Open Vent suggests one, but only if there isn't one set already (e.g. going Open Vent → System keeps whatever cylinder was already chosen). */
+  function handleInstallTypeChange(value: BoilerInstallType) {
+    setForm((current) => {
+      if (value === "Combi") return { ...current, installType: value, cylinderLitres: "" };
+      if (current.cylinderLitres) return { ...current, installType: value };
+      const suggestion = SUGGESTED_CYLINDER_LITRES_BY_KW[Number(current.outputKw)];
+      return { ...current, installType: value, cylinderLitres: suggestion !== undefined ? String(suggestion) : current.cylinderLitres };
+    });
   }
 
   function addItem() {
@@ -144,7 +184,7 @@ function UnitFormModal({
             id="unit-output"
             className={inputClassName}
             value={form.outputKw}
-            onChange={(event) => set("outputKw", event.target.value)}
+            onChange={(event) => handleOutputKwChange(event.target.value)}
           >
             {withLegacyValue(OUTPUT_KW_OPTIONS, form.outputKw).map((kw) => (
               <option key={kw} value={kw}>
@@ -197,7 +237,7 @@ function UnitFormModal({
             id="unit-install"
             className={inputClassName}
             value={form.installType}
-            onChange={(event) => set("installType", event.target.value as BoilerInstallType)}
+            onChange={(event) => handleInstallTypeChange(event.target.value as BoilerInstallType)}
           >
             {INSTALL_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -206,21 +246,23 @@ function UnitFormModal({
             ))}
           </select>
         </FormField>
-        <FormField label="Cylinder (L)" htmlFor="unit-cylinder">
-          <select
-            id="unit-cylinder"
-            className={inputClassName}
-            value={form.cylinderLitres}
-            onChange={(event) => set("cylinderLitres", event.target.value)}
-          >
-            <option value="">None (combi)</option>
-            {withLegacyValue(CYLINDER_LITRE_OPTIONS, form.cylinderLitres).map((litres) => (
-              <option key={litres} value={litres}>
-                {litres}L
-              </option>
-            ))}
-          </select>
-        </FormField>
+        {form.installType !== "Combi" && (
+          <FormField label="Cylinder (L)" htmlFor="unit-cylinder">
+            <select
+              id="unit-cylinder"
+              className={inputClassName}
+              value={form.cylinderLitres}
+              onChange={(event) => set("cylinderLitres", event.target.value)}
+            >
+              <option value="">None</option>
+              {withLegacyValue(CYLINDER_LITRE_OPTIONS, form.cylinderLitres).map((litres) => (
+                <option key={litres} value={litres}>
+                  {litres}L{litres === SUGGESTED_CYLINDER_LITRES_BY_KW[Number(form.outputKw)] ? " (suggested)" : ""}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        )}
         <FormField label="Warranty (years)" htmlFor="unit-warranty">
           <input
             id="unit-warranty"

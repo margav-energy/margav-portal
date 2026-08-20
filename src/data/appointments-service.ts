@@ -114,16 +114,20 @@ async function fetchAppointmentRows(): Promise<AppointmentRow[]> {
 
 export async function getAppointmentSummary(
   id: string,
-): Promise<{ id: string; customerName: string } | null> {
+): Promise<{ id: string; customerName: string; repId: string | null } | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("appointments")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, rep_id")
     .eq("id", id)
     .single();
 
   if (error || !data) return null;
-  return { id: data.id as string, customerName: fullName(data.first_name, data.last_name) };
+  return {
+    id: data.id as string,
+    customerName: fullName(data.first_name, data.last_name),
+    repId: data.rep_id as string | null,
+  };
 }
 
 // ── calendar ─────────────────────────────────────────────────────────────

@@ -125,16 +125,24 @@ export function monthlyPlanTermYearsFor(row: QuoteRow): number | undefined {
 /**
  * `sellPrice` always mirrors the Pricing card's total (boiler/solar +
  * install, extras, standard additionals, free-text extras) rather than
- * being stored — only `costPrice` is a value a rep enters (persisted in
- * `quotes.profit_breakdown` via `updateQuoteCostPrice`). `profit` and
- * `marginPercent` derive from the two.
+ * being stored. `profit`/`marginPercent` derive from `costPrice` + `sellPrice`.
+ *
+ * `costPrice` itself comes from different places depending on product —
+ * boiler quotes pass Margav's calculated install cost (see
+ * `boilerCostPriceFor` below); solar has no cost model yet, so callers pass
+ * `manualCostPriceFrom(row.profit_breakdown)` instead, which is whatever a
+ * rep entered via the Profit card's edit modal.
  */
-export function buildProfitBreakdown(raw: unknown, sellPrice: number): ProfitBreakdown {
-  const obj = (raw && typeof raw === "object" ? raw : {}) as Partial<ProfitBreakdown>;
-  const costPrice = Number(obj.costPrice ?? 0);
+export function buildProfitBreakdown(costPrice: number, sellPrice: number): ProfitBreakdown {
   const profit = sellPrice - costPrice;
   const marginPercent = sellPrice > 0 ? Math.round((profit / sellPrice) * 1000) / 10 : 0;
   return { costPrice, sellPrice, profit, marginPercent };
+}
+
+/** Solar-only: the cost price a rep manually entered via the Profit card, persisted in `quotes.profit_breakdown.costPrice` by `updateQuoteCostPrice`. 0 until someone sets one. */
+export function manualCostPriceFrom(raw: unknown): number {
+  const obj = (raw && typeof raw === "object" ? raw : {}) as { costPrice?: unknown };
+  return typeof obj.costPrice === "number" ? obj.costPrice : 0;
 }
 
 export function mapBoilerKeyDetails(raw: unknown): BoilerKeyDetails {

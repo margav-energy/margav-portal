@@ -11,8 +11,8 @@ import { formatCurrency } from "@/lib/format";
 import { updateQuoteCostPrice } from "@/components/quotes/actions";
 import type { ProfitBreakdown } from "@/types/quote-detail-shared";
 
-/** `sellPrice`/`profit`/`marginPercent` always derive from `costPrice` + the Pricing card total — only `costPrice` is edited here. */
-function deriveProfit(costPrice: number, sellPrice: number): Omit<ProfitBreakdown, "costPrice" | "sellPrice"> {
+/** `profit`/`marginPercent` always derive from `costPrice` + the Pricing card total. */
+function deriveProfit(costPrice: number, sellPrice: number): { profit: number; marginPercent: number } {
   const profit = sellPrice - costPrice;
   return { profit, marginPercent: sellPrice > 0 ? Math.round((profit / sellPrice) * 1000) / 10 : 0 };
 }
@@ -66,16 +66,25 @@ export function ProfitCard({
   customerName,
   profit,
   onUpdated,
+  editable = true,
 }: {
   quoteId: string;
   customerName: string;
   profit: ProfitBreakdown;
   onUpdated: (profit: ProfitBreakdown) => void;
+  /**
+   * Boiler quotes pass `false` — their cost price is Margav's real install
+   * cost (see `src/lib/boiler-install-cost.ts`, admin-editable at
+   * Settings → Boiler Install Costs), not a per-quote estimate, so there's
+   * nothing to override here. Solar has no cost model yet and defaults to
+   * `true` (a rep enters it manually).
+   */
+  editable?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
   function handleSave(costPrice: number) {
-    onUpdated({ costPrice, sellPrice: profit.sellPrice, ...deriveProfit(costPrice, profit.sellPrice) });
+    onUpdated({ ...profit, costPrice, ...deriveProfit(costPrice, profit.sellPrice) });
     void updateQuoteCostPrice(quoteId, costPrice, customerName);
   }
 
@@ -86,14 +95,16 @@ export function ProfitCard({
           <span className="text-sm text-slate-500">Cost price</span>
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-semibold text-slate-900">{formatCurrency(profit.costPrice)}</span>
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              aria-label="Edit cost price"
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
+            {editable && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                aria-label="Edit cost price"
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
         <KeyDetailField label="Sell price" value={formatCurrency(profit.sellPrice)} />
@@ -101,7 +112,7 @@ export function ProfitCard({
         <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} />
       </div>
 
-      {isEditing && (
+      {editable && isEditing && (
         <EditCostPriceModal costPrice={profit.costPrice} onClose={() => setIsEditing(false)} onSave={handleSave} />
       )}
     </Collapsible>

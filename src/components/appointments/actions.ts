@@ -171,14 +171,28 @@ export async function declineConfirmationAction(id: string): Promise<{ ok: boole
   ]);
   if (!ok) return { ok: false };
 
-  await logActivity({
-    actorId: user?.id,
-    customerName: summary?.customerName ?? "",
-    description: "Declined confirmation — appointment cancelled",
-    status: "cancelled",
-    entityType: "appointment",
-    entityId: id,
-  });
+  await Promise.all([
+    logActivity({
+      actorId: user?.id,
+      customerName: summary?.customerName ?? "",
+      description: "Declined confirmation — appointment cancelled",
+      status: "cancelled",
+      entityType: "appointment",
+      entityId: id,
+    }),
+    // Unlike every other lifecycle change here, this one is customer-
+    // initiated — the rep has no other way to find out their appointment
+    // just got cancelled out from under them.
+    summary?.repId
+      ? notifyUser({
+          userId: summary.repId,
+          title: "Appointment cancelled",
+          body: summary.customerName
+            ? `${summary.customerName} declined confirmation — the appointment has been cancelled.`
+            : "A customer declined confirmation — the appointment has been cancelled.",
+        })
+      : Promise.resolve(),
+  ]);
 
   revalidateAppointmentPaths();
   return { ok: true };

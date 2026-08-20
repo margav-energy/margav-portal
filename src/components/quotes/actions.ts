@@ -1,13 +1,14 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
-import { getQuoteDetail } from "@/data/quotes-service";
-import { buildMergeFields, isDropboxSignConfigured, sendQuoteForSignature } from "@/lib/dropbox-sign";
+import { createAgreementSignatureRequest, createSignatureRequest } from "@/data/signature-service";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
+import { signAgreementEmailHtml, signQuoteEmailHtml } from "@/lib/esignature/email-templates";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
@@ -458,10 +459,12 @@ export async function updateQuotePropertyDetails(
 }
 
 /**
- * The only value a rep enters for the Profit card — `sellPrice` always
- * mirrors the Pricing card's total instead of being stored (see
+ * Solar-only: the one value a rep enters for the Profit card — `sellPrice`
+ * always mirrors the Pricing card's total instead of being stored (see
  * `buildProfitBreakdown` in `src/data/quotes-mappers.ts`), so this is the
- * one write needed to make `profit`/`marginPercent` calculate.
+ * one write needed to make `profit`/`marginPercent` calculate. Boiler
+ * quotes don't call this — their cost price is calculated, not entered
+ * (see `src/lib/boiler-install-cost.ts`).
  */
 export async function updateQuoteCostPrice(
   quoteId: string,
@@ -471,10 +474,7 @@ export async function updateQuoteCostPrice(
   const supabase = await createClient();
   const user = await getCurrentUser();
 
-  const { error } = await supabase
-    .from("quotes")
-    .update({ profit_breakdown: { costPrice } })
-    .eq("id", quoteId);
+  const { error } = await supabase.from("quotes").update({ profit_breakdown: { costPrice } }).eq("id", quoteId);
 
   if (error) {
     console.error("updateQuoteCostPrice failed", error);
@@ -972,60 +972,127 @@ export async function addQuoteNote(quoteId: string, body: string, customerName: 
 
 export type SendQuoteResult = { ok: true } | { ok: false; error: string };
 
+/** `x-forwarded-proto`/`host` off the incoming request — there's no NEXT_PUBLIC_SITE_URL configured, and this works correctly in any environment (local/staging/prod) without one. */
+async function getSiteOrigin(): Promise<string> {
+  const headerList = await headers();
+  const host = headerList.get("host") ?? "localhost:3000";
+  const proto = headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
 /**
- * Sends the quote to the customer for e-signature via Dropbox Sign (see
- * `src/lib/dropbox-sign.ts`). Re-fetches the quote server-side instead of
- * trusting client-passed strings, since the customer's email is now
- * load-bearing (it's who Dropbox Sign sends the signing request to).
+ * Sends the quote to the customer for a self-hosted e-signature (see
+ * `src/data/signature-service.ts` — replaced Dropbox Sign). Locks a
+ * document snapshot, creates a `/sign/[token]` link, and emails it via
+ * Resend. Re-fetches the quote server-side inside `createSignatureRequest`
+ * instead of trusting client-passed strings, since the customer's email is
+ * load-bearing (it's who the signing link gets sent to).
  */
 export async function sendQuote(quoteId: string): Promise<SendQuoteResult> {
-  if (!isDropboxSignConfigured()) {
+  if (!isResendConfigured()) {
     return {
       ok: false,
-      error: "E-signature sending isn't configured yet. Ask an admin to set up Dropbox Sign (see .env.local.example).",
+      error: "Email sending isn't configured yet. Ask an admin to set up Resend (see .env.local.example).",
     };
   }
 
-  const result = await getQuoteDetail(quoteId);
-  if (!result) return { ok: false, error: "Quote not found." };
-  const { quote, detail } = result;
+  const request = await createSignatureRequest(quoteId);
+  if ("error" in request) return { ok: false, error: request.error };
+  const { accessToken, snapshot, signerEmail } = request;
 
-  const email = detail.customer.email.trim();
-  if (!email) {
-    return {
-      ok: false,
-      error: "This customer has no email address on file. Add one on the Customer card before sending for signature.",
-    };
-  }
+  const origin = await getSiteOrigin();
+  const signLink = `${origin}/sign/${accessToken}`;
 
-  let signatureRequestId: string;
   try {
-    signatureRequestId = await sendQuoteForSignature({
-      quoteId,
-      signerName: detail.customer.name,
-      signerEmail: email,
-      customFields: buildMergeFields(quote, detail),
+    await sendEmail({
+      to: signerEmail,
+      subject: `Your Margav Energy quote (${snapshot.reference}) is ready to sign`,
+      text:
+        `Hi ${snapshot.customerName},\n\n` +
+        `Your ${snapshot.productTypeLabel} quote (${snapshot.reference}, ${snapshot.totalPriceLabel}) is ready to review and sign:\n\n` +
+        `${signLink}\n\n` +
+        `This link is unique to you — please don't share it.\n\n` +
+        `Margav Energy`,
+      html: signQuoteEmailHtml({
+        customerName: snapshot.customerName,
+        reference: snapshot.reference,
+        totalPriceLabel: snapshot.totalPriceLabel,
+        productTypeLabel: snapshot.productTypeLabel,
+        signLink,
+      }),
     });
   } catch (error) {
-    console.error("sendQuote: Dropbox Sign request failed", error);
-    return { ok: false, error: "Couldn't send the quote for signature. Please try again or contact support." };
+    console.error("sendQuote: email send failed", error);
+    return { ok: false, error: "Couldn't email the signing link. Please try again or contact support." };
   }
 
-  const supabase = await createClient();
   const user = await getCurrentUser();
-
-  const { error } = await supabase
-    .from("quotes")
-    .update({ sent_at: new Date().toISOString(), dropbox_sign_request_id: signatureRequestId })
-    .eq("id", quoteId);
-  if (error) console.error("sendQuote: failed to record sent_at/dropbox_sign_request_id", error);
+  const customerName = snapshot.customerName;
 
   await Promise.all([
-    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the quote for e-signature (Dropbox Sign)" }),
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the quote for e-signature" }),
     logActivity({
       actorId: user?.id,
-      customerName: detail.customer.name,
-      description: `Sent quote for signature — ${detail.customer.name}`,
+      customerName,
+      description: `Sent quote for signature — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return { ok: true };
+}
+
+/**
+ * Sends the fixed "Boiler Installation Agreement" T&Cs document (see
+ * `assets/agreement-templates/boiler-installation-agreement.pdf`) to the
+ * customer for signature. The rep's side is filled in automatically from
+ * their saved Settings signature once the customer signs — see
+ * `src/data/signature-service.ts`'s `submitSignature`. Boiler-only, since
+ * the document itself is boiler-specific.
+ */
+export async function sendInstallationAgreement(quoteId: string): Promise<SendQuoteResult> {
+  if (!isResendConfigured()) {
+    return {
+      ok: false,
+      error: "Email sending isn't configured yet. Ask an admin to set up Resend (see .env.local.example).",
+    };
+  }
+
+  const request = await createAgreementSignatureRequest(quoteId);
+  if ("error" in request) return { ok: false, error: request.error };
+  const { accessToken, snapshot, signerEmail } = request;
+
+  const origin = await getSiteOrigin();
+  const signLink = `${origin}/sign/${accessToken}`;
+
+  try {
+    await sendEmail({
+      to: signerEmail,
+      subject: `Margav Energy — Boiler Installation Agreement to sign (${snapshot.reference})`,
+      text:
+        `Hi ${snapshot.customerName},\n\n` +
+        `Please review and sign your Boiler Installation Agreement for quote ${snapshot.reference}:\n\n` +
+        `${signLink}\n\n` +
+        `This link is unique to you — please don't share it.\n\n` +
+        `Margav Energy`,
+      html: signAgreementEmailHtml({ customerName: snapshot.customerName, reference: snapshot.reference, signLink }),
+    });
+  } catch (error) {
+    console.error("sendInstallationAgreement: email send failed", error);
+    return { ok: false, error: "Couldn't email the signing link. Please try again or contact support." };
+  }
+
+  const user = await getCurrentUser();
+  const customerName = snapshot.customerName;
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the installation agreement for signature" }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Sent installation agreement for signature — ${customerName}`,
       status: "allocated",
       entityType: "quote",
       entityId: quoteId,

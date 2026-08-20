@@ -19,15 +19,18 @@ import { BoilerUnitsSection } from "@/components/quotes/boiler/BoilerUnitsSectio
 import { BoilerKeyDetailsCard } from "@/components/quotes/boiler/BoilerKeyDetailsCard";
 import { BoilerSurveyCard } from "@/components/quotes/boiler/BoilerSurveyCard";
 import { BoilerSurveyLaunchModal } from "@/components/quotes/boiler/BoilerSurveyLaunchModal";
+import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
 import { EXTRAS_CATALOG } from "@/lib/extras-catalog";
 import {
   cancelQuoteAppointment,
   logWarrantyRegistration,
   recordPitchOutcome,
+  sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
 import type { BoilerSurveyDetail } from "@/types/boiler-survey";
+import type { SignatureRequestSummary } from "@/data/signature-service";
 import type {
   CustomerDetails,
   LineItem,
@@ -41,10 +44,18 @@ export function BoilerQuoteDetail({
   detail,
   reps,
   survey,
+  signatureRequest,
+  signedDocumentUrl,
+  agreementSignatureRequest,
+  agreementSignedDocumentUrl,
 }: {
   detail: BoilerQuoteDetailData;
   reps: RepProfile[];
   survey: BoilerSurveyDetail | undefined;
+  signatureRequest: SignatureRequestSummary | undefined;
+  signedDocumentUrl: string | undefined;
+  agreementSignatureRequest: SignatureRequestSummary | undefined;
+  agreementSignedDocumentUrl: string | undefined;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -64,6 +75,7 @@ export function BoilerQuoteDetail({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
   const router = useRouter();
 
   const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -96,6 +108,7 @@ export function BoilerQuoteDetail({
     onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
+    onInstallationAgreement: () => setIsAgreementModalOpen(true),
   });
 
   return (
@@ -172,8 +185,16 @@ export function BoilerQuoteDetail({
             customerName={customer.name}
             profit={profit}
             onUpdated={setProfit}
+            editable={false}
           />
           <BoilerSurveyCard survey={survey} />
+          <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
+          <SignatureStatusCard
+            title="Installation Agreement"
+            emptyActionLabel="Installation Agreement"
+            request={agreementSignatureRequest}
+            signedDocumentUrl={agreementSignedDocumentUrl}
+          />
         </div>
       </div>
 
@@ -196,6 +217,20 @@ export function BoilerQuoteDetail({
           customerEmail={customer.email}
           onClose={() => {
             setIsSendModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isAgreementModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          title="Send Installation Agreement"
+          documentLabel="installation agreement"
+          sendAction={sendInstallationAgreement}
+          onClose={() => {
+            setIsAgreementModalOpen(false);
             router.refresh();
           }}
         />

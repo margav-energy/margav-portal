@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { FormSection } from "@/components/ui/FormSection";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { APPOINTMENT_PRODUCTS } from "@/lib/appointment-products";
 import { createAppointmentAction } from "@/components/appointments/actions";
+import {
+  getAddressDetailsAction,
+  searchAddressesAction,
+} from "@/components/appointments/address-lookup-actions";
+import type { AddressSuggestion } from "@/lib/address-lookup";
 import { cn } from "@/lib/utils";
 
 interface FormValues {
@@ -101,6 +106,8 @@ export function CreateAppointmentForm({
   }));
   const [errors, setErrors] = useState<FormErrors>({});
   const [addressNoticeVisible, setAddressNoticeVisible] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -112,8 +119,44 @@ export function CreateAppointmentForm({
     setSaveError(null);
   }
 
-  function handleFindAddress() {
-    setAddressNoticeVisible(true);
+  async function handleFindAddress() {
+    if (!values.postcode.trim()) return;
+    setIsLookingUpAddress(true);
+    setAddressSuggestions([]);
+    setAddressNoticeVisible(false);
+
+    const { configured, suggestions } = await searchAddressesAction(values.postcode);
+    setIsLookingUpAddress(false);
+
+    if (!configured) {
+      // No GETADDRESS_API_KEY set yet — same manual-entry fallback as before.
+      setAddressNoticeVisible(true);
+      return;
+    }
+    setAddressSuggestions(suggestions);
+  }
+
+  async function handleSelectAddress(suggestion: AddressSuggestion) {
+    setIsLookingUpAddress(true);
+    const details = await getAddressDetailsAction(suggestion.id);
+    setIsLookingUpAddress(false);
+    setAddressSuggestions([]);
+    if (!details) return;
+
+    setValues((current) => ({
+      ...current,
+      postcode: details.postcode || current.postcode,
+      addressLine1: details.line1,
+      addressLine2: details.line2,
+      addressLine3: details.line3,
+      city: details.townOrCity,
+      county: details.county,
+    }));
+    setErrors((current) => ({
+      ...current,
+      addressLine1: undefined,
+      city: undefined,
+    }));
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -166,6 +209,7 @@ export function CreateAppointmentForm({
       setIsSaved(true);
       setValues(EMPTY_FORM);
       setAddressNoticeVisible(false);
+      setAddressSuggestions([]);
     });
   }
 
@@ -173,6 +217,7 @@ export function CreateAppointmentForm({
     setValues(EMPTY_FORM);
     setErrors({});
     setAddressNoticeVisible(false);
+    setAddressSuggestions([]);
     setIsSaved(false);
     setSaveError(null);
   }
@@ -235,14 +280,35 @@ export function CreateAppointmentForm({
               value={values.postcode}
               onChange={(event) => update("postcode", event.target.value)}
             />
-            <Button type="button" variant="secondary" onClick={handleFindAddress}>
-              Find address
+            <Button type="button" variant="secondary" onClick={handleFindAddress} disabled={isLookingUpAddress}>
+              {isLookingUpAddress ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Finding…
+                </span>
+              ) : (
+                "Find address"
+              )}
             </Button>
           </div>
           {addressNoticeVisible && (
             <p className="text-xs text-slate-400">
               Address lookup isn&rsquo;t connected yet — enter the address manually below.
             </p>
+          )}
+          {addressSuggestions.length > 0 && (
+            <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+              {addressSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  onClick={() => handleSelectAddress(suggestion)}
+                  className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                >
+                  {suggestion.address}
+                </button>
+              ))}
+            </div>
           )}
         </FormField>
         <FormField label="Address line 1" required htmlFor="addressLine1" error={errors.addressLine1}>

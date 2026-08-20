@@ -17,9 +17,9 @@ export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
   /** £150 one-off — quantity stays 1. */
   { name: "Roof kit", defaultUnitPrice: 150 },
   /** £55 per metre — quantity is the number of metres. */
-  { name: "Gas run", defaultUnitPrice: 55 },
+  { name: "Gas run per metre", defaultUnitPrice: 55 },
   /** £100 per metre (vertical flue) — quantity is the number of metres. */
-  { name: "Flue extension", defaultUnitPrice: 100 },
+  { name: "Flue extension per metre", defaultUnitPrice: 100 },
   /** £500 one-off — quantity stays 1. Independent of the two "Extra ... installation" entries below — a quote can carry any combination of these three. */
   { name: "Relocation", defaultUnitPrice: 500 },
   { name: "Extra half-day installation", defaultUnitPrice: 0 },

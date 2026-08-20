@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/data/current-user";
 import { getInitials } from "@/lib/utils";
+import { clearMySignature, saveMySignature } from "@/data/profile-signature-service";
 
 export interface ProfileFormState {
   error?: string;
@@ -68,4 +69,14 @@ export async function updatePasswordAction(
   }
 
   return { success: true };
+}
+
+export async function saveMySignatureAction(
+  signatureImageDataUrl: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return saveMySignature(signatureImageDataUrl);
+}
+
+export async function clearMySignatureAction(): Promise<{ ok: boolean; error?: string }> {
+  return clearMySignature();
 }

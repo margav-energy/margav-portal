@@ -4,24 +4,32 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { sendQuote } from "@/components/quotes/actions";
+import { sendQuote, type SendQuoteResult } from "@/components/quotes/actions";
 
 /**
- * Confirms + triggers sending a quote to Dropbox Sign for e-signature —
- * opened from the "Send Quote" action button on both `BoilerQuoteDetail`
- * and `SolarQuoteDetail`. Product-agnostic (unlike `BoilerSurveyLaunchModal`,
- * which is boiler-only), so it lives in `detail/` rather than `boiler/`.
+ * Confirms + triggers sending a document for e-signature via the
+ * self-hosted `/sign/[token]` flow (see `src/data/signature-service.ts`).
+ * Shared by "Send Quote" and "Installation Agreement" — only the title,
+ * wording, and which server action gets called differ. Product-agnostic
+ * (unlike `BoilerSurveyLaunchModal`, which is boiler-only), so it lives in
+ * `detail/` rather than `boiler/`.
  */
 export function SendForSignatureModal({
   quoteId,
   customerName,
   customerEmail,
   onClose,
+  title = "Send for Signature",
+  documentLabel = "quote",
+  sendAction = sendQuote,
 }: {
   quoteId: string;
   customerName: string;
   customerEmail: string;
   onClose: () => void;
+  title?: string;
+  documentLabel?: string;
+  sendAction?: (quoteId: string) => Promise<SendQuoteResult>;
 }) {
   const [status, setStatus] = useState<"confirm" | "sending" | "sent" | "error">("confirm");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -30,7 +38,7 @@ export function SendForSignatureModal({
 
   async function handleSend() {
     setStatus("sending");
-    const result = await sendQuote(quoteId);
+    const result = await sendAction(quoteId);
     if (result.ok) {
       setStatus("sent");
     } else {
@@ -40,7 +48,7 @@ export function SendForSignatureModal({
   }
 
   return (
-    <Modal title="Send for Signature" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <div className="flex flex-col items-center gap-4 px-6 py-6 text-center">
         {!hasEmail ? (
           <p className="text-sm text-red-600">
@@ -48,13 +56,13 @@ export function SendForSignatureModal({
           </p>
         ) : status === "sent" ? (
           <p className="text-sm text-brand-green-mid">
-            Sent to {customerName} ({customerEmail}) for signature via Dropbox Sign.
+            Sent to {customerName} ({customerEmail}) for signature.
           </p>
         ) : (
           <>
             <p className="text-sm text-slate-600">
-              Send this quote to <span className="font-semibold text-slate-900">{customerName}</span> (
-              {customerEmail}) for e-signature via Dropbox Sign?
+              Send this {documentLabel} to <span className="font-semibold text-slate-900">{customerName}</span> (
+              {customerEmail}) for e-signature?
             </p>
             {status === "error" && errorMessage && <p className="text-sm text-red-600">{errorMessage}</p>}
           </>

@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerSurveyForQuote } from "@/data/boiler-survey-service";
+import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
 import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
@@ -19,7 +20,14 @@ export default async function QuoteDetailPage({
 
   const { quote, detail } = result;
   const isBoiler = quote.productType === "boiler";
-  const survey = isBoiler ? await getBoilerSurveyForQuote(id) : undefined;
+  const [survey, signatureRequest, signedDocumentUrl, agreementSignatureRequest, agreementSignedDocumentUrl] =
+    await Promise.all([
+      isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
+      getLatestSignatureRequest(id),
+      getSignedDocumentUrl(id),
+      isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
+      isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
+    ]);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
@@ -31,9 +39,22 @@ export default async function QuoteDetailPage({
         Back to all quotes
       </Link>
       {isBoiler ? (
-        <BoilerQuoteDetail detail={detail as BoilerQuoteDetailData} reps={reps} survey={survey} />
+        <BoilerQuoteDetail
+          detail={detail as BoilerQuoteDetailData}
+          reps={reps}
+          survey={survey}
+          signatureRequest={signatureRequest}
+          signedDocumentUrl={signedDocumentUrl}
+          agreementSignatureRequest={agreementSignatureRequest}
+          agreementSignedDocumentUrl={agreementSignedDocumentUrl}
+        />
       ) : (
-        <SolarQuoteDetail detail={detail as SolarQuoteDetailData} reps={reps} />
+        <SolarQuoteDetail
+          detail={detail as SolarQuoteDetailData}
+          reps={reps}
+          signatureRequest={signatureRequest}
+          signedDocumentUrl={signedDocumentUrl}
+        />
       )}
     </div>
   );

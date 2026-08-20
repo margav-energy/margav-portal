@@ -17,6 +17,7 @@ import { SendForSignatureModal } from "@/components/quotes/detail/SendForSignatu
 import { SolarPropertyCard } from "@/components/quotes/solar/SolarPropertyCard";
 import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
+import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
 import {
   cancelQuoteAppointment,
   logStaxPortalAction,
@@ -25,6 +26,7 @@ import {
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
+import type { SignatureRequestSummary } from "@/data/signature-service";
 import type {
   CustomerDetails,
   LineItem,
@@ -34,7 +36,17 @@ import type {
 } from "@/types/quote-detail-shared";
 import type { RepProfile } from "@/data/profiles-service";
 
-export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailData; reps: RepProfile[] }) {
+export function SolarQuoteDetail({
+  detail,
+  reps,
+  signatureRequest,
+  signedDocumentUrl,
+}: {
+  detail: SolarQuoteDetailData;
+  reps: RepProfile[];
+  signatureRequest: SignatureRequestSummary | undefined;
+  signedDocumentUrl: string | undefined;
+}) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
@@ -158,6 +170,7 @@ export function SolarQuoteDetail({ detail, reps }: { detail: SolarQuoteDetailDat
             profit={profit}
             onUpdated={setProfit}
           />
+          <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
         </div>
       </div>
 

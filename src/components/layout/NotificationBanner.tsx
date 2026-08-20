@@ -3,13 +3,18 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 // Well-known marker row used to persist this banner's dismissal per user.
 // A partial unique index on (user_id, title) for this exact title (see
-// supabase/migrations/0003_notifications_unique_announcement.sql) keeps
-// concurrent "insert if not exists" calls from creating duplicates.
-const ANNOUNCEMENT_TITLE = "Product update";
-const ANNOUNCEMENT_BODY = "Margav Portal has been updated with the new Quotes dashboard.";
+// supabase/migrations/0009_notifications_unique_release_announcement.sql)
+// keeps concurrent "insert if not exists" calls from creating duplicates.
+// Bump the date in the title (and add a matching migration) each time this
+// copy changes for a new release — reusing the old title would just reuse
+// already-dismissed users' rows and the banner would never show again.
+const ANNOUNCEMENT_TITLE = "Product update — August 2026";
+const ANNOUNCEMENT_BODY =
+  "You can now send quotes for e-signature and email customers directly from a quote — see the Send Quote and Communications buttons.";
 
 export function NotificationBanner({ userId }: { userId: string }) {
   const [notificationId, setNotificationId] = useState<string | null>(null);
@@ -21,6 +26,10 @@ export function NotificationBanner({ userId }: { userId: string }) {
     let isMounted = true;
 
     async function ensureAnnouncement() {
+      // Supabase env vars may not be available in this client bundle yet
+      // (e.g. a dev server started before .env existed) — skip quietly
+      // rather than let createClient() throw; a restart picks up real values.
+      if (!isSupabaseConfigured()) return;
       const supabase = createClient();
 
       const { data: existing, error: selectError } = await supabase
@@ -84,6 +93,7 @@ export function NotificationBanner({ userId }: { userId: string }) {
 
   async function dismiss() {
     setIsDismissed(true);
+    if (!isSupabaseConfigured()) return;
     const supabase = createClient();
     const { error } = await supabase
       .from("notifications")

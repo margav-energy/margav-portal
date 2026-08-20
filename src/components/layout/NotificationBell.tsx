@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 interface NotificationRow {
   id: string;
@@ -14,6 +15,12 @@ interface NotificationRow {
   created_at: string;
 }
 
+// Notifications are written server-side by other users' actions (an admin
+// assigning you a quote, a customer declining confirmation, ...), so there's
+// no client-side event to react to — polling plus a refetch on open is the
+// simplest way to keep this from going stale. See POLL_INTERVAL_MS below.
+const POLL_INTERVAL_MS = 60_000;
+
 // The banner's own "have you seen the announcement" row is surfaced here too
 // (see NotificationBanner) — it's a real notification, so it belongs in the
 // same list.
@@ -22,6 +29,14 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -33,11 +48,19 @@ export function NotificationBell({ userId }: { userId: string }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadNotifications = useCallback(
+    async (options?: { showLoadingState?: boolean }) => {
+      if (options?.showLoadingState) setIsLoading(true);
 
-    async function loadNotifications() {
+      // Supabase env vars may not be available in this client bundle yet
+      // (e.g. a dev server started before .env existed) — skip quietly
+      // rather than let createClient() throw; a restart picks up real values.
+      if (!isSupabaseConfigured()) {
+        if (options?.showLoadingState) setIsLoading(false);
+        return;
+      }
       const supabase = createClient();
+
       const { data, error } = await supabase
         .from("notifications")
         .select("id, title, body, is_read, created_at")
@@ -45,20 +68,31 @@ export function NotificationBell({ userId }: { userId: string }) {
         .order("created_at", { ascending: false })
         .limit(20);
 
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
       if (error) {
         console.error("Failed to load notifications", error);
       } else {
         setNotifications((data ?? []) as NotificationRow[]);
       }
-      setIsLoading(false);
-    }
+      if (options?.showLoadingState) setIsLoading(false);
+    },
+    [userId],
+  );
 
-    loadNotifications();
+  // Initial load, plus a background poll so the unread badge doesn't go
+  // stale on a tab left open for a while — nothing here pushes updates to
+  // the client, so polling is the only way to notice a new row. The initial
+  // fetch is deferred a tick (rather than called synchronously in the
+  // effect body) so it reads the same way as the interval's own calls, all
+  // of which run from a timer callback rather than the effect body itself.
+  useEffect(() => {
+    const timeoutId = setTimeout(() => loadNotifications({ showLoadingState: true }), 0);
+    const intervalId = setInterval(() => loadNotifications(), POLL_INTERVAL_MS);
     return () => {
-      isMounted = false;
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
     };
-  }, [userId]);
+  }, [loadNotifications]);
 
   const unreadCount = notifications.filter((notification) => !notification.is_read).length;
 
@@ -68,6 +102,7 @@ export function NotificationBell({ userId }: { userId: string }) {
         notification.id === id ? { ...notification, is_read: true } : notification,
       ),
     );
+    if (!isSupabaseConfigured()) return;
     const supabase = createClient();
     const { error } = await supabase.from("notifications").update({ is_read: true }).eq("id", id);
     if (error) console.error("Failed to mark notification as read", error);
@@ -77,6 +112,7 @@ export function NotificationBell({ userId }: { userId: string }) {
     const unreadIds = notifications.filter((notification) => !notification.is_read).map((n) => n.id);
     if (unreadIds.length === 0) return;
     setNotifications((current) => current.map((notification) => ({ ...notification, is_read: true })));
+    if (!isSupabaseConfigured()) return;
     const supabase = createClient();
     const { error } = await supabase
       .from("notifications")
@@ -90,7 +126,15 @@ export function NotificationBell({ userId }: { userId: string }) {
       <button
         type="button"
         aria-label="Notifications"
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          // Refetch every time it's opened, so it never shows what was true
+          // up to POLL_INTERVAL_MS ago instead of what's true right now.
+          setIsOpen((open) => {
+            const next = !open;
+            if (next) loadNotifications();
+            return next;
+          });
+        }}
         className="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
       >
         <Bell className="h-5 w-5" />

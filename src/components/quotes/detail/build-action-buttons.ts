@@ -25,11 +25,12 @@ export function buildActionButtons(params: {
   onCancelApp: () => void;
   onSurvey: () => void;
   onSelectPitchOutcome: (outcome: string) => void;
+  /** Boiler-only — the document itself (Boiler Installation Agreement) doesn't apply to solar. */
+  onInstallationAgreement?: () => void;
 }): HeaderActionButton[] {
   return [
     { label: "Presenter", variant: "primary", href: `/quotes/${params.quoteId}/presenter` },
-    // No replacement destination defined for this one yet.
-    { label: "View Quote", variant: "primary" },
+    { label: "View Quote", variant: "primary", href: `/quotes/${params.quoteId}/view` },
     { label: "Send Quote", variant: "primary", onClick: params.onSendQuote },
     { label: params.secondaryPortalLabel, variant: "primary", onClick: params.onSecondaryPortalAction },
     { label: "Cancel App", variant: "primary", onClick: params.onCancelApp },
@@ -41,6 +42,9 @@ export function buildActionButtons(params: {
     },
     { label: "Rebook App", variant: "primary", href: rebookAppointmentHref(params.customerName) },
     { label: "Survey", variant: "primary", onClick: params.onSurvey },
+    ...(params.onInstallationAgreement
+      ? [{ label: "Installation Agreement", variant: "primary" as const, onClick: params.onInstallationAgreement }]
+      : []),
     // No manual "Archive" button — quotes archive themselves automatically
     // after 5 years (see src/data/quotes-service.ts).
   ];

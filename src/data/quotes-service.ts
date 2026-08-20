@@ -1,10 +1,13 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles } from "@/data/profiles-service";
+import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
+import { boilerCostPrice } from "@/lib/boiler-install-cost";
 import {
   buildPricingBreakdown,
   buildProfileMap,
   buildProfitBreakdown,
+  manualCostPriceFrom,
   mapBoilerKeyDetails,
   mapBoilerPropertyDetails,
   mapBoilerUnitRow,
@@ -144,7 +147,7 @@ export async function getQuoteDetail(
   const row = quoteRow as QuoteRow;
   const isBoiler = row.product_type === "boiler";
 
-  const [unitsResult, lineItemsResult, notesResult, historyResult] = await Promise.all([
+  const [unitsResult, lineItemsResult, notesResult, historyResult, boilerCostSettings] = await Promise.all([
     isBoiler
       ? supabase
           .from("boiler_units")
@@ -171,6 +174,8 @@ export async function getQuoteDetail(
       .select("id, actor_id, is_system, description, created_at")
       .eq("quote_id", id)
       .order("created_at", { ascending: false }),
+    // Only boiler quotes need this — skip the extra round trip for solar.
+    isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
   ]);
 
   if (unitsResult.error) console.error("getQuoteDetail units failed", unitsResult.error);
@@ -225,6 +230,8 @@ export async function getQuoteDetail(
       boilerUnits.reduce((sum, unit) => sum + unit.price, 0) +
       sumLineItems(boilerUnits.flatMap((unit) => unit.items));
     const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
+    // boilerCostSettings is always populated here — fetched above whenever isBoiler is true.
+    const costPrice = boilerCostPrice(boilerUnits.map((unit) => unit.outputKw), boilerCostSettings!);
 
     const detail: BoilerQuoteDetail = {
       quoteId: row.id,
@@ -238,7 +245,7 @@ export async function getQuoteDetail(
         { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
         { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
       ]),
-      profitBreakdown: buildProfitBreakdown(row.profit_breakdown, sellPrice),
+      profitBreakdown: buildProfitBreakdown(costPrice, sellPrice),
     };
 
     return { quote, detail };
@@ -261,7 +268,7 @@ export async function getQuoteDetail(
       { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
       { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
     ]),
-    profitBreakdown: buildProfitBreakdown(row.profit_breakdown, sellPrice),
+    profitBreakdown: buildProfitBreakdown(manualCostPriceFrom(row.profit_breakdown), sellPrice),
   };
 
   return { quote, detail };

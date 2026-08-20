@@ -52,6 +52,12 @@ export interface QuoteHistoryEntry {
 }
 
 export interface ProfitBreakdown {
+  /**
+   * For boiler quotes this is Margav's real install cost — calculated from
+   * `src/lib/boiler-install-cost.ts`, not editable (see `ProfitCard`'s
+   * `editable` prop). Solar has no cost model yet, so its cost price is
+   * whatever a rep manually entered (0 until someone does).
+   */
   costPrice: number;
   sellPrice: number;
   profit: number;
