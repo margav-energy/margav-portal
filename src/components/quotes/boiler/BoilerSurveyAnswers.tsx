@@ -37,7 +37,7 @@ export function BoilerSurveyAnswers({ answers, photos }: { answers: Answers; pho
         {photos.length === 0 ? (
           <p className="mt-2 text-sm text-slate-400">No photos uploaded yet.</p>
         ) : (
-          <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6">
+          <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {PHOTO_CHECKLIST_ITEMS.map((item) => {
               const photo = photos.find((p) => p.itemKey === item.key);
               if (!photo) return null;
@@ -45,6 +45,7 @@ export function BoilerSurveyAnswers({ answers, photos }: { answers: Answers; pho
                 <a key={item.key} href={photo.url} target="_blank" rel="noopener noreferrer" title={item.label}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, refreshed on every server read rather than a static asset. */}
                   <img src={photo.url} alt={item.label} className="aspect-square w-full rounded-md object-cover" />
+                  <p className="mt-1 text-xs text-slate-500">{item.label}</p>
                 </a>
               );
             })}

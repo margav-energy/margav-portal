@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getAllProfiles } from "@/data/profiles-service";
-import { getBoilerSurveyForQuote } from "@/data/boiler-survey-service";
+import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
 import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
@@ -20,9 +20,10 @@ export default async function QuoteDetailPage({
 
   const { quote, detail } = result;
   const isBoiler = quote.productType === "boiler";
-  const [survey, signatureRequest, signedDocumentUrl, agreementSignatureRequest, agreementSignedDocumentUrl] =
+  const [survey, surveyDocumentUrl, signatureRequest, signedDocumentUrl, agreementSignatureRequest, agreementSignedDocumentUrl] =
     await Promise.all([
       isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
+      isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
       getLatestSignatureRequest(id),
       getSignedDocumentUrl(id),
       isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
@@ -43,6 +44,7 @@ export default async function QuoteDetailPage({
           detail={detail as BoilerQuoteDetailData}
           reps={reps}
           survey={survey}
+          surveyDocumentUrl={surveyDocumentUrl}
           signatureRequest={signatureRequest}
           signedDocumentUrl={signedDocumentUrl}
           agreementSignatureRequest={agreementSignatureRequest}

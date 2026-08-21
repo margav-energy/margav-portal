@@ -44,6 +44,7 @@ export function BoilerQuoteDetail({
   detail,
   reps,
   survey,
+  surveyDocumentUrl,
   signatureRequest,
   signedDocumentUrl,
   agreementSignatureRequest,
@@ -52,6 +53,7 @@ export function BoilerQuoteDetail({
   detail: BoilerQuoteDetailData;
   reps: RepProfile[];
   survey: BoilerSurveyDetail | undefined;
+  surveyDocumentUrl: string | undefined;
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
   agreementSignatureRequest: SignatureRequestSummary | undefined;
@@ -104,7 +106,10 @@ export function BoilerQuoteDetail({
     customerName: customer.name,
     secondaryPortalLabel: "Warranty Registration",
     onSendQuote: () => setIsSendModalOpen(true),
-    onSecondaryPortalAction: () => void logWarrantyRegistration(detail.quoteId, customer.name),
+    onSecondaryPortalAction: () => {
+      window.open("https://www.myintergasregistration.co.uk/app/installer_login", "_blank", "noopener,noreferrer");
+      void logWarrantyRegistration(detail.quoteId, customer.name);
+    },
     onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
@@ -187,7 +192,7 @@ export function BoilerQuoteDetail({
             onUpdated={setProfit}
             editable={false}
           />
-          <BoilerSurveyCard survey={survey} />
+          <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />
           <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
           <SignatureStatusCard
             title="Installation Agreement"
@@ -204,6 +209,7 @@ export function BoilerQuoteDetail({
           quoteId={detail.quoteId}
           customerName={customer.name}
           survey={survey}
+          documentUrl={surveyDocumentUrl}
           onClose={() => {
             setIsSurveyModalOpen(false);
             router.refresh();

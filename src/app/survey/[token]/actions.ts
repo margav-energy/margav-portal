@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { serializeAnswersPatch, SURVEY_PHOTOS_BUCKET } from "@/data/boiler-survey-service";
+import { generateAndStoreSurveyPdf, serializeAnswersPatch, SURVEY_PHOTOS_BUCKET } from "@/data/boiler-survey-service";
+import { formatDateTime } from "@/lib/format";
 import type { BoilerSurveyAnswers, PhotoChecklistItemKey } from "@/types/boiler-survey";
 
 /**
@@ -31,15 +32,26 @@ export async function submitBoilerSurvey(
   if (!survey) return { ok: false, error: "This survey link is no longer valid." };
 
   const supabase = createServiceRoleClient();
+  const submittedAt = new Date().toISOString();
   const { error } = await supabase
     .from("boiler_surveys")
-    .update({ ...serializeAnswersPatch(answers), status: "submitted", submitted_at: new Date().toISOString() })
+    .update({ ...serializeAnswersPatch(answers), status: "submitted", submitted_at: submittedAt })
     .eq("id", survey.id);
 
   if (error) {
     console.error("submitBoilerSurvey failed", error);
     return { ok: false, error: "Could not save the survey. Please try again." };
   }
+
+  // Best-effort — rebuilds the "Download survey PDF" artifact from the
+  // just-saved answers/photos. A failure here doesn't fail the submission
+  // itself (see `generateAndStoreSurveyPdf`'s doc comment).
+  await generateAndStoreSurveyPdf(supabase, {
+    surveyId: survey.id,
+    quoteId: survey.quote_id,
+    answers,
+    submittedAtLabel: formatDateTime(submittedAt),
+  });
 
   const { data: quote } = await supabase.from("quotes").select("customer_name").eq("id", survey.quote_id).maybeSingle();
   const customerName = quote?.customer_name ?? "";

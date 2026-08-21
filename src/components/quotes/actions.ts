@@ -1102,7 +1102,12 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
   return { ok: true };
 }
 
-/** No warranty-registration provider is integrated yet — this is that integration point. */
+/**
+ * Logs the activity-history entry for the "Warranty Registration" button,
+ * which opens the Intergas installer portal
+ * (https://www.myintergasregistration.co.uk/app/installer_login) in a new
+ * tab — see `BoilerQuoteDetail.tsx`'s `onSecondaryPortalAction`.
+ */
 export async function logWarrantyRegistration(quoteId: string, customerName: string): Promise<void> {
   await logExternalPortalAction(quoteId, customerName, "Warranty registration submitted");
 }

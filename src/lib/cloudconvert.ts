@@ -2,7 +2,7 @@ import CloudConvert from "cloudconvert";
 
 /**
  * Powers the admin "upload a sales deck" flow (`src/app/settings/presenter-deck/`)
- * — converts an uploaded .pptx into one PNG per slide. Mirrors
+ * — converts an uploaded .pptx or .pdf into one PNG per slide. Mirrors
  * `src/lib/supabase/env.ts`'s "fail loudly with a helpful message" pattern.
  */
 

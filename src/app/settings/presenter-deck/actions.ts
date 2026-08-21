@@ -15,7 +15,21 @@ import type { PresenterSlideType } from "@/data/presenter-deck-service";
  * takes to render every slide — the job id + the metadata needed to finish
  * the job are round-tripped through the client's component state between
  * the two calls rather than persisted server-side.
+ *
+ * Accepts either a .pptx or a .pdf — both go through the same CloudConvert
+ * "convert to PNG" job (see `uploadDeckAction`), so admins with a deck
+ * that's already a PDF don't need to round-trip it through PowerPoint
+ * first. The `pptx_storage_path` column/bucket names predate this and
+ * still just mean "the originally uploaded deck file".
  */
+
+/** Extensions accepted for the "Replace with" upload — order matters for `DECK_EXTENSIONS.find` in `uploadDeckAction`, but both are checked. */
+const DECK_EXTENSIONS = [".pptx", ".pdf"] as const;
+
+const CONTENT_TYPE_BY_EXTENSION: Record<(typeof DECK_EXTENSIONS)[number], string> = {
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".pdf": "application/pdf",
+};
 
 async function requireAdmin(): Promise<CurrentUser> {
   const user = await getCurrentUser();
@@ -41,10 +55,12 @@ export async function uploadDeckAction(_prev: UploadDeckResult, formData: FormDa
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
-    return { error: "Choose a .pptx file to upload." };
+    return { error: "Choose a .pptx or .pdf file to upload." };
   }
-  if (!file.name.toLowerCase().endsWith(".pptx")) {
-    return { error: "Only .pptx files are supported." };
+  const lowerName = file.name.toLowerCase();
+  const extension = DECK_EXTENSIONS.find((ext) => lowerName.endsWith(ext));
+  if (!extension) {
+    return { error: "Only .pptx and .pdf files are supported." };
   }
 
   const arrayBuffer = await file.arrayBuffer();
@@ -52,7 +68,7 @@ export async function uploadDeckAction(_prev: UploadDeckResult, formData: FormDa
 
   const supabase = await createClient();
   const { error: uploadError } = await supabase.storage.from("presenter-decks").upload(storagePath, arrayBuffer, {
-    contentType: file.type || "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    contentType: file.type || CONTENT_TYPE_BY_EXTENSION[extension],
   });
 
   if (uploadError) {
@@ -69,7 +85,12 @@ export async function uploadDeckAction(_prev: UploadDeckResult, formData: FormDa
           operation: "convert",
           input: "upload-deck",
           output_format: "png",
-          engine: "libreoffice",
+          // LibreOffice renders .pptx slides reliably; a .pdf is already
+          // page images waiting to be rasterized, so leave the engine
+          // unset there and let CloudConvert pick its own default
+          // (Poppler/MuPDF) rather than forcing LibreOffice's PDF import,
+          // which can mangle page sizing.
+          ...(extension === ".pptx" ? { engine: "libreoffice" } : {}),
         },
         "export-deck": { operation: "export/url", input: "convert-deck" },
       },

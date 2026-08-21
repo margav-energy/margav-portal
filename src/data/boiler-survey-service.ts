@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { renderSurveySummaryPdf, type SurveyPdfPhoto } from "@/lib/boiler-survey/pdf";
 import {
   emptyBoilerSurveyAnswers,
   type BoilerSurveyAnswers,
@@ -13,6 +14,9 @@ import {
 } from "@/types/boiler-survey";
 
 export const SURVEY_PHOTOS_BUCKET = "boiler-survey-photos";
+
+/** react-pdf's `<Image>` only reliably decodes these — see `SurveyPdfPhoto.embeddable` in `src/lib/boiler-survey/pdf.tsx`. */
+const PDF_EMBEDDABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 
 /** Every `boiler_surveys` column this module reads — kept in one place since both the authenticated and service-role paths select the same shape. */
 const SURVEY_COLUMNS = `
@@ -194,6 +198,24 @@ export async function getOrCreateBoilerSurveyToken(
   return { accessToken: data.access_token, status: data.status as BoilerSurveyStatus, created: true };
 }
 
+/** A short-lived signed URL to the generated survey-summary PDF (see `generateAndStoreSurveyPdf`), for the "Download survey PDF" link on the quote detail page. `undefined` until a surveyor has submitted at least once. */
+export async function getSurveyDocumentUrl(quoteId: string): Promise<string | undefined> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("boiler_surveys").select("pdf_path").eq("quote_id", quoteId).maybeSingle();
+
+  if (!data?.pdf_path) return undefined;
+
+  const { data: signed, error } = await supabase.storage
+    .from(SURVEY_PHOTOS_BUCKET)
+    .createSignedUrl(data.pdf_path, 60 * 60);
+
+  if (error || !signed) {
+    console.error("getSurveyDocumentUrl: createSignedUrl failed", error);
+    return undefined;
+  }
+  return signed.signedUrl;
+}
+
 /** For the "Survey" card on the quote detail page. Returns `undefined` if "Survey" has never been clicked for this quote. */
 export async function getBoilerSurveyForQuote(quoteId: string): Promise<BoilerSurveyDetail | undefined> {
   const supabase = await createClient();
@@ -253,6 +275,119 @@ async function loadSignedPhotos(
   return photos.filter((photo): photo is BoilerSurveyPhoto => photo !== null);
 }
 
+/** Shared by `getPublicBoilerSurvey` and `generateAndStoreSurveyPdf` — looks up the owning quote + assigned rep to build the read-only job header both need. */
+async function buildJobContext(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `loadSignedPhotos`'s note above.
+  supabase: SupabaseClient<any>,
+  quoteId: string,
+): Promise<BoilerSurveyJobContext> {
+  const { data: quote, error: quoteError } = await supabase
+    .from("quotes")
+    .select("id, reference, customer_name, customer_phone, customer_email, customer_address_lines, representative_id")
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (quoteError) console.error("buildJobContext quote lookup failed", quoteError);
+
+  let repName = "Unassigned";
+  if (quote?.representative_id) {
+    const { data: rep } = await supabase.from("profiles").select("full_name").eq("id", quote.representative_id).maybeSingle();
+    repName = rep?.full_name || repName;
+  }
+
+  return {
+    quoteId: quote?.id ?? "",
+    reference: quote?.reference || quote?.id || "",
+    repName,
+    customerName: quote?.customer_name ?? "",
+    phone: quote?.customer_phone ?? "",
+    email: quote?.customer_email ?? "",
+    addressLines: quote?.customer_address_lines ?? [],
+  };
+}
+
+/** Downloads each uploaded photo's raw bytes for embedding into the survey PDF — a separate read from `loadSignedPhotos`, which only needs signed *URLs* for the portal UI. */
+async function loadPhotosForPdf(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `loadSignedPhotos`'s note above.
+  supabase: SupabaseClient<any>,
+  surveyId: string,
+): Promise<SurveyPdfPhoto[]> {
+  const { data: photoRows, error } = await supabase
+    .from("boiler_survey_photos")
+    .select("item_key, storage_path")
+    .eq("survey_id", surveyId);
+
+  if (error) {
+    console.error("loadPhotosForPdf failed", error);
+    return [];
+  }
+
+  const rows = (photoRows ?? []) as { item_key: PhotoChecklistItemKey; storage_path: string }[];
+
+  const photos = await Promise.all(
+    rows.map(async (row): Promise<SurveyPdfPhoto | null> => {
+      const { data, error: downloadError } = await supabase.storage.from(SURVEY_PHOTOS_BUCKET).download(row.storage_path);
+      if (downloadError || !data) {
+        console.error("loadPhotosForPdf: download failed", row.storage_path, downloadError);
+        return null;
+      }
+      const extension = row.storage_path.split(".").pop()?.toLowerCase() ?? "";
+      return {
+        itemKey: row.item_key,
+        bytes: Buffer.from(await data.arrayBuffer()),
+        embeddable: PDF_EMBEDDABLE_EXTENSIONS.has(extension),
+      };
+    }),
+  );
+
+  return photos.filter((photo): photo is SurveyPdfPhoto => photo !== null);
+}
+
+/**
+ * Called by `submitBoilerSurvey` (`src/app/survey/[token]/actions.ts`) once
+ * the on-site surveyor submits/resubmits — renders the answers + photo
+ * checklist to a PDF (see `src/lib/boiler-survey/pdf.tsx`) and stores it
+ * back on the same `boiler_surveys` row, the same pattern as
+ * `signature-service.ts`'s signed-document PDF. Best-effort: the survey
+ * answers are already saved by the time this runs, so a failure here (a
+ * broken photo download, a storage hiccup) shouldn't fail the submission
+ * itself — it just means "Download survey PDF" stays absent until the next
+ * successful (re)submit.
+ */
+export async function generateAndStoreSurveyPdf(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `loadSignedPhotos`'s note above.
+  supabase: SupabaseClient<any>,
+  params: { surveyId: string; quoteId: string; answers: BoilerSurveyAnswers; submittedAtLabel: string },
+): Promise<void> {
+  try {
+    const [job, photos] = await Promise.all([
+      buildJobContext(supabase, params.quoteId),
+      loadPhotosForPdf(supabase, params.surveyId),
+    ]);
+
+    const pdfBuffer = await renderSurveySummaryPdf({
+      job,
+      answers: params.answers,
+      photos,
+      submittedAtLabel: params.submittedAtLabel,
+    });
+    const pdfPath = `${params.surveyId}/survey.pdf`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(SURVEY_PHOTOS_BUCKET)
+      .upload(pdfPath, pdfBuffer, { contentType: "application/pdf", upsert: true });
+    if (uploadError) {
+      console.error("generateAndStoreSurveyPdf: upload failed", uploadError);
+      return;
+    }
+
+    const { error: updateError } = await supabase.from("boiler_surveys").update({ pdf_path: pdfPath }).eq("id", params.surveyId);
+    if (updateError) console.error("generateAndStoreSurveyPdf: failed to save pdf_path", updateError);
+  } catch (error) {
+    console.error("generateAndStoreSurveyPdf failed", error);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Public side (unauthenticated, token-gated) — used by /survey/[token].
 // ─────────────────────────────────────────────────────────────────────────
@@ -289,41 +424,17 @@ export async function getPublicBoilerSurvey(token: string): Promise<PublicBoiler
 
   const surveyRow = row as SurveyRow;
 
-  const [{ data: quote, error: quoteError }, photos] = await Promise.all([
-    supabase
-      .from("quotes")
-      .select("id, reference, customer_name, customer_phone, customer_email, customer_address_lines, representative_id")
-      .eq("id", surveyRow.quote_id)
-      .maybeSingle(),
+  const [job, photos] = await Promise.all([
+    buildJobContext(supabase, surveyRow.quote_id),
     loadSignedPhotos(supabase, surveyRow.id),
   ]);
-
-  if (quoteError) console.error("getPublicBoilerSurvey quote lookup failed", quoteError);
-
-  let repName = "Unassigned";
-  if (quote?.representative_id) {
-    const { data: rep } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", quote.representative_id)
-      .maybeSingle();
-    repName = rep?.full_name || repName;
-  }
 
   return {
     surveyId: surveyRow.id,
     status: surveyRow.status,
     answers: mapAnswers(surveyRow),
     photos,
-    job: {
-      quoteId: quote?.id ?? "",
-      reference: quote?.reference || quote?.id || "",
-      repName,
-      customerName: quote?.customer_name ?? "",
-      phone: quote?.customer_phone ?? "",
-      email: quote?.customer_email ?? "",
-      addressLines: quote?.customer_address_lines ?? [],
-    },
+    job,
   };
 }
 

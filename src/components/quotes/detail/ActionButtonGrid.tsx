@@ -38,7 +38,7 @@ function PopoverButton({ action }: { action: HeaderActionButton }) {
     <div className="relative" ref={containerRef}>
       <Button
         variant={action.variant}
-        className="w-full justify-center px-1.5 py-2 text-center text-xs"
+        className="h-14 w-full items-center justify-center px-1.5 py-2 text-center text-xs leading-tight"
         onClick={() => setIsOpen((open) => !open)}
       >
         {action.label}
@@ -81,7 +81,7 @@ export function ActionButtonGrid({ buttons }: { buttons: HeaderActionButton[] })
             href={action.href}
             onClick={action.onClick}
             disabled={action.disabled}
-            className="justify-center px-1.5 py-2 text-center text-xs"
+            className="h-14 items-center justify-center px-1.5 py-2 text-center text-xs leading-tight"
           >
             {action.label}
           </Button>

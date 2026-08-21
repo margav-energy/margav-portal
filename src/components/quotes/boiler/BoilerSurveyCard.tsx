@@ -10,7 +10,14 @@ import { BoilerSurveyAnswers } from "@/components/quotes/boiler/BoilerSurveyAnsw
 import type { BoilerSurveyDetail } from "@/types/boiler-survey";
 
 /** Read-only summary of the on-site survey, shown on the boiler quote detail page. See `BoilerSurveyLaunchModal` for how the survey gets started/viewed via the "Survey" button. */
-export function BoilerSurveyCard({ survey }: { survey: BoilerSurveyDetail | undefined }) {
+export function BoilerSurveyCard({
+  survey,
+  documentUrl,
+}: {
+  survey: BoilerSurveyDetail | undefined;
+  /** Signed URL to the generated survey PDF (see `getSurveyDocumentUrl`) — present once a surveyor has submitted at least once. */
+  documentUrl: string | undefined;
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (!survey) {
@@ -42,6 +49,19 @@ export function BoilerSurveyCard({ survey }: { survey: BoilerSurveyDetail | unde
           <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
         </div>
       </button>
+
+      {survey.status === "submitted" && documentUrl && (
+        <div className="border-t border-slate-100 px-5 py-3">
+          <a
+            href={documentUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-sm font-medium text-brand-blue hover:underline"
+          >
+            Download survey PDF →
+          </a>
+        </div>
+      )}
 
       {isOpen && (
         <div className="border-t border-slate-100 px-5 py-4">

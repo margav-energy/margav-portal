@@ -29,11 +29,14 @@ export function BoilerSurveyLaunchModal({
   quoteId,
   customerName,
   survey,
+  documentUrl,
   onClose,
 }: {
   quoteId: string;
   customerName: string;
   survey: BoilerSurveyDetail | undefined;
+  /** Signed URL to the generated survey PDF (see `getSurveyDocumentUrl`) — present once a surveyor has submitted at least once. */
+  documentUrl: string | undefined;
   onClose: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -101,6 +104,16 @@ export function BoilerSurveyLaunchModal({
           </button>
           {showAnswers && (
             <div className="max-h-96 overflow-y-auto px-6 pb-5">
+              {survey.status === "submitted" && documentUrl && (
+                <a
+                  href={documentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-4 inline-flex text-sm font-medium text-brand-blue hover:underline"
+                >
+                  Download survey PDF →
+                </a>
+              )}
               <BoilerSurveyAnswers answers={survey.answers} photos={survey.photos} />
             </div>
           )}
