@@ -33,7 +33,7 @@ import {
   type QuoteRow,
   type SolarArrayRow,
 } from "@/data/quotes-mappers";
-import type { Quote, QuoteStage } from "@/types/quote";
+import type { Quote, QuoteStage, UnassignedInstallJob } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
 
@@ -301,4 +301,36 @@ export async function getQuoteSummary(): Promise<{
     totalQuotes: totalResult.count ?? 0,
     totalSigned: signedResult.count ?? 0,
   };
+}
+
+/**
+ * Signed jobs with nobody booked to install them yet — the list shown in
+ * the "assign a job" modal on the Installer Availability grid (see
+ * src/components/availability/AssignJobModal.tsx). Deliberately its own
+ * lean `select`, not `QUOTE_COLUMNS`/`mapQuoteRow` — this list only needs
+ * enough to identify and pick a job, not the full quote shape.
+ */
+export async function getUnassignedInstallJobs(): Promise<UnassignedInstallJob[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id, reference, customer_name, postcode, product_type, install_status")
+    .eq("stage", "signed")
+    .is("installer_id", null)
+    .or("install_status.is.null,install_status.not.in.(completed_install,cancelled)")
+    .order("signed_date", { ascending: true });
+
+  if (error) {
+    console.error("getUnassignedInstallJobs failed", error);
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    reference: row.reference,
+    customerName: row.customer_name,
+    postcode: row.postcode,
+    productType: row.product_type,
+    installStatus: row.install_status,
+  }));
 }

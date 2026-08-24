@@ -41,6 +41,20 @@ export default async function SettingsPage() {
       {user.role === "admin" && (
         <Card className="flex items-center justify-between gap-4 p-5">
           <div>
+            <h3 className="font-semibold text-slate-900">Team Members</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Set who&rsquo;s an admin, a rep, or an installer.
+            </p>
+          </div>
+          <Button href="/settings/users" variant="secondary">
+            Manage
+          </Button>
+        </Card>
+      )}
+
+      {user.role === "admin" && (
+        <Card className="flex items-center justify-between gap-4 p-5">
+          <div>
             <h3 className="font-semibold text-slate-900">Presenter Deck</h3>
             <p className="mt-1 text-sm text-slate-500">
               Upload the sales deck reps present to customers.

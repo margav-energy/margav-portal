@@ -12,7 +12,7 @@ export interface RepProfile {
   id: string;
   fullName: string;
   initials: string;
-  role: "admin" | "rep";
+  role: "admin" | "rep" | "installer";
 }
 
 export async function getAllProfiles(): Promise<RepProfile[]> {
@@ -31,7 +31,7 @@ export async function getAllProfiles(): Promise<RepProfile[]> {
     id: row.id,
     fullName: row.full_name || "Unnamed",
     initials: row.initials || "?",
-    role: (row.role as "admin" | "rep") ?? "rep",
+    role: (row.role as "admin" | "rep" | "installer") ?? "rep",
   }));
 }
 
@@ -50,6 +50,6 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
     id: data.id,
     fullName: data.full_name || "Unnamed",
     initials: data.initials || "?",
-    role: (data.role as "admin" | "rep") ?? "rep",
+    role: (data.role as "admin" | "rep" | "installer") ?? "rep",
   };
 }

@@ -35,7 +35,7 @@ export function AppShellClient({
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar role={user.role} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={user} onMenuClick={() => setIsSidebarOpen((open) => !open)} />
         <NotificationBanner userId={user.id} />

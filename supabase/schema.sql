@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text not null default '',
   initials text not null default '',
-  role text not null default 'rep' check (role in ('admin', 'rep')),
+  role text not null default 'rep' check (role in ('admin', 'rep', 'installer')),
   created_at timestamptz not null default now()
 );
 
@@ -219,6 +219,25 @@ create table if not exists public.holidays (
 );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- installer_availability — self-reported day-by-day availability for the
+-- 'installer' role, read-only reference for admins doing manual job
+-- scheduling. Row presence (not just `status`) is meaningful: no row for a
+-- date means "hasn't told us yet"; see 0014_installer_availability.sql.
+-- ─────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.installer_availability (
+  id uuid primary key default gen_random_uuid(),
+  installer_id uuid not null references public.profiles (id) on delete cascade,
+  date date not null,
+  status text not null check (status in ('available', 'unavailable')),
+  note text,
+  updated_by uuid references public.profiles (id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (installer_id, date)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- activities — real audit log backing the Activity Feed page. Every
 -- mutation in the app should insert one row here.
 -- ─────────────────────────────────────────────────────────────────────────
@@ -264,6 +283,8 @@ create index if not exists idx_quote_history_quote on public.quote_history (quot
 create index if not exists idx_appointments_lifecycle on public.appointments (lifecycle_stage);
 create index if not exists idx_appointments_date on public.appointments (appointment_date);
 create index if not exists idx_holidays_status on public.holidays (status);
+create index if not exists idx_installer_availability_date on public.installer_availability (date);
+create index if not exists idx_installer_availability_installer on public.installer_availability (installer_id, date);
 create index if not exists idx_activities_created_at on public.activities (created_at desc);
 create index if not exists idx_notifications_user on public.notifications (user_id, is_read);
 
@@ -283,6 +304,7 @@ alter table public.quote_history enable row level security;
 alter table public.appointments enable row level security;
 alter table public.calendar_saved_views enable row level security;
 alter table public.holidays enable row level security;
+alter table public.installer_availability enable row level security;
 alter table public.activities enable row level security;
 alter table public.notifications enable row level security;
 
@@ -302,7 +324,7 @@ begin
   foreach t in array array[
     'quotes', 'boiler_units', 'solar_arrays', 'quote_line_items', 'quote_notes',
     'quote_history', 'appointments', 'calendar_saved_views', 'holidays',
-    'activities', 'notifications'
+    'installer_availability', 'activities', 'notifications'
   ]
   loop
     execute format('drop policy if exists "%1$s_all_authenticated" on public.%1$s;', t);

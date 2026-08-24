@@ -5,7 +5,7 @@ export interface CurrentUser {
   email: string;
   firstName: string;
   initials: string;
-  role: "admin" | "rep";
+  role: "admin" | "rep" | "installer";
   teamMemberCount: number;
 }
 
@@ -37,7 +37,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     email: user.email ?? "",
     firstName,
     initials: profile?.initials || firstName[0]?.toUpperCase() || "?",
-    role: (profile?.role as "admin" | "rep") ?? "rep",
+    role: (profile?.role as "admin" | "rep" | "installer") ?? "rep",
     teamMemberCount: count ?? 1,
   };
 }

@@ -4,6 +4,7 @@ import type { HolidayStatus } from "@/types/holiday";
 import type { AppointmentStage } from "@/types/calendar-appointment";
 import type { ConfirmationStatus } from "@/types/ready-to-confirm";
 import type { AcceptanceStatus } from "@/types/allocated-appointment";
+import type { InstallerAvailabilityStatus } from "@/types/installer-availability";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -72,6 +73,27 @@ export const HOLIDAY_STATUS_STYLES: Record<
   rejected: {
     label: "Rejected",
     className: "bg-red-100 text-red-700",
+  },
+};
+
+// "unset" covers a date with no row yet — distinct from an explicit
+// "unavailable" so the admin grid and the installer's own list can tell
+// "hasn't answered" apart from "answered no" at a glance.
+export const INSTALLER_AVAILABILITY_STATUS_STYLES: Record<
+  InstallerAvailabilityStatus | "unset",
+  { label: string; className: string }
+> = {
+  available: {
+    label: "Available",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  unavailable: {
+    label: "Unavailable",
+    className: "bg-red-100 text-red-700",
+  },
+  unset: {
+    label: "Not entered",
+    className: "bg-slate-100 text-slate-400",
   },
 };
 

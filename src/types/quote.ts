@@ -43,3 +43,20 @@ export interface Quote {
   /** Dropbox Sign's signature_request_id, for audit/support lookup — the e-sign webhook keys off `metadata.quoteId` instead, not this. */
   dropboxSignRequestId?: string;
 }
+
+/**
+ * A signed job that still needs an installer — the list shown in the
+ * "assign a job" modal on the Installer Availability grid
+ * (src/components/availability/AssignJobModal.tsx). Deliberately a lean,
+ * separate shape from `Quote` (own query in `getUnassignedInstallJobs`,
+ * not the full `QUOTE_COLUMNS`/`mapQuoteRow` pipeline) since this list
+ * needs far fewer fields.
+ */
+export interface UnassignedInstallJob {
+  id: string;
+  reference: string | null;
+  customerName: string;
+  postcode: string;
+  productType: ProductType;
+  installStatus: InstallStatus | null;
+}

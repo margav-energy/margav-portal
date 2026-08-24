@@ -5,14 +5,21 @@ import { APP_NAME, APP_VERSION } from "@/lib/constants";
 import { SidebarNavItem } from "@/components/layout/SidebarNavItem";
 import { SidebarNavGroup } from "@/components/layout/SidebarNavGroup";
 import { cn } from "@/lib/utils";
+import type { CurrentUser } from "@/data/current-user";
 
 export function Sidebar({
+  role,
   isOpen,
   onClose,
 }: {
+  role: CurrentUser["role"];
   isOpen: boolean;
   onClose: () => void;
 }) {
+  // Opt-in restrictive: an item with no `roles` stays visible to everyone,
+  // so existing nav items are unaffected by this filter.
+  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+
   return (
     <>
       {isOpen && (
@@ -35,7 +42,7 @@ export function Sidebar({
           </span>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) =>
+          {visibleItems.map((item) =>
             item.type === "link" ? (
               <SidebarNavItem key={item.label} {...item} />
             ) : (
