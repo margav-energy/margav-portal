@@ -44,7 +44,7 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  */
 
 const QUOTE_COLUMNS =
-  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
+  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, deposit_amount, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
 
 const ARCHIVE_AFTER_YEARS = 5;
 
@@ -197,6 +197,13 @@ export async function getQuoteDetail(
 
   const assignedRepId = row.representative_id ?? undefined;
   const assignedRep = assignedRepId ? (profiles.get(assignedRepId)?.fullName ?? "Unassigned") : "Unassigned";
+  const installerId = row.installer_id ?? undefined;
+  const installerName = installerId ? profiles.get(installerId)?.fullName : undefined;
+  const installDate = row.install_date ?? undefined;
+  const installAcceptanceStatus = row.install_acceptance_status ?? undefined;
+  const vatAmount = Number(row.vat_amount ?? 0);
+  const discountAmount = Number(row.discount_amount ?? 0);
+  const depositAmount = Number(row.deposit_amount ?? 0);
 
   const shared = {
     reference: referenceFor(row),
@@ -204,6 +211,13 @@ export async function getQuoteDetail(
     statusLabel: statusLabelFor(row),
     assignedRep,
     assignedRepId,
+    installerId,
+    installerName,
+    installDate,
+    installAcceptanceStatus,
+    vatAmount,
+    discountAmount,
+    depositAmount,
     isFavourite: row.is_favourite,
     locked: row.is_locked,
     customer: mapCustomerDetails(row),

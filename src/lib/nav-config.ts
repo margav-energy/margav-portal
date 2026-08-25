@@ -1,5 +1,6 @@
 import {
   Activity,
+  Briefcase,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
@@ -14,6 +15,10 @@ import type { CurrentUser } from "@/data/current-user";
 export interface NavLeaf {
   label: string;
   href: string;
+  /** Restricts visibility to these roles. Omit to show to everyone —
+   *  this is opt-in restrictive, not opt-in permissive, so existing
+   *  leaves without `roles` keep showing for every role. */
+  roles?: CurrentUser["role"][];
 }
 
 export type NavItem =
@@ -38,9 +43,9 @@ export type NavItem =
     };
 
 export const NAV_ITEMS: NavItem[] = [
-  { type: "link", label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { type: "link", label: "Activity Feed", href: "/activity-feed", icon: Activity },
-  { type: "link", label: "Holidays", href: "/holidays", icon: CalendarDays },
+  { type: "link", label: "Dashboard", href: "/", icon: LayoutDashboard, roles: ["admin", "rep"] },
+  { type: "link", label: "Activity Feed", href: "/activity-feed", icon: Activity, roles: ["admin", "rep"] },
+  { type: "link", label: "Holidays", href: "/holidays", icon: CalendarDays, roles: ["admin", "rep"] },
   {
     type: "link",
     label: "My Availability",
@@ -48,12 +53,26 @@ export const NAV_ITEMS: NavItem[] = [
     icon: CalendarCheck,
     roles: ["installer"],
   },
-  { type: "link", label: "Quick Links", href: "/quick-links", icon: Link2 },
-  { type: "link", label: "Create Appointment", href: "/appointments/create", icon: Plus },
+  {
+    type: "link",
+    label: "Upcoming Jobs",
+    href: "/jobs",
+    icon: Briefcase,
+    roles: ["installer"],
+  },
+  { type: "link", label: "Quick Links", href: "/quick-links", icon: Link2, roles: ["admin", "rep"] },
+  {
+    type: "link",
+    label: "Create Appointment",
+    href: "/appointments/create",
+    icon: Plus,
+    roles: ["admin", "rep"],
+  },
   {
     type: "group",
     label: "Appointments",
     icon: CalendarClock,
+    roles: ["admin", "rep"],
     children: [
       { label: "View calendar", href: "/appointments/calendar" },
       { label: "RTA due", href: "/appointments/rta-due" },
@@ -62,13 +81,14 @@ export const NAV_ITEMS: NavItem[] = [
       { label: "Allocated, not accepted", href: "/appointments/allocated-not-accepted" },
       { label: "Outcome Missing", href: "/appointments/outcome-missing" },
       { label: "Recently cancelled", href: "/appointments/recently-cancelled" },
-      { label: "Installer Availability", href: "/appointments/installer-availability" },
+      { label: "Installer Availability", href: "/appointments/installer-availability", roles: ["admin"] },
     ],
   },
   {
     type: "group",
     label: "Quotes",
     icon: FileText,
+    roles: ["admin", "rep"],
     children: [{ label: "View all quotes", href: "/quotes" }],
   },
 ];

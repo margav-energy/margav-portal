@@ -20,6 +20,7 @@ export async function updateProfileAction(
 
   const fullName = String(formData.get("fullName") ?? "").trim();
   if (!fullName) return { error: "Enter your full name." };
+  const phone = String(formData.get("phone") ?? "").trim();
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -27,6 +28,7 @@ export async function updateProfileAction(
     .update({
       full_name: fullName,
       initials: getInitials(fullName) || fullName[0]?.toUpperCase() || "?",
+      phone: phone || null,
     })
     .eq("id", user.id);
 

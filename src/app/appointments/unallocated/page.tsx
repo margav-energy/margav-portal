@@ -1,8 +1,11 @@
 import { getAllUnallocatedLeads } from "@/data/unallocated-leads-service";
 import { getAllProfiles } from "@/data/profiles-service";
+import { requireStaffUser } from "@/data/current-user";
 import { LeadTable } from "@/components/appointments/LeadTable";
 
 export default async function UnallocatedPage() {
+  await requireStaffUser();
+
   const [leads, reps] = await Promise.all([getAllUnallocatedLeads(), getAllProfiles()]);
 
   return (

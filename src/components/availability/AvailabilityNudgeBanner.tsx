@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/Card";
 
 /**
  * Rolling reminder shown on the installer's own page when the upcoming
- * 14-day window (see `getMissingAvailabilityDates`) has unanswered days.
+ * 14-day window (see src/app/availability/page.tsx) has unanswered days.
  * Deliberately stateless — recomputed from real row-presence on every
  * load, not a persisted/dismissible notification, so it can't go stale or
  * get stuck: as today's date advances, the window and this count advance

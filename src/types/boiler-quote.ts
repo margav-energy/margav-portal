@@ -65,6 +65,19 @@ export interface BoilerQuoteDetail {
   assignedRep: string;
   /** Absent when unassigned. */
   assignedRepId?: string;
+  /** Who's booked to install this job, if anyone (see quotes.installer_id/install_date). */
+  installerId?: string;
+  installerName?: string;
+  /** ISO date, e.g. "2026-09-12" — only meaningful alongside installerId. */
+  installDate?: string;
+  /** Whether the installer has confirmed the booking — absent when unassigned. */
+  installAcceptanceStatus?: "pending" | "accepted" | "rejected";
+  /** The "System Summary" figures a generated quote can't derive on its
+   *  own — see PricingAdjustmentsCard. vatAmount is informational only
+   *  (this business quotes VAT-inclusive prices). */
+  vatAmount: number;
+  discountAmount: number;
+  depositAmount: number;
   isFavourite: boolean;
   locked: boolean;
   customer: CustomerDetails;

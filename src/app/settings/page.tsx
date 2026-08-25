@@ -25,7 +25,7 @@ export default async function SettingsPage() {
 
       <Card className="p-5">
         <h3 className="mb-4 font-semibold text-slate-900">Profile</h3>
-        <ProfileForm fullName={profile?.fullName ?? ""} email={user.email} />
+        <ProfileForm fullName={profile?.fullName ?? ""} email={user.email} phone={profile?.phone ?? ""} />
       </Card>
 
       <Card className="p-5">

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export interface CurrentUser {
@@ -40,4 +41,29 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     role: (profile?.role as "admin" | "rep" | "installer") ?? "rep",
     teamMemberCount: count ?? 1,
   };
+}
+
+/**
+ * For every rep/admin-oriented page (Quotes, Appointments, Activity Feed,
+ * Holidays, Quick Links, ...) — installers have no business need for any
+ * of it, their whole app is the availability calendar + whatever job
+ * they're booked into (see src/app/availability/page.tsx). Hiding these
+ * behind role-gated nav (src/lib/nav-config.ts) only stops the sidebar
+ * from linking there; this stops a direct/bookmarked visit too.
+ */
+export async function requireStaffUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (user.role === "installer") redirect("/availability");
+  return user;
+}
+
+/** The installer-only counterpart of `requireStaffUser` — for pages that
+ *  only make sense for the installer role (My Availability, Upcoming Jobs).
+ *  Sends anyone else to the dashboard rather than looping them back here. */
+export async function requireInstallerUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (user.role !== "installer") redirect("/");
+  return user;
 }

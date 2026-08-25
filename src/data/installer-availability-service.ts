@@ -1,9 +1,10 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles } from "@/data/profiles-service";
-import { addDays, toISODate } from "@/lib/date-utils";
+import { addDays, parseISODate, toISODate } from "@/lib/date-utils";
 import type {
   AssignedJobSummary,
+  InstallAcceptanceStatus,
   InstallerAvailabilityDay,
   InstallerAvailabilityRow,
   InstallerAvailabilityStatus,
@@ -32,16 +33,8 @@ interface AssignedJobDbRow {
   customer_name: string;
   product_type: "solar" | "boiler";
   reference: string | null;
-}
-
-/**
- * Parses a bare "YYYY-MM-DD" date as local midnight — same caution as
- * `formatDate` in src/lib/format.ts, so date-range iteration can't drift by
- * a day in timezones behind UTC.
- */
-function parseISODate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Date(year, month - 1, day);
+  postcode: string;
+  install_acceptance_status: InstallAcceptanceStatus | null;
 }
 
 /**
@@ -92,7 +85,7 @@ async function getAssignedJobsByInstaller(
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("quotes")
-    .select("id, installer_id, install_date, customer_name, product_type, reference")
+    .select("id, installer_id, install_date, customer_name, product_type, reference, postcode, install_acceptance_status")
     .in("installer_id", installerIds)
     .gte("install_date", startDate)
     .lte("install_date", endDate);
@@ -108,6 +101,8 @@ async function getAssignedJobsByInstaller(
       customerName: row.customer_name,
       productType: row.product_type,
       reference: row.reference,
+      postcode: row.postcode,
+      acceptanceStatus: row.install_acceptance_status,
     };
     let byDate = byInstaller.get(row.installer_id);
     if (!byDate) {
@@ -208,22 +203,4 @@ export async function getAllInstallersAvailability(
       assignedJobsByInstaller.get(installer.id) ?? new Map(),
     ),
   }));
-}
-
-/**
- * ISO dates in the next `windowDays` days (starting today) that this
- * installer hasn't entered anything for yet — backs the nudge banner on
- * their own page. Recomputed on every load, so the "rolling" window and the
- * missing set naturally advance with today's date, with nothing persisted.
- */
-export async function getMissingAvailabilityDates(
-  installerId: string,
-  windowDays = 14,
-): Promise<string[]> {
-  const today = new Date();
-  const startDate = toISODate(today);
-  const endDate = toISODate(addDays(today, windowDays - 1));
-
-  const days = await getInstallerAvailability(installerId, startDate, endDate);
-  return days.filter((day) => day.status === null).map((day) => day.date);
 }

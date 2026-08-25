@@ -216,6 +216,35 @@ export async function getSurveyDocumentUrl(quoteId: string): Promise<string | un
   return signed.signedUrl;
 }
 
+/**
+ * Public-safe (service-role) variant of `getSurveyDocumentUrl` above, for
+ * linking to the survey PDF from the customer's `/sign/[token]` page —
+ * there's no authenticated session there for the normal RLS-bound client
+ * (`boiler_surveys_all_authenticated`, supabase/migrations/0007_*.sql) to
+ * use. Only returns a link once the survey is actually submitted — a
+ * pending/part-filled survey isn't something to hand a customer.
+ */
+export async function getPublicSurveyDocumentUrl(quoteId: string): Promise<string | undefined> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("boiler_surveys")
+    .select("pdf_path, status")
+    .eq("quote_id", quoteId)
+    .maybeSingle();
+
+  if (!data?.pdf_path || data.status !== "submitted") return undefined;
+
+  const { data: signed, error } = await supabase.storage
+    .from(SURVEY_PHOTOS_BUCKET)
+    .createSignedUrl(data.pdf_path, 60 * 60);
+
+  if (error || !signed) {
+    console.error("getPublicSurveyDocumentUrl: createSignedUrl failed", error);
+    return undefined;
+  }
+  return signed.signedUrl;
+}
+
 /** For the "Survey" card on the quote detail page. Returns `undefined` if "Survey" has never been clicked for this quote. */
 export async function getBoilerSurveyForQuote(quoteId: string): Promise<BoilerSurveyDetail | undefined> {
   const supabase = await createClient();

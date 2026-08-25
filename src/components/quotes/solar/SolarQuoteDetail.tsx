@@ -10,6 +10,8 @@ import { PropertyImagePlaceholder } from "@/components/quotes/detail/PropertyIma
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
 import { PricingCard } from "@/components/quotes/detail/PricingCard";
+import { PricingAdjustmentsCard } from "@/components/quotes/detail/PricingAdjustmentsCard";
+import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
 import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
@@ -18,6 +20,8 @@ import { SolarPropertyCard } from "@/components/quotes/solar/SolarPropertyCard";
 import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
+import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
+import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
 import {
   cancelQuoteAppointment,
   logStaxPortalAction,
@@ -35,21 +39,29 @@ import type {
   QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { RepProfile } from "@/data/profiles-service";
+import type { QuoteDocument } from "@/data/quote-documents-service";
 
 export function SolarQuoteDetail({
   detail,
   reps,
+  todayISO,
   signatureRequest,
   signedDocumentUrl,
+  documents,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
+  todayISO: string;
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
+  documents: QuoteDocument[];
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
+  const [installerName, setInstallerName] = useState(detail.installerName);
+  const [installDate, setInstallDate] = useState(detail.installDate);
+  const [acceptanceStatus, setAcceptanceStatus] = useState(detail.installAcceptanceStatus);
   const [customer, setCustomer] = useState<CustomerDetails>(detail.customer);
   const [property, setProperty] = useState(detail.property);
   const [solarArrays, setSolarArrays] = useState(detail.solarArrays);
@@ -62,6 +74,11 @@ export function SolarQuoteDetail({
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
   const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
+  const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
+    vatAmount: detail.vatAmount,
+    discountAmount: detail.discountAmount,
+    depositAmount: detail.depositAmount,
+  });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const router = useRouter();
@@ -164,13 +181,39 @@ export function SolarQuoteDetail({
           />
           <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
           <PricingCard items={detail.pricingBreakdown} />
+          <PricingAdjustmentsCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            subtotal={totalCost}
+            adjustments={pricingAdjustments}
+            onUpdated={setPricingAdjustments}
+          />
           <ProfitCard
             quoteId={detail.quoteId}
             customerName={customer.name}
             profit={profit}
             onUpdated={setProfit}
           />
+          <InstallerAssignmentCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            installerName={installerName}
+            installDate={installDate}
+            acceptanceStatus={acceptanceStatus}
+            todayISO={todayISO}
+            onAssigned={(nextInstallerName, nextInstallDate) => {
+              setInstallerName(nextInstallerName);
+              setInstallDate(nextInstallDate);
+              setAcceptanceStatus("pending");
+            }}
+            onUnassigned={() => {
+              setInstallerName(undefined);
+              setAcceptanceStatus(undefined);
+              setInstallDate(undefined);
+            }}
+          />
           <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
+          <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </div>
       </div>
 

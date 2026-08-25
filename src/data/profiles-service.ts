@@ -13,13 +13,16 @@ export interface RepProfile {
   fullName: string;
   initials: string;
   role: "admin" | "rep" | "installer";
+  /** Self-service, same as full_name — shown in "Get In Touch" on the
+   *  quote document. Absent until the person sets one in Settings. */
+  phone?: string;
 }
 
 export async function getAllProfiles(): Promise<RepProfile[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, role")
+    .select("id, full_name, initials, role, phone")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -32,6 +35,7 @@ export async function getAllProfiles(): Promise<RepProfile[]> {
     fullName: row.full_name || "Unnamed",
     initials: row.initials || "?",
     role: (row.role as "admin" | "rep" | "installer") ?? "rep",
+    phone: row.phone || undefined,
   }));
 }
 
@@ -40,7 +44,7 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, role")
+    .select("id, full_name, initials, role, phone")
     .eq("id", id)
     .single();
 
@@ -51,5 +55,6 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
     fullName: data.full_name || "Unnamed",
     initials: data.initials || "?",
     role: (data.role as "admin" | "rep" | "installer") ?? "rep",
+    phone: data.phone || undefined,
   };
 }

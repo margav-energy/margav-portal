@@ -1,4 +1,5 @@
 import { getAllQuotes, getQuotesByStage } from "@/data/quotes-service";
+import { requireStaffUser } from "@/data/current-user";
 import { QuotesTable } from "@/components/quotes/QuotesTable";
 import { QuotesPageHeader } from "@/components/quotes/QuotesPageHeader";
 import type { QuoteStage } from "@/types/quote";
@@ -6,6 +7,8 @@ import type { QuoteStage } from "@/types/quote";
 export default async function QuotesPage({
   searchParams,
 }: PageProps<"/quotes">) {
+  await requireStaffUser();
+
   const { stage: rawStage } = await searchParams;
   const stage = Array.isArray(rawStage) ? rawStage[0] : rawStage;
   const activeStage: QuoteStage | "all" =

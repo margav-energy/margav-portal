@@ -1,8 +1,11 @@
 import { getAllAllocatedAppointments } from "@/data/allocated-appointments-service";
 import { getAllProfiles } from "@/data/profiles-service";
+import { requireStaffUser } from "@/data/current-user";
 import { AllocatedNotAcceptedTable } from "@/components/appointments/AllocatedNotAcceptedTable";
 
 export default async function AllocatedNotAcceptedPage() {
+  await requireStaffUser();
+
   const [appointments, profiles] = await Promise.all([
     getAllAllocatedAppointments(),
     getAllProfiles(),

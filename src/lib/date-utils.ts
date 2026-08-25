@@ -52,6 +52,13 @@ export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
+/** First of the month `amount` months from `date`'s month (negative to go
+ *  back) — always normalized to the 1st, so it's safe to chain regardless
+ *  of `date`'s day-of-month (no Feb-31-rolls-into-March surprises). */
+export function addMonths(date: Date, amount: number): Date {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
 export function addDays(date: Date, amount: number): Date {
   const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   result.setDate(result.getDate() + amount);
@@ -64,6 +71,14 @@ export function isSameDay(a: Date, b: Date): boolean {
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
   );
+}
+
+/** Parses a bare "YYYY-MM-DD" date as local midnight — avoids the UTC-shift
+ *  `new Date(iso)` would give, which can drift the displayed/compared date
+ *  by a day in timezones behind UTC. */
+export function parseISODate(isoDate: string): Date {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 export function toISODate(date: Date): string {

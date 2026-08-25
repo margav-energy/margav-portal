@@ -87,6 +87,24 @@ function QuoteDocumentBody({ snapshot }: { snapshot: DocumentSnapshot }) {
   );
 }
 
+/**
+ * The "Download PDF" button on the quote document (both the internal View
+ * Quote page and the customer's pre-signing `/sign/[token]` page) — same
+ * body as the final signed PDF, minus the signature block that doesn't
+ * exist yet at this point.
+ */
+export async function renderUnsignedQuotePdf(snapshot: DocumentSnapshot): Promise<Buffer> {
+  const doc = (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <QuoteDocumentBody snapshot={snapshot} />
+      </Page>
+    </Document>
+  );
+
+  return renderToBuffer(doc);
+}
+
 export async function renderSignedDocumentPdf(
   snapshot: DocumentSnapshot,
   audit: SignedDocumentAudit,

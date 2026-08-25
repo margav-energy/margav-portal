@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { formatDayHeader } from "@/lib/date-utils";
+import { formatDayHeader, parseISODate } from "@/lib/date-utils";
 import { Card } from "@/components/ui/Card";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { INSTALLER_AVAILABILITY_STATUS_STYLES } from "@/lib/status-colors";
+import { accentForName, borderAccentForName } from "@/lib/name-color";
 import { cn } from "@/lib/utils";
 import { AssignJobModal } from "@/components/availability/AssignJobModal";
 import { UnassignJobModal } from "@/components/availability/UnassignJobModal";
@@ -17,24 +18,24 @@ const COMPACT_LABEL: Record<"available" | "unavailable" | "unset", string> = {
   unset: "—",
 };
 
-const BOOKED_CLASS = "bg-brand-blue/10 text-brand-blue";
 const CELL_WIDTH = 84;
 const FIRST_COL_WIDTH = 220;
 
-/** Parses a bare "YYYY-MM-DD" date as local midnight — avoids the UTC-shift
- *  `new Date(iso)` would give (same caution as src/lib/format.ts). */
-function parseISODate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function cellFor(day: InstallerAvailabilityDay) {
+/** Booked cells use the same hashed color as the installer's own avatar
+ *  (see InitialsAvatar/accentForName) — a color scanned anywhere in the
+ *  grid ties straight back to whose row it's in, without reading names. */
+function cellFor(day: InstallerAvailabilityDay, todayISO: string, installerName: string) {
   if (day.assignedJob) {
-    return { label: day.assignedJob.customerName, className: BOOKED_CLASS, kind: "booked" as const };
+    return { label: day.assignedJob.customerName, className: accentForName(installerName), kind: "booked" as const };
   }
   const status = day.status ?? "unset";
   const { className } = INSTALLER_AVAILABILITY_STATUS_STYLES[status];
-  return { label: COMPACT_LABEL[status], className, kind: status === "available" ? ("assign" as const) : ("inert" as const) };
+  const isPast = day.date < todayISO;
+  return {
+    label: COMPACT_LABEL[status],
+    className,
+    kind: status === "available" && !isPast ? ("assign" as const) : ("inert" as const),
+  };
 }
 
 interface AssignTarget {
@@ -61,10 +62,12 @@ export function InstallerAvailabilityGrid({
   rows,
   dateHeaders,
   unassignedJobs,
+  todayISO,
 }: {
   rows: InstallerAvailabilityRow[];
   dateHeaders: string[];
   unassignedJobs: UnassignedInstallJob[];
+  todayISO: string;
 }) {
   const [assignTarget, setAssignTarget] = useState<AssignTarget | null>(null);
   const [unassignTarget, setUnassignTarget] = useState<UnassignTarget | null>(null);
@@ -101,12 +104,17 @@ export function InstallerAvailabilityGrid({
           {/* Installer rows */}
           {rows.map((row) => (
             <div key={row.installerId} className="grid border-b border-slate-100 last:border-0" style={{ gridTemplateColumns }}>
-              <div className="sticky left-0 z-10 flex h-[60px] items-center gap-2.5 border-r border-slate-100 bg-white px-4">
+              <div
+                className={cn(
+                  "sticky left-0 z-10 flex h-[60px] items-center gap-2.5 border-r border-slate-100 border-l-4 bg-white pr-4 pl-3",
+                  borderAccentForName(row.installerName),
+                )}
+              >
                 <InitialsAvatar name={row.installerName} initials={row.installerInitials} className="h-8 w-8 text-xs" />
                 <span className="truncate text-sm font-medium text-slate-900">{row.installerName}</span>
               </div>
               {row.days.map((day) => {
-                const cell = cellFor(day);
+                const cell = cellFor(day, todayISO, row.installerName);
                 const commonClassName = cn(
                   "flex h-[60px] w-full items-center justify-center px-1.5 py-1",
                 );

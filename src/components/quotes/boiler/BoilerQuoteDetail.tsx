@@ -10,6 +10,8 @@ import { PropertyImagePlaceholder } from "@/components/quotes/detail/PropertyIma
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
 import { PricingCard } from "@/components/quotes/detail/PricingCard";
+import { PricingAdjustmentsCard } from "@/components/quotes/detail/PricingAdjustmentsCard";
+import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
 import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
@@ -20,6 +22,8 @@ import { BoilerKeyDetailsCard } from "@/components/quotes/boiler/BoilerKeyDetail
 import { BoilerSurveyCard } from "@/components/quotes/boiler/BoilerSurveyCard";
 import { BoilerSurveyLaunchModal } from "@/components/quotes/boiler/BoilerSurveyLaunchModal";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
+import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
+import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
 import { EXTRAS_CATALOG } from "@/lib/extras-catalog";
 import {
   cancelQuoteAppointment,
@@ -39,29 +43,37 @@ import type {
   QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { RepProfile } from "@/data/profiles-service";
+import type { QuoteDocument } from "@/data/quote-documents-service";
 
 export function BoilerQuoteDetail({
   detail,
   reps,
+  todayISO,
   survey,
   surveyDocumentUrl,
   signatureRequest,
   signedDocumentUrl,
   agreementSignatureRequest,
   agreementSignedDocumentUrl,
+  documents,
 }: {
   detail: BoilerQuoteDetailData;
   reps: RepProfile[];
+  todayISO: string;
   survey: BoilerSurveyDetail | undefined;
   surveyDocumentUrl: string | undefined;
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
   agreementSignatureRequest: SignatureRequestSummary | undefined;
   agreementSignedDocumentUrl: string | undefined;
+  documents: QuoteDocument[];
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
+  const [installerName, setInstallerName] = useState(detail.installerName);
+  const [installDate, setInstallDate] = useState(detail.installDate);
+  const [acceptanceStatus, setAcceptanceStatus] = useState(detail.installAcceptanceStatus);
   const [customer, setCustomer] = useState<CustomerDetails>(detail.customer);
   const [property, setProperty] = useState(detail.property);
   const [boilerUnits, setBoilerUnits] = useState(detail.boilerUnits);
@@ -74,6 +86,11 @@ export function BoilerQuoteDetail({
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
   const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
+  const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
+    vatAmount: detail.vatAmount,
+    discountAmount: detail.discountAmount,
+    depositAmount: detail.depositAmount,
+  });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
@@ -185,6 +202,13 @@ export function BoilerQuoteDetail({
           />
           {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
           <PricingCard items={detail.pricingBreakdown} />
+          <PricingAdjustmentsCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            subtotal={totalCost}
+            adjustments={pricingAdjustments}
+            onUpdated={setPricingAdjustments}
+          />
           <ProfitCard
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -193,6 +217,24 @@ export function BoilerQuoteDetail({
             editable={false}
           />
           <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />
+          <InstallerAssignmentCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            installerName={installerName}
+            installDate={installDate}
+            acceptanceStatus={acceptanceStatus}
+            todayISO={todayISO}
+            onAssigned={(nextInstallerName, nextInstallDate) => {
+              setInstallerName(nextInstallerName);
+              setInstallDate(nextInstallDate);
+              setAcceptanceStatus("pending");
+            }}
+            onUnassigned={() => {
+              setInstallerName(undefined);
+              setAcceptanceStatus(undefined);
+              setInstallDate(undefined);
+            }}
+          />
           <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
           <SignatureStatusCard
             title="Installation Agreement"
@@ -200,6 +242,7 @@ export function BoilerQuoteDetail({
             request={agreementSignatureRequest}
             signedDocumentUrl={agreementSignedDocumentUrl}
           />
+          <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </div>
       </div>
 

@@ -1,7 +1,10 @@
 import { getAllReadyToConfirmLeads } from "@/data/ready-to-confirm-service";
+import { requireStaffUser } from "@/data/current-user";
 import { ReadyToConfirmTable } from "@/components/appointments/ReadyToConfirmTable";
 
 export default async function ReadyToConfirmPage() {
+  await requireStaffUser();
+
   const leads = await getAllReadyToConfirmLeads();
 
   return (

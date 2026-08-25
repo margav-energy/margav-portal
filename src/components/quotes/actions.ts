@@ -1,8 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getSiteOrigin } from "@/lib/site-origin";
 import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
@@ -496,6 +496,60 @@ export async function updateQuoteCostPrice(
   return true;
 }
 
+export interface PricingAdjustments {
+  vatAmount: number;
+  discountAmount: number;
+  depositAmount: number;
+}
+
+/**
+ * The three "System Summary" figures on the quote document
+ * (src/lib/esignature/document.ts) that need a human to enter them rather
+ * than being derived from line items — see supabase/migrations/0020_*.sql.
+ * `vatAmount` is informational only (this business quotes VAT-inclusive
+ * prices); the real total is subtotal minus discount.
+ */
+export async function updatePricingAdjustments(
+  quoteId: string,
+  adjustments: PricingAdjustments,
+  customerName: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({
+      vat_amount: adjustments.vatAmount,
+      discount_amount: adjustments.discountAmount,
+      deposit_amount: adjustments.depositAmount,
+    })
+    .eq("id", quoteId);
+
+  if (error) {
+    console.error("updatePricingAdjustments failed", error);
+    return false;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({
+      quoteId,
+      actorId: user?.id,
+      description: `Set VAT ${formatCurrency(adjustments.vatAmount)}, discount ${formatCurrency(adjustments.discountAmount)}, deposit ${formatCurrency(adjustments.depositAmount)}`,
+    }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Updated pricing adjustments — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return true;
+}
+
 /**
  * `termYears` is only meaningful (and only persisted) when `method` is
  * "monthly_plan" — see src/lib/finance.ts for the term/APR rule.
@@ -971,14 +1025,6 @@ export async function addQuoteNote(quoteId: string, body: string, customerName: 
 // ─────────────────────────────────────────────────────────────────────────
 
 export type SendQuoteResult = { ok: true } | { ok: false; error: string };
-
-/** `x-forwarded-proto`/`host` off the incoming request — there's no NEXT_PUBLIC_SITE_URL configured, and this works correctly in any environment (local/staging/prod) without one. */
-async function getSiteOrigin(): Promise<string> {
-  const headerList = await headers();
-  const host = headerList.get("host") ?? "localhost:3000";
-  const proto = headerList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
 
 /**
  * Sends the quote to the customer for a self-hosted e-signature (see

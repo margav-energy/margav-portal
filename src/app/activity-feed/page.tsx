@@ -1,7 +1,10 @@
 import { getAllActivities, getActivityActors } from "@/data/activities-service";
+import { requireStaffUser } from "@/data/current-user";
 import { ActivityFeedPanel } from "@/components/activity/ActivityFeedPanel";
 
 export default async function ActivityFeedPage() {
+  await requireStaffUser();
+
   const [activities, actors] = await Promise.all([
     getAllActivities(),
     getActivityActors(),

@@ -1,4 +1,4 @@
-import { ordinal } from "@/lib/date-utils";
+import { ordinal, parseISODate } from "@/lib/date-utils";
 
 const currencyFormatter = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -27,11 +27,7 @@ export function formatCurrency(amount: number): string {
 
 /** @param isoDate an ISO date string, e.g. "2026-07-28" */
 export function formatDate(isoDate: string): string {
-  // Parse the date parts directly (rather than `new Date(isoDate)`, which
-  // treats a bare "YYYY-MM-DD" as UTC midnight) so the displayed date can't
-  // shift by a day in timezones behind UTC.
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return dateFormatter.format(new Date(year, month - 1, day));
+  return dateFormatter.format(parseISODate(isoDate));
 }
 
 /**

@@ -1,7 +1,10 @@
 import { getAllRtaLeads } from "@/data/rta-leads-service";
+import { requireStaffUser } from "@/data/current-user";
 import { LeadTable } from "@/components/appointments/LeadTable";
 
 export default async function RtaDuePage() {
+  await requireStaffUser();
+
   const leads = await getAllRtaLeads();
 
   return (

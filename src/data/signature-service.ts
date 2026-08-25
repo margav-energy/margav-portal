@@ -157,7 +157,7 @@ export async function createSignatureRequest(
     return { error: "This customer has no email address on file. Add one on the Customer card before sending for signature." };
   }
 
-  const snapshot = buildDocumentSnapshot(quote, detail);
+  const snapshot = await buildDocumentSnapshot(quote, detail);
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -295,6 +295,47 @@ export async function getPublicSignatureRequest(token: string): Promise<PublicSi
     snapshot: row.document_snapshot,
     signerName: row.signer_name,
     expired,
+  };
+}
+
+export interface PublicRelatedDocument {
+  documentType: SignatureDocumentType;
+  status: SignatureStatus;
+  accessToken: string;
+}
+
+/**
+ * Cross-link between a quote's two documents — from the quote's own
+ * `/sign/[token]` page, "you also need to sign the Installation Agreement"
+ * (or vice versa), so the customer doesn't need a second email to notice
+ * the other one exists. Service-role, like `getPublicSignatureRequest`
+ * above: the customer has no authenticated session for
+ * `getLatestSignatureRequest` (the portal-side equivalent) to use.
+ */
+export async function getPublicRelatedDocument(
+  quoteId: string,
+  excludeDocumentType: SignatureDocumentType,
+): Promise<PublicRelatedDocument | undefined> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("signature_requests")
+    .select("document_type, status, access_token")
+    .eq("quote_id", quoteId)
+    .neq("document_type", excludeDocumentType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("getPublicRelatedDocument failed", error);
+    return undefined;
+  }
+  if (!data) return undefined;
+
+  return {
+    documentType: data.document_type as SignatureDocumentType,
+    status: data.status as SignatureStatus,
+    accessToken: data.access_token,
   };
 }
 

@@ -1,8 +1,11 @@
 import { getAllCancelledAppointments } from "@/data/cancelled-appointments-service";
 import { getAllProfiles } from "@/data/profiles-service";
+import { requireStaffUser } from "@/data/current-user";
 import { RecentlyCancelledTable } from "@/components/appointments/RecentlyCancelledTable";
 
 export default async function RecentlyCancelledPage() {
+  await requireStaffUser();
+
   const [appointments, profiles] = await Promise.all([
     getAllCancelledAppointments(),
     getAllProfiles(),

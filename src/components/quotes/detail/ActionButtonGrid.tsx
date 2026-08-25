@@ -8,6 +8,8 @@ export interface HeaderActionButton {
   variant: "primary" | "danger";
   /** When present, the button navigates here instead of being a static no-op. */
   href?: string;
+  /** Pass "_blank" to open `href` in a new tab (e.g. "View Quote"). */
+  target?: string;
   /** When present (and `href`/`popoverOptions` are absent), the button calls this instead of being a no-op. */
   onClick?: () => void;
   disabled?: boolean;
@@ -79,6 +81,7 @@ export function ActionButtonGrid({ buttons }: { buttons: HeaderActionButton[] })
             key={action.label}
             variant={action.variant}
             href={action.href}
+            target={action.target}
             onClick={action.onClick}
             disabled={action.disabled}
             className="h-14 items-center justify-center px-1.5 py-2 text-center text-xs leading-tight"

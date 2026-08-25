@@ -16,9 +16,17 @@ export function Sidebar({
   isOpen: boolean;
   onClose: () => void;
 }) {
-  // Opt-in restrictive: an item with no `roles` stays visible to everyone,
-  // so existing nav items are unaffected by this filter.
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  // Opt-in restrictive: an item (or group child) with no `roles` stays
+  // visible to everyone, so existing nav items are unaffected by this
+  // filter. Group children need their own pass — filtering only the group
+  // itself would still render every child, roles and all, once open.
+  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    .map((item) =>
+      item.type === "group"
+        ? { ...item, children: item.children.filter((child) => !child.roles || child.roles.includes(role)) }
+        : item,
+    )
+    .filter((item) => item.type !== "group" || item.children.length > 0);
 
   return (
     <>

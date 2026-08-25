@@ -30,7 +30,7 @@ export function buildActionButtons(params: {
 }): HeaderActionButton[] {
   return [
     { label: "Presenter", variant: "primary", href: `/quotes/${params.quoteId}/presenter` },
-    { label: "View Quote", variant: "primary", href: `/quotes/${params.quoteId}/view` },
+    { label: "View Quote", variant: "primary", href: `/quotes/${params.quoteId}/view`, target: "_blank" },
     { label: "Send Quote", variant: "primary", onClick: params.onSendQuote },
     { label: params.secondaryPortalLabel, variant: "primary", onClick: params.onSecondaryPortalAction },
     { label: "Cancel App", variant: "primary", onClick: params.onCancelApp },

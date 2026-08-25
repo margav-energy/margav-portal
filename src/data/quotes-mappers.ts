@@ -62,6 +62,12 @@ export interface QuoteRow {
   product_type: string;
   pipeline_status: string;
   representative_id: string | null;
+  installer_id: string | null;
+  install_date: string | null;
+  install_acceptance_status: "pending" | "accepted" | "rejected" | null;
+  vat_amount: number | string;
+  discount_amount: number | string;
+  deposit_amount: number | string;
   is_favourite: boolean;
   is_locked: boolean;
   archived_at: string | null;

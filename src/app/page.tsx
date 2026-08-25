@@ -9,17 +9,24 @@ import { QuickLinksCard } from "@/components/dashboard/QuickLinksCard";
 import { QuotesPanel } from "@/components/dashboard/QuotesPanel";
 
 export default async function DashboardPage() {
-  const [user, summary, sentToSign, signed] = await Promise.all([
-    getCurrentUser(),
-    getQuoteSummary(),
-    getQuotesByStage("sent_to_sign"),
-    getQuotesByStage("signed"),
-  ]);
+  const user = await getCurrentUser();
 
   // Belt-and-braces: src/proxy.ts already redirects signed-out requests to
   // /login before this ever renders, but every data-fetching entry point
   // should check for itself too (see node_modules/next/dist/docs/01-app/02-guides/authentication.md).
   if (!user) redirect("/login");
+
+  // Installers have no quotes to manage — the sent-to-sign/signed stats
+  // and quote panels below are meaningless to them. Their whole "dashboard"
+  // is the availability calendar + whatever job they're booked into, which
+  // already lives at /availability (see src/app/availability/page.tsx).
+  if (user.role === "installer") redirect("/availability");
+
+  const [summary, sentToSign, signed] = await Promise.all([
+    getQuoteSummary(),
+    getQuotesByStage("sent_to_sign"),
+    getQuotesByStage("signed"),
+  ]);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">

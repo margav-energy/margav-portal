@@ -1,7 +1,10 @@
 import { getAllHolidays, getHolidayReps } from "@/data/holidays-service";
+import { requireStaffUser } from "@/data/current-user";
 import { HolidaysPanel } from "@/components/holidays/HolidaysPanel";
 
 export default async function HolidaysPage() {
+  await requireStaffUser();
+
   const [holidays, reps] = await Promise.all([getAllHolidays(), getHolidayReps()]);
 
   return (

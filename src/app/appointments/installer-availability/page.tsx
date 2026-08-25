@@ -92,7 +92,12 @@ export default async function AdminInstallerAvailabilityPage({
         )}
       </div>
 
-      <InstallerAvailabilityGrid rows={rows} dateHeaders={dateHeaders} unassignedJobs={unassignedJobs} />
+      <InstallerAvailabilityGrid
+        rows={rows}
+        dateHeaders={dateHeaders}
+        unassignedJobs={unassignedJobs}
+        todayISO={todayISO}
+      />
     </div>
   );
 }

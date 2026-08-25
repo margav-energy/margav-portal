@@ -4,7 +4,7 @@ import type { HolidayStatus } from "@/types/holiday";
 import type { AppointmentStage } from "@/types/calendar-appointment";
 import type { ConfirmationStatus } from "@/types/ready-to-confirm";
 import type { AcceptanceStatus } from "@/types/allocated-appointment";
-import type { InstallerAvailabilityStatus } from "@/types/installer-availability";
+import type { InstallAcceptanceStatus, InstallerAvailabilityStatus } from "@/types/installer-availability";
 
 export const INSTALL_STATUS_STYLES: Record<
   InstallStatus,
@@ -94,6 +94,24 @@ export const INSTALLER_AVAILABILITY_STATUS_STYLES: Record<
   unset: {
     label: "Not entered",
     className: "bg-slate-100 text-slate-400",
+  },
+};
+
+export const INSTALL_ACCEPTANCE_STATUS_STYLES: Record<
+  InstallAcceptanceStatus,
+  { label: string; className: string }
+> = {
+  pending: {
+    label: "Awaiting response",
+    className: "bg-amber-100 text-amber-700",
+  },
+  accepted: {
+    label: "Accepted",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
+  rejected: {
+    label: "Declined",
+    className: "bg-red-100 text-red-700",
   },
 };
 

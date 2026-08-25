@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/data/current-user";
 import { getAllProfiles } from "@/data/profiles-service";
 import { Card } from "@/components/ui/Card";
+import { CreateUserForm } from "@/components/settings/CreateUserForm";
 import { UserRoleManager } from "@/components/settings/UserRoleManager";
 
 export default async function TeamMembersSettingsPage() {
@@ -20,6 +21,11 @@ export default async function TeamMembersSettingsPage() {
           page instead of the rep/admin nav. Admin only.
         </p>
       </div>
+
+      <Card className="p-5">
+        <h3 className="mb-3 text-sm font-semibold text-slate-700">Add a teammate</h3>
+        <CreateUserForm />
+      </Card>
 
       <Card className="p-5">
         <UserRoleManager profiles={profiles} currentUserId={user.id} />

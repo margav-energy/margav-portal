@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getActivePresenterDeck } from "@/data/presenter-deck-service";
-import { getCurrentUser } from "@/data/current-user";
+import { requireStaffUser } from "@/data/current-user";
 import { PresenterViewer } from "@/components/quotes/presenter/PresenterViewer";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 
@@ -11,11 +11,11 @@ export default async function QuotePresenterPage({
   params,
 }: PageProps<"/quotes/[id]/presenter">) {
   const { id } = await params;
-  const result = await getQuoteDetail(id);
+  const [result, user] = await Promise.all([getQuoteDetail(id), requireStaffUser()]);
 
   if (!result || result.quote.productType !== "boiler") notFound();
 
-  const [deck, user] = await Promise.all([getActivePresenterDeck(), getCurrentUser()]);
+  const deck = await getActivePresenterDeck();
 
   if (!deck || deck.slides.length === 0) {
     return (

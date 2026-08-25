@@ -1,5 +1,7 @@
-import { getPublicSignatureRequest } from "@/data/signature-service";
+import { getPublicRelatedDocument, getPublicSignatureRequest } from "@/data/signature-service";
+import { getPublicSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { SignForm } from "@/app/sign/[token]/SignForm";
+import type { DocumentSnapshot } from "@/lib/esignature/document";
 
 export default async function PublicSignPage({
   params,
@@ -20,5 +22,19 @@ export default async function PublicSignPage({
     );
   }
 
-  return <SignForm token={token} request={request} />;
+  // Only boiler jobs have a survey step at all — the agreement document
+  // type is boiler-only by definition, and a "quote" document is boiler
+  // when its snapshot says so.
+  const isBoilerJob =
+    request.documentType === "boiler_installation_agreement" ||
+    (request.snapshot as DocumentSnapshot).productTypeLabel === "Boiler";
+
+  const [relatedDocument, surveyDocumentUrl] = await Promise.all([
+    getPublicRelatedDocument(request.snapshot.quoteId, request.documentType),
+    isBoilerJob ? getPublicSurveyDocumentUrl(request.snapshot.quoteId) : Promise.resolve(undefined),
+  ]);
+
+  return (
+    <SignForm token={token} request={request} relatedDocument={relatedDocument} surveyDocumentUrl={surveyDocumentUrl} />
+  );
 }

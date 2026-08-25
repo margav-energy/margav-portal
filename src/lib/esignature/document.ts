@@ -1,7 +1,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { createServiceRoleClient } from "@/lib/supabase/service";
+import { getProfileById } from "@/data/profiles-service";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sumLineItems } from "@/data/quotes-mappers";
+import { HEADLINE_MONTHLY_PLAN_TERM_YEARS, monthlyRepayment } from "@/lib/finance";
 import type { Quote } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
@@ -16,16 +19,45 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  * This snapshot is what gets locked into `signature_requests.document_snapshot`
  * at send-time and rendered on `/sign/[token]` — never a live re-fetch of
  * the quote, so what the customer signs can't change underneath them.
+ *
+ * Fields added after the original shape (headline/monthlyPlans/rep/customer
+ * contact) are optional — a snapshot locked before they existed won't have
+ * them, and `QuoteDocumentPreview` has to render those older rows too.
  */
 export interface DocumentSnapshot {
   quoteId: string;
   reference: string;
   productTypeLabel: string;
+  /** e.g. "7.76kW Solar System" / "30kW Combi Boiler". */
+  headlineLabel?: string;
+  /** e.g. "with 2 battery units" / "Mains Gas · Horizontal Flue". */
+  subheadlineLabel?: string;
   customerName: string;
   customerAddressLines: string[];
+  customerEmail?: string;
+  customerPhone?: string;
+  /** Sum of `lineItems` before the discount below — "Subtotal incl. VAT"
+   *  on the System Summary. */
+  subtotalLabel?: string;
+  /** Informational only — this business quotes VAT-inclusive prices, so
+   *  it's never added on top of the subtotal. */
+  vatLabel?: string;
+  discountLabel?: string;
+  /** Absent when there's no deposit for this quote. */
+  depositLabel?: string;
+  /** `subtotalLabel` minus the discount — the actual amount owed. */
   totalPriceLabel: string;
   paymentMethodLabel: string;
   lineItems: { name: string; amountLabel: string }[];
+  /** A handful of representative terms, not the full list in
+   *  `MONTHLY_PLAN_TERM_YEARS` — see `HEADLINE_MONTHLY_PLAN_TERM_YEARS`. */
+  monthlyPlans?: { years: number; monthlyLabel: string }[];
+  /** "Unassigned" when nobody's assigned — same as the quote header shows. */
+  repName?: string;
+  /** Absent when the rep has no email on `auth.users`, or on an old snapshot. */
+  repEmail?: string;
+  /** Absent when the rep hasn't set a phone number in Settings, or on an old snapshot. */
+  repPhone?: string;
   sentDateLabel: string;
   generatedAt: string;
 }
@@ -40,6 +72,56 @@ function paymentMethodLabel(detail: BoilerQuoteDetail | SolarQuoteDetail): strin
     return years ? `Monthly Plan (${years} years)` : "Monthly Plan";
   }
   return "BACS";
+}
+
+/** "7.76kW Solar System" / "30kW Combi Boiler", plus a short subheadline —
+ *  the headline on the document's hero panel. Boiler headlines come off the
+ *  first unit (multi-unit boiler quotes are rare and this is just a
+ *  headline, not a spec sheet — the itemized units still show further down). */
+function headlineFor(
+  quote: Quote,
+  detail: BoilerQuoteDetail | SolarQuoteDetail,
+): { headline?: string; subheadline?: string } {
+  if (quote.productType === "boiler") {
+    const unit = (detail as BoilerQuoteDetail).boilerUnits[0];
+    if (!unit) return {};
+    return {
+      headline: `${unit.outputKw}kW ${unit.installType} Boiler`,
+      subheadline: `${unit.fuelType} · ${unit.flueType} Flue`,
+    };
+  }
+
+  const { systemSizeKw, batteries } = (detail as SolarQuoteDetail).keyDetails;
+  return {
+    headline: `${systemSizeKw}kW Solar System`,
+    subheadline: batteries > 0 ? `with ${batteries} battery unit${batteries === 1 ? "" : "s"}` : undefined,
+  };
+}
+
+function monthlyPlansFor(totalPrice: number): { years: number; monthlyLabel: string }[] {
+  return HEADLINE_MONTHLY_PLAN_TERM_YEARS.map((years) => ({
+    years,
+    monthlyLabel: formatCurrency(monthlyRepayment(totalPrice, years)),
+  }));
+}
+
+/**
+ * `profiles` has no email column (see supabase/schema.sql) — the real
+ * address lives on `auth.users`, which only the service-role client can
+ * look up for a user other than the current session's own. Same pattern as
+ * `emailNotification` in src/lib/notify.ts.
+ */
+async function repEmailFor(repId: string | undefined): Promise<string | undefined> {
+  if (!repId) return undefined;
+  try {
+    const admin = createServiceRoleClient();
+    const { data, error } = await admin.auth.admin.getUserById(repId);
+    if (error || !data?.user?.email) return undefined;
+    return data.user.email;
+  } catch (error) {
+    console.error("repEmailFor failed", error);
+    return undefined;
+  }
 }
 
 /**
@@ -74,26 +156,48 @@ function itemizedLineItems(detail: BoilerQuoteDetail | SolarQuoteDetail): { name
   return [...installLines, ...extraLines, ...standardAdditionalLines, ...freeTextLines];
 }
 
-export function buildDocumentSnapshot(
+export async function buildDocumentSnapshot(
   quote: Quote,
   detail: BoilerQuoteDetail | SolarQuoteDetail,
-): DocumentSnapshot {
+): Promise<DocumentSnapshot> {
   // `quote.amount` is a separately-entered field that isn't kept in sync
   // with the line items below (it's set once at quote creation and not
-  // recomputed as extras/additionals are added) — the real total is the
+  // recomputed as extras/additionals are added) — the real subtotal is the
   // sum of exactly what's itemized here, same as `totalCostFor()` in
-  // src/components/quotes/presenter/slides/PersonalizedSlides.tsx.
-  const totalPrice = sumLineItems(detail.pricingBreakdown);
+  // src/components/quotes/presenter/slides/PersonalizedSlides.tsx. The
+  // actual amount owed is that minus whatever discount's been entered
+  // (see PricingAdjustmentsCard) — VAT is informational only, already
+  // included in the subtotal, never added on top.
+  const subtotal = sumLineItems(detail.pricingBreakdown);
+  const total = subtotal - detail.discountAmount;
+  const { headline, subheadline } = headlineFor(quote, detail);
+
+  const [repEmail, repProfile] = await Promise.all([
+    repEmailFor(detail.assignedRepId),
+    getProfileById(detail.assignedRepId),
+  ]);
 
   return {
     quoteId: quote.id,
     reference: detail.reference,
     productTypeLabel: productTypeLabel(quote.productType),
+    headlineLabel: headline,
+    subheadlineLabel: subheadline,
     customerName: detail.customer.name,
     customerAddressLines: detail.customer.addressLines,
-    totalPriceLabel: formatCurrency(totalPrice),
+    customerEmail: detail.customer.email || undefined,
+    customerPhone: detail.customer.phone || undefined,
+    subtotalLabel: formatCurrency(subtotal),
+    vatLabel: formatCurrency(detail.vatAmount),
+    discountLabel: detail.discountAmount > 0 ? formatCurrency(detail.discountAmount) : undefined,
+    depositLabel: detail.depositAmount > 0 ? formatCurrency(detail.depositAmount) : undefined,
+    totalPriceLabel: formatCurrency(total),
     paymentMethodLabel: paymentMethodLabel(detail),
     lineItems: itemizedLineItems(detail),
+    monthlyPlans: monthlyPlansFor(total),
+    repName: detail.assignedRep,
+    repEmail,
+    repPhone: repProfile?.phone,
     sentDateLabel: formatDate(quote.sentDate),
     generatedAt: new Date().toISOString(),
   };

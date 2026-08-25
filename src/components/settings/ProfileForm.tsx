@@ -8,7 +8,7 @@ import { updateProfileAction, type ProfileFormState } from "@/app/settings/actio
 
 const initialState: ProfileFormState = {};
 
-export function ProfileForm({ fullName, email }: { fullName: string; email: string }) {
+export function ProfileForm({ fullName, email, phone }: { fullName: string; email: string; phone: string }) {
   const [state, formAction, pending] = useActionState(updateProfileAction, initialState);
 
   return (
@@ -31,6 +31,17 @@ export function ProfileForm({ fullName, email }: { fullName: string; email: stri
           defaultValue={fullName}
           className={inputClassName}
         />
+      </FormField>
+      <FormField label="Phone" htmlFor="phone">
+        <input
+          id="phone"
+          name="phone"
+          type="tel"
+          defaultValue={phone}
+          placeholder="e.g. 07565 443579"
+          className={inputClassName}
+        />
+        <p className="mt-1 text-xs text-slate-400">Shown to customers under &ldquo;Get In Touch&rdquo; on your quotes.</p>
       </FormField>
 
       {state?.error && (

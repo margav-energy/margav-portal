@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, FileText, XCircle } from "lucide-react";
+import { CheckCircle2, Download, FileText, XCircle } from "lucide-react";
 import { submitSignatureAction, declineSignatureAction } from "@/app/sign/[token]/actions";
 import { SignaturePad } from "@/components/esignature/SignaturePad";
 import { QuoteDocumentPreview } from "@/components/esignature/QuoteDocumentPreview";
-import type { PublicSignatureRequest } from "@/data/signature-service";
+import { RelatedDocumentsCard, type RelatedDocumentLink } from "@/components/esignature/RelatedDocumentsCard";
+import type { PublicRelatedDocument, PublicSignatureRequest } from "@/data/signature-service";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
 
 const inputClassName =
@@ -13,7 +14,7 @@ const inputClassName =
 
 function AgreementDocumentPreview({ reference }: { reference: string }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <div className="mx-auto w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="mb-4 text-sm font-semibold tracking-wide text-slate-500 uppercase">
         Boiler Installation Agreement
       </h2>
@@ -38,7 +39,17 @@ function AgreementDocumentPreview({ reference }: { reference: string }) {
   );
 }
 
-export function SignForm({ token, request }: { token: string; request: PublicSignatureRequest }) {
+export function SignForm({
+  token,
+  request,
+  relatedDocument,
+  surveyDocumentUrl,
+}: {
+  token: string;
+  request: PublicSignatureRequest;
+  relatedDocument?: PublicRelatedDocument;
+  surveyDocumentUrl?: string;
+}) {
   const isAgreement = request.documentType === "boiler_installation_agreement";
   const documentLabel = isAgreement ? "installation agreement" : "quote";
   const [typedName, setTypedName] = useState("");
@@ -96,9 +107,31 @@ export function SignForm({ token, request }: { token: string; request: PublicSig
 
   const canSubmit = typedName.trim().length > 0 && Boolean(signatureDataUrl) && agreed && status !== "submitting";
 
+  function scrollToSignForm() {
+    document.getElementById("sign-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const relatedDocuments: RelatedDocumentLink[] = [];
+  if (surveyDocumentUrl) {
+    relatedDocuments.push({ label: "Boiler survey", href: surveyDocumentUrl, statusLabel: "Submitted" });
+  }
+  if (relatedDocument) {
+    const label = relatedDocument.documentType === "boiler_installation_agreement" ? "Installation Agreement" : "Quote";
+    relatedDocuments.push({
+      label,
+      href: `/sign/${relatedDocument.accessToken}`,
+      statusLabel:
+        relatedDocument.status === "signed"
+          ? "Signed"
+          : relatedDocument.status === "declined"
+            ? "Declined"
+            : "Needs your signature",
+    });
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
-      <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <div className="text-center">
           <p className="text-lg font-bold text-slate-900">Margav Energy</p>
           <p className="text-sm text-slate-500">
@@ -110,10 +143,38 @@ export function SignForm({ token, request }: { token: string; request: PublicSig
         {isAgreement ? (
           <AgreementDocumentPreview reference={request.snapshot.reference} />
         ) : (
-          <QuoteDocumentPreview snapshot={request.snapshot as DocumentSnapshot} />
+          <QuoteDocumentPreview
+            snapshot={request.snapshot as DocumentSnapshot}
+            actionsSlot={
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={scrollToSignForm}
+                  className="flex-1 rounded-lg bg-brand-green-mid px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-green-mid/90"
+                >
+                  Accept &amp; Sign
+                </button>
+                <a
+                  href={`/sign/${token}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200"
+                >
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </a>
+              </div>
+            }
+          />
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <RelatedDocumentsCard documents={relatedDocuments} />
+
+        <form
+          id="sign-form"
+          onSubmit={handleSubmit}
+          className="mx-auto flex w-full max-w-2xl flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
           <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Sign</h2>
 
           <div className="flex flex-col gap-1.5">
