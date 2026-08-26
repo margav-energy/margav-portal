@@ -7,6 +7,7 @@ import type {
   QuoteHistoryEntry,
   QuoteNote,
 } from "@/types/quote-detail-shared";
+import type { QuotePipelineStatus } from "@/types/quote";
 
 /**
  * Rich detail-view shape for a boiler quote, keyed 1:1 with a `Quote` whose
@@ -62,6 +63,10 @@ export interface BoilerQuoteDetail {
   reference: string;
   version: number;
   statusLabel: string;
+  /** The lead's stage — New Lead → Ready to Pitch → Locked → Complete
+   *  (see `QUOTE_PIPELINE_STATUS_STYLES`, src/lib/status-colors.ts).
+   *  Admin-editable via `updateQuotePipelineStatusAction`. */
+  pipelineStatus: QuotePipelineStatus;
   assignedRep: string;
   /** Absent when unassigned. */
   assignedRepId?: string;

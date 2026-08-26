@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/data/current-user";
-import { getAllProfiles } from "@/data/profiles-service";
+import { getTeammatesForAdmin } from "@/data/profiles-service";
 import { Card } from "@/components/ui/Card";
 import { CreateUserForm } from "@/components/settings/CreateUserForm";
 import { UserRoleManager } from "@/components/settings/UserRoleManager";
@@ -10,7 +10,7 @@ export default async function TeamMembersSettingsPage() {
   if (!user) redirect("/login");
   if (user.role !== "admin") redirect("/settings");
 
-  const profiles = await getAllProfiles();
+  const profiles = await getTeammatesForAdmin();
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4">

@@ -205,4 +205,13 @@ export const QUOTE_PIPELINE_STATUS_STYLES: Record<
     label: "Locked",
     className: "bg-slate-100 text-slate-600",
   },
+  complete: {
+    label: "Complete",
+    className: "bg-brand-green-mid/10 text-brand-green-mid",
+  },
 };
+
+/** Every stage a lead moves through, in order — drives the dropdown on
+ *  `QuoteStatusPill` (only admins can change it) and anywhere else the
+ *  full ordered list is useful (e.g. a "next stage" shortcut). */
+export const QUOTE_PIPELINE_STATUS_ORDER: QuotePipelineStatus[] = ["new_lead", "ready_to_pitch", "locked", "complete"];

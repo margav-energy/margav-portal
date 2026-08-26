@@ -56,6 +56,7 @@ export function BoilerQuoteDetail({
   agreementSignatureRequest,
   agreementSignedDocumentUrl,
   documents,
+  isAdmin,
 }: {
   detail: BoilerQuoteDetailData;
   reps: RepProfile[];
@@ -67,6 +68,7 @@ export function BoilerQuoteDetail({
   agreementSignatureRequest: SignatureRequestSummary | undefined;
   agreementSignedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
+  isAdmin: boolean;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -142,6 +144,8 @@ export function BoilerQuoteDetail({
         reference={detail.reference}
         version={detail.version}
         statusLabel={detail.statusLabel}
+        pipelineStatus={detail.pipelineStatus}
+        isAdmin={isAdmin}
         locked={locked}
         onToggleLocked={setLocked}
         favorite={favorite}
@@ -235,12 +239,19 @@ export function BoilerQuoteDetail({
               setInstallDate(undefined);
             }}
           />
-          <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
+          <SignatureStatusCard
+            request={signatureRequest}
+            signedDocumentUrl={signedDocumentUrl}
+            readHref={`/api/quotes/${detail.quoteId}/pdf`}
+            readLabel="Read the quote"
+          />
           <SignatureStatusCard
             title="Installation Agreement"
             emptyActionLabel="Installation Agreement"
             request={agreementSignatureRequest}
             signedDocumentUrl={agreementSignedDocumentUrl}
+            readHref="/api/agreement-templates/boiler-installation"
+            readLabel="Read the agreement"
           />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </div>

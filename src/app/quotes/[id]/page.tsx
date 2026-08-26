@@ -16,7 +16,7 @@ import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quo
 export default async function QuoteDetailPage({
   params,
 }: PageProps<"/quotes/[id]">) {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
   const { id } = await params;
   const [result, reps] = await Promise.all([getQuoteDetail(id), getAllProfiles()]);
@@ -64,6 +64,7 @@ export default async function QuoteDetailPage({
           agreementSignatureRequest={agreementSignatureRequest}
           agreementSignedDocumentUrl={agreementSignedDocumentUrl}
           documents={documents}
+          isAdmin={user.role === "admin"}
         />
       ) : (
         <SolarQuoteDetail
@@ -73,6 +74,7 @@ export default async function QuoteDetailPage({
           signatureRequest={signatureRequest}
           signedDocumentUrl={signedDocumentUrl}
           documents={documents}
+          isAdmin={user.role === "admin"}
         />
       )}
     </div>

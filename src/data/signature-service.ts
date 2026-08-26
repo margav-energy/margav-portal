@@ -10,6 +10,7 @@ import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { formatDateTime } from "@/lib/format";
 import { buildDocumentSnapshot, hashDocument, type DocumentSnapshot } from "@/lib/esignature/document";
 import { renderSignedDocumentPdf, type RepSignature } from "@/lib/esignature/pdf";
+import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
 import { signedConfirmationEmailHtml } from "@/lib/esignature/email-templates";
@@ -482,18 +483,19 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
         repSignature ? { name: repSignature.name, image: repSignature.image, signedAtLabel } : null,
       );
     } else {
-      pdfBuffer = await renderSignedDocumentPdf(
-        row.document_snapshot as DocumentSnapshot,
-        {
-          typedName: params.typedName,
-          signatureImage: signatureImageBuffer,
-          signedAtLabel,
-          ip: params.ip,
-          userAgent: params.userAgent,
-          documentHash: row.document_hash,
-        },
-        repSignature,
-      );
+      const snapshot = row.document_snapshot as DocumentSnapshot;
+      const audit = {
+        typedName: params.typedName,
+        signatureImage: signatureImageBuffer,
+        signedAtLabel,
+        ip: params.ip,
+        userAgent: params.userAgent,
+        documentHash: row.document_hash,
+      };
+      pdfBuffer =
+        snapshot.productTypeLabel === "Boiler"
+          ? await buildBoilerQuotePdf(snapshot, audit)
+          : await renderSignedDocumentPdf(snapshot, audit, repSignature);
     }
   } catch (error) {
     console.error("submitSignature: PDF render failed", error);

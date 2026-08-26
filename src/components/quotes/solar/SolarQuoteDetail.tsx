@@ -48,6 +48,7 @@ export function SolarQuoteDetail({
   signatureRequest,
   signedDocumentUrl,
   documents,
+  isAdmin,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
@@ -55,6 +56,7 @@ export function SolarQuoteDetail({
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
+  isAdmin: boolean;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -122,6 +124,8 @@ export function SolarQuoteDetail({
         reference={detail.reference}
         version={detail.version}
         statusLabel={detail.statusLabel}
+        pipelineStatus={detail.pipelineStatus}
+        isAdmin={isAdmin}
         locked={locked}
         onToggleLocked={setLocked}
         favorite={favorite}
@@ -212,7 +216,12 @@ export function SolarQuoteDetail({
               setInstallDate(undefined);
             }}
           />
-          <SignatureStatusCard request={signatureRequest} signedDocumentUrl={signedDocumentUrl} />
+          <SignatureStatusCard
+            request={signatureRequest}
+            signedDocumentUrl={signedDocumentUrl}
+            readHref={`/api/quotes/${detail.quoteId}/pdf`}
+            readLabel="Read the quote"
+          />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </div>
       </div>

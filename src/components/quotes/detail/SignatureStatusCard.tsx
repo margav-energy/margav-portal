@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { formatDateTime } from "@/lib/format";
@@ -30,11 +31,20 @@ export function SignatureStatusCard({
   emptyActionLabel = "Send Quote",
   request,
   signedDocumentUrl,
+  readHref,
+  readLabel = "Read the document",
 }: {
   title?: string;
   emptyActionLabel?: string;
   request: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
+  /** Lets whoever's looking at this card read the document before it's
+   *  even been sent — e.g. the static, customer-independent Installation
+   *  Agreement template (assets/agreement-templates/boiler-installation-agreement.pdf),
+   *  served unauthenticated at /api/agreement-templates/boiler-installation.
+   *  Omit for documents with nothing fixed to preview ahead of send time. */
+  readHref?: string;
+  readLabel?: string;
 }) {
   if (!request) {
     return (
@@ -43,6 +53,17 @@ export function SignatureStatusCard({
         <p className="mt-2 text-sm text-slate-500">
           Not sent for signature yet — click &ldquo;{emptyActionLabel}&rdquo; above.
         </p>
+        {readHref && (
+          <a
+            href={readHref}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-brand-blue hover:bg-slate-100"
+          >
+            <FileText className="h-4 w-4" />
+            {readLabel}
+          </a>
+        )}
       </Card>
     );
   }
@@ -73,6 +94,17 @@ export function SignatureStatusCard({
           className="mt-3 inline-flex text-sm font-medium text-brand-blue hover:underline"
         >
           Download signed PDF →
+        </a>
+      )}
+      {readHref && request.status !== "signed" && (
+        <a
+          href={readHref}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-brand-blue hover:bg-slate-100"
+        >
+          <FileText className="h-4 w-4" />
+          {readLabel}
         </a>
       )}
     </Card>

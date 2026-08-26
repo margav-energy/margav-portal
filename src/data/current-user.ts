@@ -26,9 +26,17 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!user) return null;
 
   const [{ data: profile }, { count }] = await Promise.all([
-    supabase.from("profiles").select("full_name, initials, role").eq("id", user.id).single(),
+    supabase.from("profiles").select("full_name, initials, role, active").eq("id", user.id).single(),
     supabase.from("profiles").select("id", { count: "exact", head: true }),
   ]);
+
+  // Covers a teammate deactivated mid-session (signInAction only blocks a
+  // *new* login) — the next request after `active` flips to false signs
+  // them straight back out, same as a signed-out visitor from here on.
+  if (profile?.active === false) {
+    await supabase.auth.signOut();
+    return null;
+  }
 
   const fullName = profile?.full_name || user.email?.split("@")[0] || "there";
   const firstName = fullName.split(" ")[0];

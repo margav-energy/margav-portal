@@ -60,14 +60,26 @@ export default async function ViewQuotePage({
         },
         {
           label: "Installation agreement",
-          href: agreementRequest?.status === "signed" ? agreementSignedDocumentUrl : undefined,
+          // Always readable, even before it's ever been sent — the
+          // agreement's body is a fixed template with nothing
+          // customer-specific in it (see agreement-document.ts), so there's
+          // no reason to wait until sign-time to let someone read it. Once
+          // actually signed, this points at that signed copy instead (the
+          // one with the real signature/audit trail on it), not the blank
+          // template.
+          href:
+            agreementRequest?.status === "signed"
+              ? agreementSignedDocumentUrl
+              : "/api/agreement-templates/boiler-installation",
           statusLabel: !agreementRequest
             ? "Not sent yet"
             : agreementRequest.status === "signed"
               ? "Signed"
               : agreementRequest.status === "declined"
                 ? "Declined"
-                : "Awaiting signature",
+                : agreementRequest.status === "expired"
+                  ? "Link expired"
+                  : "Awaiting signature",
         },
       ]
     : [];

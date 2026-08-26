@@ -12,6 +12,7 @@ import { signAgreementEmailHtml, signQuoteEmailHtml } from "@/lib/esignature/ema
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
+import { QUOTE_PIPELINE_STATUS_STYLES } from "@/lib/status-colors";
 import {
   mapFreeTextRow,
   mapLineItemRow,
@@ -28,6 +29,7 @@ import type {
 } from "@/types/quote-detail-shared";
 import type { BoilerPropertyDetails, BoilerUnit } from "@/types/boiler-quote";
 import type { SolarArray, SolarPropertyDetails } from "@/types/solar-quote";
+import type { QuotePipelineStatus } from "@/types/quote";
 
 /**
  * All mutations for the Quotes module. Reads live in
@@ -290,6 +292,51 @@ export async function setQuoteLocked(quoteId: string, isLocked: boolean, custome
     }),
   ]);
   revalidateQuote(quoteId);
+}
+
+export interface UpdateQuotePipelineStatusResult {
+  error?: string;
+}
+
+/**
+ * Moves a lead through its lifecycle — New Lead → Ready to Pitch → Locked →
+ * Complete (see `QUOTE_PIPELINE_STATUS_STYLES`, src/lib/status-colors.ts).
+ * Admin-only: every other field this module writes is open to reps too,
+ * but `pipeline_status` doubles as the top-level "is this deal done"
+ * signal reps and installers see on the quotes list, so only an admin can
+ * move it. Previously this column was only ever set once at creation
+ * ('new_lead') and never changed again.
+ */
+export async function updateQuotePipelineStatusAction(
+  quoteId: string,
+  status: QuotePipelineStatus,
+  customerName: string,
+): Promise<UpdateQuotePipelineStatusResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { error: "Only admins can change a lead's status." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("quotes").update({ pipeline_status: status }).eq("id", quoteId);
+  if (error) {
+    console.error("updateQuotePipelineStatusAction failed", error);
+    return { error: "Could not update the status. Please try again." };
+  }
+
+  const label = QUOTE_PIPELINE_STATUS_STYLES[status].label;
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user.id, description: `Changed status to ${label}` }),
+    logActivity({
+      actorId: user.id,
+      customerName,
+      description: `Changed status to ${label} — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return {};
 }
 
 export async function assignQuoteRepresentative(

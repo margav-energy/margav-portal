@@ -3,6 +3,7 @@ import { requireStaffUser } from "@/data/current-user";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { buildDocumentSnapshot } from "@/lib/esignature/document";
 import { renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
+import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 
 /**
  * "Download PDF" on the internal "View Quote" page — a live render of the
@@ -19,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!result) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
 
   const snapshot = await buildDocumentSnapshot(result.quote, result.detail);
-  const pdfBuffer = await renderUnsignedQuotePdf(snapshot);
+  const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

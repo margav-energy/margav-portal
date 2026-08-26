@@ -14,8 +14,11 @@ export type PaymentType = "cash" | "finance" | "card" | "bacs";
 /**
  * The "All Quotes" list's own pipeline status — independent of `QuoteStage`/
  * `InstallStatus` above (which the Dashboard's quick panels still key off).
+ * Admin-editable (see `updateQuotePipelineStatusAction`,
+ * src/components/quotes/actions.ts) — every other stage here is otherwise
+ * only ever set once at creation.
  */
-export type QuotePipelineStatus = "new_lead" | "ready_to_pitch" | "locked";
+export type QuotePipelineStatus = "new_lead" | "ready_to_pitch" | "locked" | "complete";
 
 export interface Quote {
   id: string;

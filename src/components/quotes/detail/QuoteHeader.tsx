@@ -7,6 +7,7 @@ import { Pill } from "@/components/ui/Pill";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
+import { LeadStatusPill } from "@/components/quotes/detail/LeadStatusPill";
 import { cn } from "@/lib/utils";
 import {
   logCommunicationsOpened,
@@ -16,6 +17,7 @@ import {
   assignQuoteRepresentative,
 } from "@/components/quotes/actions";
 import type { RepProfile } from "@/data/profiles-service";
+import type { QuotePipelineStatus } from "@/types/quote";
 
 function initialsFor(name: string): string {
   return name
@@ -183,6 +185,8 @@ export function QuoteHeader({
   reference,
   version,
   statusLabel,
+  pipelineStatus,
+  isAdmin,
   locked,
   onToggleLocked,
   favorite,
@@ -199,6 +203,8 @@ export function QuoteHeader({
   reference: string;
   version: number;
   statusLabel: string;
+  pipelineStatus: QuotePipelineStatus;
+  isAdmin: boolean;
   locked: boolean;
   onToggleLocked: (locked: boolean) => void;
   favorite: boolean;
@@ -250,6 +256,7 @@ export function QuoteHeader({
           <h1 className="text-lg font-semibold text-slate-900">{reference}</h1>
           <Pill label={`V${version}`} className="bg-slate-100 text-slate-500" />
           <Pill label={statusLabel} className="bg-brand-green-mid/10 text-brand-green-mid" />
+          <LeadStatusPill quoteId={quoteId} customerName={customerName} status={pipelineStatus} isAdmin={isAdmin} />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

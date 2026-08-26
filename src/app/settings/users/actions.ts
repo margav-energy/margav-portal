@@ -17,11 +17,11 @@ export interface UpdateUserRoleResult {
 
 export interface CreateUserResult {
   error?: string;
-  /** Set when the account was created but the credentials couldn't be
-   *  emailed — the caller needs to hand the temporary password over some
-   *  other way (shown inline, since this is the only place it ever exists
-   *  in plaintext). */
-  temporaryPassword?: string;
+  /** True only when a welcome email actually went out. False both when
+   *  Resend isn't configured at all and when sending it failed — either
+   *  way the admin needs to pass the login on themselves (they already
+   *  know the password, since they're the one who set it). */
+  emailSent?: boolean;
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -70,25 +70,22 @@ export async function updateUserRoleAction(userId: string, role: UserRole): Prom
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** 16 hex chars (64 bits of entropy) — good enough for a one-time password
- *  that gets emailed once and is meant to be changed on first login (see
- *  the "Password" form on /settings, backed by `updatePasswordAction`). */
-function generateTemporaryPassword(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-}
+const MIN_PASSWORD_LENGTH = 8;
 
 /**
  * Invite-only signup, automated: creates the `auth.users` row (via the
  * service-role client — this app has no public sign-up page, so there's no
  * end-user session to do this as) and the app-specific role on top of the
  * `profiles` row `handle_new_user` (supabase/schema.sql) creates for it.
- * Mails the teammate their login and a one-time password if Resend is
- * configured; otherwise hands the password back to the admin to pass on.
+ * The admin sets the initial password directly (rather than one being
+ * generated for them) so they can hand it over however suits — verbally,
+ * on a slip of paper, whatever — the welcome email is just a convenience
+ * on top when Resend is configured, not the only way it's ever known.
  */
 export async function createUserAction(
   fullName: string,
   email: string,
+  password: string,
   role: UserRole,
 ): Promise<CreateUserResult> {
   const user = await getCurrentUser();
@@ -99,13 +96,13 @@ export async function createUserAction(
   const trimmedEmail = email.trim().toLowerCase();
   if (!trimmedName) return { error: "Enter a full name." };
   if (!EMAIL_PATTERN.test(trimmedEmail)) return { error: "Enter a valid email address." };
+  if (password.length < MIN_PASSWORD_LENGTH) return { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` };
 
-  const temporaryPassword = generateTemporaryPassword();
   const serviceClient = createServiceRoleClient();
 
   const { data, error } = await serviceClient.auth.admin.createUser({
     email: trimmedEmail,
-    password: temporaryPassword,
+    password,
     email_confirm: true,
     user_metadata: { full_name: trimmedName },
   });
@@ -142,7 +139,7 @@ export async function createUserAction(
   revalidatePath("/settings/users");
 
   if (!isResendConfigured()) {
-    return { temporaryPassword };
+    return { emailSent: false };
   }
 
   const origin = await getSiteOrigin();
@@ -155,13 +152,115 @@ export async function createUserAction(
         `An account has been created for you on Margav Portal.\n\n` +
         `Log in at ${origin}/login\n` +
         `Email: ${trimmedEmail}\n` +
-        `Temporary password: ${temporaryPassword}\n\n` +
+        `Password: ${password}\n\n` +
         `You can set your own password from Settings once you're in.`,
     });
   } catch (emailError) {
     console.error("createUserAction: welcome email failed", emailError);
-    return { temporaryPassword };
+    return { emailSent: false };
   }
 
+  return { emailSent: true };
+}
+
+export interface UpdateTeammateResult {
+  error?: string;
+}
+
+/**
+ * Edits an existing teammate's name, login email, and phone — the pencil
+ * icon on Settings → Team Members. Name/phone live on `profiles` (RLS
+ * already lets an admin update any row, see
+ * supabase/migrations/0016_profiles_admin_update.sql); email lives on
+ * `auth.users`, so it needs the service-role admin API instead.
+ */
+export async function updateTeammateAction(
+  userId: string,
+  fullName: string,
+  email: string,
+  phone: string,
+): Promise<UpdateTeammateResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { error: "Only admins can edit teammates." };
+
+  const trimmedName = fullName.trim();
+  const trimmedEmail = email.trim().toLowerCase();
+  const trimmedPhone = phone.trim();
+  if (!trimmedName) return { error: "Enter a full name." };
+  if (!EMAIL_PATTERN.test(trimmedEmail)) return { error: "Enter a valid email address." };
+
+  const serviceClient = createServiceRoleClient();
+
+  const { error: emailError } = await serviceClient.auth.admin.updateUserById(userId, {
+    email: trimmedEmail,
+    email_confirm: true,
+  });
+  if (emailError) {
+    console.error("updateTeammateAction: email update failed", emailError);
+    const alreadyExists = emailError.message?.toLowerCase().includes("already");
+    return { error: alreadyExists ? "Another teammate already uses that email address." : "Could not update this teammate. Please try again." };
+  }
+
+  const { error: profileError } = await serviceClient
+    .from("profiles")
+    .update({
+      full_name: trimmedName,
+      initials: getInitials(trimmedName) || trimmedName[0]?.toUpperCase() || "?",
+      phone: trimmedPhone || null,
+    })
+    .eq("id", userId);
+
+  if (profileError) {
+    console.error("updateTeammateAction: profile update failed", profileError);
+    return { error: "Could not update this teammate. Please try again." };
+  }
+
+  revalidatePath("/settings/users");
+  return {};
+}
+
+export interface SetTeammateActiveResult {
+  error?: string;
+}
+
+/**
+ * Deactivates/reactivates a teammate (see
+ * supabase/migrations/0021_teammate_active_status.sql) — the icon that
+ * replaces a hard delete on Settings → Team Members. A deactivated
+ * teammate's `profiles` row (and everything it's referenced from —
+ * historical quotes, activity feed entries, uploaded documents) stays
+ * intact; only their ability to sign in is cut off (enforced in
+ * `signInAction`/`getCurrentUser`, not just hidden in the UI).
+ */
+export async function setTeammateActiveAction(userId: string, active: boolean): Promise<SetTeammateActiveResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { error: "Only admins can deactivate teammates." };
+  if (userId === user.id) return { error: "You can't deactivate your own account." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ active })
+    .eq("id", userId)
+    .select("full_name")
+    .single();
+
+  if (error) {
+    console.error("setTeammateActiveAction failed", error);
+    return { error: "Could not update this teammate. Please try again." };
+  }
+
+  await logActivity({
+    actorId: user.id,
+    customerName: data?.full_name || "A teammate",
+    description: `${user.firstName} ${active ? "reactivated" : "deactivated"} ${data?.full_name || "a teammate"}'s account`,
+    status: active ? "allocated" : "unallocated",
+    entityType: "profile_active_status",
+    entityId: userId,
+  });
+
+  revalidatePath("/settings/users");
   return {};
 }

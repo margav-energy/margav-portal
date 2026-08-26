@@ -22,6 +22,9 @@ create table if not exists public.profiles (
   -- Self-service, same as full_name — shown in "Get In Touch" on the quote
   -- document (see supabase/migrations/0020_*.sql).
   phone text,
+  -- Deactivate/reactivate on Settings → Team Members, see
+  -- supabase/migrations/0021_teammate_active_status.sql.
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -89,7 +92,9 @@ create table if not exists public.quotes (
   ),
   notes text,
   product_type text not null default 'solar' check (product_type in ('solar', 'boiler')),
-  pipeline_status text not null default 'new_lead' check (pipeline_status in ('new_lead', 'ready_to_pitch', 'locked')),
+  -- Admin-editable lead lifecycle, see
+  -- supabase/migrations/0022_quote_pipeline_status_complete.sql.
+  pipeline_status text not null default 'new_lead' check (pipeline_status in ('new_lead', 'ready_to_pitch', 'locked', 'complete')),
   representative_id uuid references public.profiles (id),
   installer_id uuid references public.profiles (id),
   install_date date,

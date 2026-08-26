@@ -8,6 +8,22 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { BoilerPropertyDetails } from "@/types/boiler-quote";
 
+/** Standard UK property archetypes — covers the vast majority of jobs. Not
+ *  a strict enum on `BoilerPropertyDetails.propertyType` (still plain
+ *  `string`): older quotes may already have a free-text value entered
+ *  before this became a dropdown, and that value shouldn't silently
+ *  disappear or get overwritten just because it isn't on this list. */
+const PROPERTY_TYPE_OPTIONS = [
+  "Detached",
+  "Semi-Detached",
+  "Terraced",
+  "End Terrace",
+  "Bungalow",
+  "Flat / Apartment",
+  "Maisonette",
+  "Other",
+];
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
@@ -41,12 +57,24 @@ function EditPropertyModal({
     <Modal title="Edit property details" onClose={onClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
         <FormField label="Property Type" htmlFor="propertyType">
-          <input
+          <select
             id="propertyType"
             className={inputClassName}
             value={form.propertyType}
             onChange={(event) => set("propertyType", event.target.value)}
-          />
+          >
+            {!form.propertyType && <option value="">Select a property type</option>}
+            {/* Keeps a pre-existing free-text value selectable/visible even
+                though it isn't one of the standard options below. */}
+            {form.propertyType && !PROPERTY_TYPE_OPTIONS.includes(form.propertyType) && (
+              <option value={form.propertyType}>{form.propertyType}</option>
+            )}
+            {PROPERTY_TYPE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </FormField>
         <FormField label="Bedrooms" htmlFor="bedrooms">
           <input

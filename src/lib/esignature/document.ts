@@ -5,6 +5,7 @@ import { getProfileById } from "@/data/profiles-service";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sumLineItems } from "@/data/quotes-mappers";
 import { HEADLINE_MONTHLY_PLAN_TERM_YEARS, monthlyRepayment } from "@/lib/finance";
+import { addDays, parseISODate, toISODate } from "@/lib/date-utils";
 import type { Quote } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
@@ -48,7 +49,18 @@ export interface DocumentSnapshot {
   /** `subtotalLabel` minus the discount — the actual amount owed. */
   totalPriceLabel: string;
   paymentMethodLabel: string;
-  lineItems: { name: string; amountLabel: string }[];
+  lineItems: {
+    name: string;
+    amountLabel: string;
+    /** Raw quantity/unit price/line total behind `amountLabel` — absent on
+     *  a snapshot locked before these existed. Only the boiler quote
+     *  template's dynamic pricing table (boiler-quote-pdf.ts) needs them,
+     *  to lay out and sum a variable number of rows; `QuoteDocumentPreview`
+     *  and the plain PDF renderer (pdf.tsx) still just show `amountLabel`. */
+    quantity?: number;
+    unitPriceLabel?: string;
+    amount?: number;
+  }[];
   /** A handful of representative terms, not the full list in
    *  `MONTHLY_PLAN_TERM_YEARS` — see `HEADLINE_MONTHLY_PLAN_TERM_YEARS`. */
   monthlyPlans?: { years: number; monthlyLabel: string }[];
@@ -59,8 +71,17 @@ export interface DocumentSnapshot {
   /** Absent when the rep hasn't set a phone number in Settings, or on an old snapshot. */
   repPhone?: string;
   sentDateLabel: string;
+  /** `sentDateLabel` + `OFFER_VALIDITY_DAYS` — only used by the boiler
+   *  quote template's cover page (see boiler-quote-pdf.ts); absent on a
+   *  snapshot locked before this field existed. */
+  offerValidUntilLabel?: string;
   generatedAt: string;
 }
+
+/** How long a quote is held open for, shown on the boiler quote template's
+ *  cover page ("Offer valid until"). Not configurable per-quote today —
+ *  just a fixed policy window from the day it's sent. */
+const OFFER_VALIDITY_DAYS = 30;
 
 function productTypeLabel(productType: Quote["productType"]): string {
   return productType === "boiler" ? "Boiler" : "Solar PV";
@@ -135,23 +156,26 @@ async function repEmailFor(repId: string | undefined): Promise<string | undefine
  */
 const AGGREGATED_SECTION_NAMES = new Set(["Extras", "Standard additionals", "Free-text extras"]);
 
-function itemizedLineItems(detail: BoilerQuoteDetail | SolarQuoteDetail): { name: string; amountLabel: string }[] {
+function lineItemFrom(name: string, quantity: number, unitPrice: number): DocumentSnapshot["lineItems"][number] {
+  return {
+    name,
+    quantity,
+    unitPriceLabel: formatCurrency(unitPrice),
+    amount: quantity * unitPrice,
+    amountLabel: formatCurrency(quantity * unitPrice),
+  };
+}
+
+function itemizedLineItems(detail: BoilerQuoteDetail | SolarQuoteDetail): DocumentSnapshot["lineItems"] {
   const installLines = detail.pricingBreakdown
     .filter((item) => !AGGREGATED_SECTION_NAMES.has(item.name))
-    .map((item) => ({ name: item.name, amountLabel: formatCurrency(item.quantity * item.unitPrice) }));
+    .map((item) => lineItemFrom(item.name, item.quantity, item.unitPrice));
 
-  const extraLines = detail.extras.map((item) => ({
-    name: item.name,
-    amountLabel: formatCurrency(item.quantity * item.unitPrice),
-  }));
-  const standardAdditionalLines = detail.standardAdditionals.map((item) => ({
-    name: item.name,
-    amountLabel: formatCurrency(item.quantity * item.unitPrice),
-  }));
-  const freeTextLines = detail.freeTextExtras.map((item) => ({
-    name: item.description,
-    amountLabel: formatCurrency(item.quantity * item.unitPrice),
-  }));
+  const extraLines = detail.extras.map((item) => lineItemFrom(item.name, item.quantity, item.unitPrice));
+  const standardAdditionalLines = detail.standardAdditionals.map((item) =>
+    lineItemFrom(item.name, item.quantity, item.unitPrice),
+  );
+  const freeTextLines = detail.freeTextExtras.map((item) => lineItemFrom(item.description, item.quantity, item.unitPrice));
 
   return [...installLines, ...extraLines, ...standardAdditionalLines, ...freeTextLines];
 }
@@ -199,6 +223,9 @@ export async function buildDocumentSnapshot(
     repEmail,
     repPhone: repProfile?.phone,
     sentDateLabel: formatDate(quote.sentDate),
+    offerValidUntilLabel: quote.sentDate
+      ? formatDate(toISODate(addDays(parseISODate(quote.sentDate), OFFER_VALIDITY_DAYS)))
+      : undefined,
     generatedAt: new Date().toISOString(),
   };
 }

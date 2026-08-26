@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getPublicSignatureRequest } from "@/data/signature-service";
 import { renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
+import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
 
 /**
@@ -22,7 +23,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   }
 
   const snapshot = request.snapshot as DocumentSnapshot;
-  const pdfBuffer = await renderUnsignedQuotePdf(snapshot);
+  const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

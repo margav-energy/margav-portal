@@ -11,14 +11,18 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "admin", label: "Admin" },
 ];
 
-type Feedback = { kind: "error"; message: string } | { kind: "password"; email: string; password: string } | { kind: "invited"; email: string };
+const MIN_PASSWORD_LENGTH = 8;
+
+type Feedback = { kind: "error"; message: string } | { kind: "success"; email: string; emailSent: boolean };
 
 /** Admin-only "add teammate" form on Settings → Team Members — creates the
  *  auth account and profiles row in one step (see `createUserAction`)
- *  instead of the old manual-SQL-insert-only path. */
+ *  instead of the old manual-SQL-insert-only path. The admin sets the
+ *  password themselves rather than one being generated for them. */
 export function CreateUserForm() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("rep");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -28,27 +32,25 @@ export function CreateUserForm() {
     setFeedback(null);
     const submittedName = fullName.trim();
     const submittedEmail = email.trim();
+    const submittedPassword = password;
 
     startTransition(async () => {
-      const result = await createUserAction(submittedName, submittedEmail, role);
+      const result = await createUserAction(submittedName, submittedEmail, submittedPassword, role);
       if (result.error) {
         setFeedback({ kind: "error", message: result.error });
         return;
       }
-      if (result.temporaryPassword) {
-        setFeedback({ kind: "password", email: submittedEmail, password: result.temporaryPassword });
-      } else {
-        setFeedback({ kind: "invited", email: submittedEmail });
-      }
+      setFeedback({ kind: "success", email: submittedEmail, emailSent: result.emailSent ?? false });
       setFullName("");
       setEmail("");
+      setPassword("");
       setRole("rep");
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.2fr_1.5fr_1fr_auto]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           type="text"
           value={fullName}
@@ -64,6 +66,18 @@ export function CreateUserForm() {
           onChange={(event) => setEmail(event.target.value)}
           placeholder="Email address"
           required
+          disabled={isPending}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.5fr_1fr_auto]">
+        <input
+          type="password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          placeholder="Password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
           disabled={isPending}
           className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
         />
@@ -84,6 +98,9 @@ export function CreateUserForm() {
           {isPending ? "Adding…" : "Add teammate"}
         </Button>
       </div>
+      <p className="text-xs text-slate-400">
+        At least {MIN_PASSWORD_LENGTH} characters. They can change it from Settings once they&rsquo;re in.
+      </p>
 
       {feedback?.kind === "error" && (
         <p className="flex items-center gap-1.5 text-sm text-red-600">
@@ -92,25 +109,18 @@ export function CreateUserForm() {
         </p>
       )}
 
-      {feedback?.kind === "invited" && (
+      {feedback?.kind === "success" && feedback.emailSent && (
         <p className="flex items-center gap-1.5 text-sm text-brand-green-mid">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           {feedback.email} has been added and emailed their login details.
         </p>
       )}
 
-      {feedback?.kind === "password" && (
-        <div className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          <p className="flex items-center gap-1.5 font-medium">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            {feedback.email} has been added — couldn&rsquo;t email their login, so share this with them yourself:
-          </p>
-          <p className="font-mono text-sm">
-            Email: {feedback.email}
-            <br />
-            Temporary password: {feedback.password}
-          </p>
-        </div>
+      {feedback?.kind === "success" && !feedback.emailSent && (
+        <p className="flex items-center gap-1.5 text-sm text-brand-green-mid">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {feedback.email} has been added — share the email and password you set with them yourself.
+        </p>
       )}
     </form>
   );
