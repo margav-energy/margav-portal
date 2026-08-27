@@ -411,7 +411,7 @@ export async function getPublicRelatedDocument(
   };
 }
 
-/** The rep's saved signature (Settings → "My signature") for the quote's assigned rep — shared by both document types below. Missing gracefully (rep hasn't set one up, or no assigned rep). */
+/** The rep's saved signature (Settings → "My signature") for the quote's assigned rep — used for the quote itself and the Installation Agreement. Missing gracefully (rep hasn't set one up, or no assigned rep). */
 async function lookupRepSignature(
   supabase: ReturnType<typeof createServiceRoleClient>,
   quoteId: string,
@@ -426,6 +426,29 @@ async function lookupRepSignature(
   return repProfile?.data?.full_name && repSignatureImage
     ? { name: repProfile.data.full_name, image: repSignatureImage }
     : null;
+}
+
+/**
+ * The Cooling-Off Waiver's designated countersignatory — Lucy Starkey,
+ * specifically, on every waiver, regardless of which rep is assigned to
+ * the quote (unlike the Installation Agreement, which uses whichever rep
+ * sold the job — see `lookupRepSignature`). Same "it's always Lucy"
+ * pattern as `EMAIL_FROM` in src/lib/resend.ts. Looked up by name rather
+ * than a hardcoded profile id so this doesn't silently break if her
+ * account ever gets recreated; missing gracefully (same as
+ * `lookupRepSignature`) if she hasn't saved a signature, or her profile
+ * isn't found under this name in whichever environment this runs in.
+ */
+async function lookupWaiverSignatory(supabase: ReturnType<typeof createServiceRoleClient>): Promise<RepSignature | null> {
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, full_name")
+    .eq("full_name", "Lucy Starkey")
+    .maybeSingle();
+  if (!profile) return null;
+
+  const image = await getRepSignatureImageBytes(profile.id);
+  return image ? { name: profile.full_name, image } : null;
 }
 
 async function performQuoteSignedSideEffects(row: SignatureRequestRow): Promise<void> {
@@ -573,7 +596,13 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
     return { ok: false, error: "Could not save your signature. Please try again." };
   }
 
-  const repSignature = await lookupRepSignature(supabase, row.quote_id);
+  // The waiver is always countersigned by its own designated signatory
+  // (Lucy Starkey), never whichever rep happens to be assigned to the quote
+  // — see `lookupWaiverSignatory`'s doc comment.
+  const repSignature =
+    row.document_type === "cooling_off_waiver"
+      ? await lookupWaiverSignatory(supabase)
+      : await lookupRepSignature(supabase, row.quote_id);
   const repSignatureForOverlay = repSignature ? { name: repSignature.name, image: repSignature.image, signedAtLabel } : null;
 
   let pdfBuffer: Buffer;
