@@ -8,33 +8,51 @@ import { QuoteDocumentPreview } from "@/components/esignature/QuoteDocumentPrevi
 import { RelatedDocumentsCard, type RelatedDocumentLink } from "@/components/esignature/RelatedDocumentsCard";
 import type { PublicRelatedDocument, PublicSignatureRequest } from "@/data/signature-service";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
+import type { WaiverSnapshot } from "@/lib/esignature/waiver-document";
 
 const inputClassName =
   "w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-blue focus:bg-white focus:ring-1 focus:ring-brand-blue";
 
-function AgreementDocumentPreview({ reference }: { reference: string }) {
+/** One place mapping `documentType` to how each fixed-template document reads on this page — the "quote" case's banner is built separately below since it needs the snapshot's reference/product type, not a fixed title. */
+const DOCUMENT_META = {
+  boiler_installation_agreement: { label: "installation agreement", bannerTitle: "Boiler Installation Agreement", relatedLabel: "Installation Agreement" },
+  cooling_off_waiver: { label: "cooling-off waiver", bannerTitle: "Cooling-Off Waiver", relatedLabel: "Cooling-Off Waiver" },
+} as const;
+
+function isStaticTemplateType(
+  documentType: PublicSignatureRequest["documentType"],
+): documentType is keyof typeof DOCUMENT_META {
+  return documentType in DOCUMENT_META;
+}
+
+/** Shared by the Boiler Installation Agreement and Cooling-Off Waiver — both are fixed T&Cs templates with nothing customer-specific to render inline, so this just links out to the static PDF (see /api/agreement-templates/[...]) instead of rendering the document itself. */
+function StaticDocumentPreview({
+  title,
+  description,
+  pdfHref,
+  linkLabel,
+  footnote,
+}: {
+  title: string;
+  description: string;
+  pdfHref: string;
+  linkLabel: string;
+  footnote?: string;
+}) {
   return (
     <div className="mx-auto w-full max-w-2xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-4 text-sm font-semibold tracking-wide text-slate-500 uppercase">
-        Boiler Installation Agreement
-      </h2>
-      <p className="text-sm text-slate-600">
-        This is the Terms &amp; Conditions of Installation for quote {reference}. Please read the full agreement
-        before signing.
-      </p>
+      <h2 className="mb-4 text-sm font-semibold tracking-wide text-slate-500 uppercase">{title}</h2>
+      <p className="text-sm text-slate-600">{description}</p>
       <a
-        href="/api/agreement-templates/boiler-installation"
+        href={pdfHref}
         target="_blank"
         rel="noreferrer"
         className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-brand-blue hover:bg-slate-100"
       >
         <FileText className="h-4 w-4" />
-        View the full agreement (PDF)
+        {linkLabel}
       </a>
-      <p className="mt-4 text-xs text-slate-400">
-        A statutory 14-day cooling-off period applies from the date you sign, during which you may cancel without
-        penalty (see clause 3 of the agreement).
-      </p>
+      {footnote && <p className="mt-4 text-xs text-slate-400">{footnote}</p>}
     </div>
   );
 }
@@ -50,9 +68,18 @@ export function SignForm({
   relatedDocument?: PublicRelatedDocument;
   surveyDocumentUrl?: string;
 }) {
-  const isAgreement = request.documentType === "boiler_installation_agreement";
-  const documentLabel = isAgreement ? "installation agreement" : "quote";
+  const staticTemplate = isStaticTemplateType(request.documentType) ? DOCUMENT_META[request.documentType] : undefined;
+  const documentLabel = staticTemplate?.label ?? "quote";
+  const isWaiver = request.documentType === "cooling_off_waiver";
   const [typedName, setTypedName] = useState("");
+  // Pre-filled from whatever the quote already had (e.g. an installer's
+  // already been assigned a date) but editable — whatever's in the box at
+  // submit time is what gets recorded on the signed PDF (see
+  // `WaiverSnapshot.agreedInstallDate`'s doc comment). Optional: left blank
+  // prints as "—", same as before this existed.
+  const [installDate, setInstallDate] = useState(
+    isWaiver ? ((request.snapshot as WaiverSnapshot).agreedInstallDate ?? "") : "",
+  );
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [status, setStatus] = useState<"form" | "submitting" | "signed" | "declined" | "declining">("form");
@@ -85,7 +112,7 @@ export function SignForm({
 
     setStatus("submitting");
     setError(null);
-    const result = await submitSignatureAction(token, typedName, signatureDataUrl);
+    const result = await submitSignatureAction(token, typedName, signatureDataUrl, isWaiver ? installDate : undefined);
     if (result.ok) {
       setStatus("signed");
     } else {
@@ -116,7 +143,9 @@ export function SignForm({
     relatedDocuments.push({ label: "Boiler survey", href: surveyDocumentUrl, statusLabel: "Submitted" });
   }
   if (relatedDocument) {
-    const label = relatedDocument.documentType === "boiler_installation_agreement" ? "Installation Agreement" : "Quote";
+    const label = isStaticTemplateType(relatedDocument.documentType)
+      ? DOCUMENT_META[relatedDocument.documentType].relatedLabel
+      : "Quote";
     relatedDocuments.push({
       label,
       href: `/sign/${relatedDocument.accessToken}`,
@@ -135,13 +164,26 @@ export function SignForm({
         <div className="text-center">
           <p className="text-lg font-bold text-slate-900">Margav Heating</p>
           <p className="text-sm text-slate-500">
-            {isAgreement ? "Boiler Installation Agreement" : `Quote ${request.snapshot.reference}`}
-            {!isAgreement && " — " + (request.snapshot as DocumentSnapshot).productTypeLabel}
+            {staticTemplate?.bannerTitle ?? `Quote ${request.snapshot.reference}`}
+            {!staticTemplate && " — " + (request.snapshot as DocumentSnapshot).productTypeLabel}
           </p>
         </div>
 
-        {isAgreement ? (
-          <AgreementDocumentPreview reference={request.snapshot.reference} />
+        {request.documentType === "boiler_installation_agreement" ? (
+          <StaticDocumentPreview
+            title="Boiler Installation Agreement"
+            description={`This is the Terms & Conditions of Installation for quote ${request.snapshot.reference}. Please read the full agreement before signing.`}
+            pdfHref="/api/agreement-templates/boiler-installation"
+            linkLabel="View the full agreement (PDF)"
+            footnote="A statutory 14-day cooling-off period applies from the date you sign, during which you may cancel without penalty (see clause 3 of the agreement)."
+          />
+        ) : request.documentType === "cooling_off_waiver" ? (
+          <StaticDocumentPreview
+            title="Cooling-Off Waiver"
+            description={`This waiver lets your boiler installation for quote ${request.snapshot.reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
+            pdfHref="/api/agreement-templates/cooling-off-waiver"
+            linkLabel="View the full waiver (PDF)"
+          />
         ) : (
           <QuoteDocumentPreview
             snapshot={request.snapshot as DocumentSnapshot}
@@ -190,6 +232,21 @@ export function SignForm({
             />
           </div>
 
+          {isWaiver && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="installDate" className="text-sm font-medium text-slate-700">
+                Agreed installation date <span className="font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                id="installDate"
+                type="date"
+                className={inputClassName}
+                value={installDate}
+                onChange={(event) => setInstallDate(event.target.value)}
+              />
+            </div>
+          )}
+
           <SignaturePad onChange={setSignatureDataUrl} />
 
           <label className="flex items-start gap-2 text-sm text-slate-600">
@@ -199,7 +256,9 @@ export function SignForm({
               onChange={(event) => setAgreed(event.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
             />
-            I have read and agree to the {documentLabel} above, including the statutory 14-day cooling-off period.
+            {request.documentType === "cooling_off_waiver"
+              ? "I have read and agree to the cooling-off waiver above, and I expressly request that Margav Heating begin the installation works before my statutory 14-day cancellation period ends."
+              : `I have read and agree to the ${documentLabel} above, including the statutory 14-day cooling-off period.`}
           </label>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

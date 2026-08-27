@@ -57,6 +57,20 @@ export function signAgreementEmailHtml(params: {
   );
 }
 
+export function signWaiverEmailHtml(params: {
+  customerName: string;
+  reference: string;
+  signLink: string;
+}): string {
+  return wrapper(
+    `<p>Hi ${params.customerName},</p>` +
+      `<p>Please review and sign your Cooling-Off Waiver for quote ${params.reference}.</p>` +
+      buttonHtml(params.signLink, "Review & sign waiver") +
+      `<p style="font-size:13px;color:#64748b;">Or copy this link: <a href="${params.signLink}">${params.signLink}</a></p>` +
+      `<p style="font-size:13px;color:#64748b;">This link is unique to you — please don&rsquo;t share it.</p>`,
+  );
+}
+
 export function signedConfirmationEmailHtml(params: {
   customerName: string;
   reference: string;

@@ -30,6 +30,7 @@ import {
   cancelQuoteAppointment,
   logWarrantyRegistration,
   recordPitchOutcome,
+  sendCoolingOffWaiver,
   sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
@@ -57,6 +58,8 @@ export function BoilerQuoteDetail({
   signedDocumentUrl,
   agreementSignatureRequest,
   agreementSignedDocumentUrl,
+  waiverSignatureRequest,
+  waiverSignedDocumentUrl,
   documents,
   isAdmin,
   propertyPhotoUrl,
@@ -71,6 +74,8 @@ export function BoilerQuoteDetail({
   signedDocumentUrl: string | undefined;
   agreementSignatureRequest: SignatureRequestSummary | undefined;
   agreementSignedDocumentUrl: string | undefined;
+  waiverSignatureRequest: SignatureRequestSummary | undefined;
+  waiverSignedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
   isAdmin: boolean;
   propertyPhotoUrl: string | undefined;
@@ -105,6 +110,7 @@ export function BoilerQuoteDetail({
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+  const [isWaiverModalOpen, setIsWaiverModalOpen] = useState(false);
   const router = useRouter();
 
   // Recomputed from live `boilerUnits`/`extras` state on every render
@@ -197,6 +203,7 @@ export function BoilerQuoteDetail({
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
     onInstallationAgreement: () => setIsAgreementModalOpen(true),
+    onCoolingOffWaiver: () => setIsWaiverModalOpen(true),
   });
 
   return (
@@ -224,7 +231,12 @@ export function BoilerQuoteDetail({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="flex flex-col gap-6 md:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <PropertyPhotoCard quoteId={detail.quoteId} customerName={customer.name} photoUrl={propertyPhotoUrl} />
+            <PropertyPhotoCard
+              quoteId={detail.quoteId}
+              customerName={customer.name}
+              address={customer.addressLines.join(", ")}
+              photoUrl={propertyPhotoUrl}
+            />
             <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} />
           </div>
           <BoilerPropertyCard
@@ -319,6 +331,14 @@ export function BoilerQuoteDetail({
             readHref="/api/agreement-templates/boiler-installation"
             readLabel="Read the agreement"
           />
+          <SignatureStatusCard
+            title="Cooling-Off Waiver"
+            emptyActionLabel="Cooling-Off Waiver"
+            request={waiverSignatureRequest}
+            signedDocumentUrl={waiverSignedDocumentUrl}
+            readHref="/api/agreement-templates/cooling-off-waiver"
+            readLabel="Read the waiver"
+          />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </div>
       </div>
@@ -357,6 +377,20 @@ export function BoilerQuoteDetail({
           sendAction={sendInstallationAgreement}
           onClose={() => {
             setIsAgreementModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isWaiverModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          title="Send Cooling-Off Waiver"
+          documentLabel="cooling-off waiver"
+          sendAction={sendCoolingOffWaiver}
+          onClose={() => {
+            setIsWaiverModalOpen(false);
             router.refresh();
           }}
         />

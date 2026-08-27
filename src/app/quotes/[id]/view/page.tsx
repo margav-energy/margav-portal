@@ -38,19 +38,30 @@ export default async function ViewQuotePage({
   const { quote, detail } = result;
   const isBoiler = quote.productType === "boiler";
 
-  const [snapshot, survey, surveyDocumentUrl, agreementRequest, agreementSignedDocumentUrl, documents] =
-    await Promise.all([
-      buildDocumentSnapshot(quote, detail),
-      isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
-      isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
-      isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-      isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-      getQuoteDocuments(id),
-    ]);
+  const [
+    snapshot,
+    survey,
+    surveyDocumentUrl,
+    agreementRequest,
+    agreementSignedDocumentUrl,
+    waiverRequest,
+    waiverSignedDocumentUrl,
+    documents,
+  ] = await Promise.all([
+    buildDocumentSnapshot(quote, detail),
+    isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
+    isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
+    isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
+    isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
+    isBoiler ? getLatestSignatureRequest(id, "cooling_off_waiver") : Promise.resolve(undefined),
+    isBoiler ? getSignedDocumentUrl(id, "cooling_off_waiver") : Promise.resolve(undefined),
+    getQuoteDocuments(id),
+  ]);
 
-  // Only boiler jobs have a survey step or an Installation Agreement at
-  // all (see BoilerSurveyCard / "Send Installation Agreement" — neither
-  // exists for solar) — nothing to cross-link for a solar quote.
+  // Only boiler jobs have a survey step or an Installation Agreement/
+  // Cooling-Off Waiver at all (see BoilerSurveyCard / "Send Installation
+  // Agreement" / "Send Cooling-Off Waiver" — none exist for solar) —
+  // nothing to cross-link for a solar quote.
   const otherDocuments: RelatedDocumentLink[] = isBoiler
     ? [
         {
@@ -78,6 +89,21 @@ export default async function ViewQuotePage({
               : agreementRequest.status === "declined"
                 ? "Declined"
                 : agreementRequest.status === "expired"
+                  ? "Link expired"
+                  : "Awaiting signature",
+        },
+        {
+          label: "Cooling-off waiver",
+          // Same "always readable" reasoning as the agreement above.
+          href:
+            waiverRequest?.status === "signed" ? waiverSignedDocumentUrl : "/api/agreement-templates/cooling-off-waiver",
+          statusLabel: !waiverRequest
+            ? "Not sent yet"
+            : waiverRequest.status === "signed"
+              ? "Signed"
+              : waiverRequest.status === "declined"
+                ? "Declined"
+                : waiverRequest.status === "expired"
                   ? "Link expired"
                   : "Awaiting signature",
         },

@@ -27,6 +27,8 @@ export function buildActionButtons(params: {
   onSelectPitchOutcome: (outcome: string) => void;
   /** Boiler-only — the document itself (Boiler Installation Agreement) doesn't apply to solar. */
   onInstallationAgreement?: () => void;
+  /** Boiler-only — same reasoning as `onInstallationAgreement` (the Cooling-Off Waiver is written for a boiler installation). */
+  onCoolingOffWaiver?: () => void;
 }): HeaderActionButton[] {
   return [
     { label: "Presenter", variant: "primary", href: `/quotes/${params.quoteId}/presenter` },
@@ -44,6 +46,9 @@ export function buildActionButtons(params: {
     { label: "Survey", variant: "primary", onClick: params.onSurvey },
     ...(params.onInstallationAgreement
       ? [{ label: "Installation Agreement", variant: "primary" as const, onClick: params.onInstallationAgreement }]
+      : []),
+    ...(params.onCoolingOffWaiver
+      ? [{ label: "Cooling-Off Waiver", variant: "primary" as const, onClick: params.onCoolingOffWaiver }]
       : []),
     // No manual "Archive" button — quotes archive themselves automatically
     // after 5 years (see src/data/quotes-service.ts).

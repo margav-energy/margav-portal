@@ -34,6 +34,8 @@ export default async function QuoteDetailPage({
     signedDocumentUrl,
     agreementSignatureRequest,
     agreementSignedDocumentUrl,
+    waiverSignatureRequest,
+    waiverSignedDocumentUrl,
     documents,
     propertyPhotoUrl,
     boilerCostSettings,
@@ -44,6 +46,8 @@ export default async function QuoteDetailPage({
     getSignedDocumentUrl(id),
     isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
     isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
+    isBoiler ? getLatestSignatureRequest(id, "cooling_off_waiver") : Promise.resolve(undefined),
+    isBoiler ? getSignedDocumentUrl(id, "cooling_off_waiver") : Promise.resolve(undefined),
     getQuoteDocuments(id),
     getPropertyPhotoUrl(id),
     // Only boiler's Profit card recomputes cost/profit live client-side as
@@ -72,6 +76,8 @@ export default async function QuoteDetailPage({
           signedDocumentUrl={signedDocumentUrl}
           agreementSignatureRequest={agreementSignatureRequest}
           agreementSignedDocumentUrl={agreementSignedDocumentUrl}
+          waiverSignatureRequest={waiverSignatureRequest}
+          waiverSignedDocumentUrl={waiverSignedDocumentUrl}
           documents={documents}
           isAdmin={user.role === "admin"}
           propertyPhotoUrl={propertyPhotoUrl}

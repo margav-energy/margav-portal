@@ -147,7 +147,12 @@ export function SolarQuoteDetail({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="flex flex-col gap-6 md:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <PropertyPhotoCard quoteId={detail.quoteId} customerName={customer.name} photoUrl={propertyPhotoUrl} />
+            <PropertyPhotoCard
+              quoteId={detail.quoteId}
+              customerName={customer.name}
+              address={customer.addressLines.join(", ")}
+              photoUrl={propertyPhotoUrl}
+            />
             <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} />
           </div>
           <SolarPropertyCard

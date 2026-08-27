@@ -11,7 +11,8 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 // src/data/signature-service.ts) — same token-authenticated shape as
 // `/survey`, replacing the old Dropbox Sign webhook (removed).
 // `/api/agreement-templates` serves the static (no customer data) Boiler
-// Installation Agreement template PDF that `/sign/[token]` links to.
+// Installation Agreement / Cooling-Off Waiver template PDFs that
+// `/sign/[token]` links to.
 const PUBLIC_PATHS = ["/login", "/survey", "/sign", "/api/agreement-templates"];
 
 function isPublicPath(pathname: string): boolean {

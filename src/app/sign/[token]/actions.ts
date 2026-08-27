@@ -22,12 +22,21 @@ export async function submitSignatureAction(
   token: string,
   typedName: string,
   signatureImageDataUrl: string,
+  /** Cooling-Off Waiver only — see `SubmitSignatureParams.installDate`'s doc comment. Ignored for every other document type. */
+  installDate?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!typedName.trim()) return { ok: false, error: "Please type your full name." };
   if (!signatureImageDataUrl) return { ok: false, error: "Please draw your signature." };
 
   const { ip, userAgent } = await clientMeta();
-  const result = await submitSignature({ token, typedName: typedName.trim(), signatureImageDataUrl, ip, userAgent });
+  const result = await submitSignature({
+    token,
+    typedName: typedName.trim(),
+    signatureImageDataUrl,
+    ip,
+    userAgent,
+    installDate,
+  });
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
 

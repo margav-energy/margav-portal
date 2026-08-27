@@ -22,11 +22,12 @@ export default async function PublicSignPage({
     );
   }
 
-  // Only boiler jobs have a survey step at all — the agreement document
-  // type is boiler-only by definition, and a "quote" document is boiler
-  // when its snapshot says so.
+  // Only boiler jobs have a survey step at all — the agreement/waiver
+  // document types are boiler-only by definition, and a "quote" document
+  // is boiler when its snapshot says so.
   const isBoilerJob =
     request.documentType === "boiler_installation_agreement" ||
+    request.documentType === "cooling_off_waiver" ||
     (request.snapshot as DocumentSnapshot).productTypeLabel === "Boiler";
 
   const [relatedDocument, surveyDocumentUrl] = await Promise.all([

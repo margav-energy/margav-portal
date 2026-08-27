@@ -2,30 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceRoleClient } from "@/lib/supabase/service";
 import { getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
-import { PROPERTY_PHOTOS_BUCKET } from "@/data/property-photo-service";
+import {
+  ensurePropertyPhotosBucketExists,
+  fetchStreetViewPhotoForQuote,
+  PROPERTY_PHOTOS_BUCKET,
+} from "@/data/property-photo-service";
+import { isStreetViewConfigured } from "@/lib/google-street-view";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB — a phone photo, not a scanned document.
 
 export interface PropertyPhotoActionResult {
   error?: string;
-}
-
-/** Same self-provisioning pattern as `ensureQuoteDocumentsBucketExists`
- *  (src/app/quotes/[id]/documents-actions.ts) — storage buckets can't be
- *  created from a SQL migration, so this removes the one-time manual
- *  "Dashboard → Storage → New bucket" step. */
-async function ensurePropertyPhotosBucketExists(): Promise<void> {
-  const admin = createServiceRoleClient();
-  const { data: existing } = await admin.storage.getBucket(PROPERTY_PHOTOS_BUCKET);
-  if (existing) return;
-
-  const { error } = await admin.storage.createBucket(PROPERTY_PHOTOS_BUCKET, { public: false });
-  if (error && !error.message?.toLowerCase().includes("already exists")) {
-    console.error(`ensurePropertyPhotosBucketExists: could not create bucket "${PROPERTY_PHOTOS_BUCKET}"`, error);
-  }
 }
 
 function extensionFor(file: File): string {
@@ -119,6 +108,45 @@ export async function removePropertyPhotoAction(quoteId: string): Promise<Proper
 
   // Best-effort — the quote row already stopped pointing at it either way.
   await supabase.storage.from(PROPERTY_PHOTOS_BUCKET).remove([existing.property_photo_path]);
+
+  revalidatePath(`/quotes/${quoteId}`);
+  return {};
+}
+
+/**
+ * The Property Photo card's "Fetch from Street View" button — a manual
+ * retry of the auto-fetch that already runs once at quote creation (see
+ * `createQuote`/`createQuoteForAppointment`), for whenever that didn't
+ * produce a photo (Street View had no coverage yet, `GOOGLE_MAPS_API_KEY`
+ * wasn't set at the time, ...). Never overwrites an existing photo — see
+ * `fetchStreetViewPhotoForQuote`.
+ */
+export async function fetchStreetViewPhotoAction(
+  quoteId: string,
+  address: string,
+  customerName: string,
+): Promise<PropertyPhotoActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  if (user.role === "installer") return { error: "Only admins and reps can fetch a property photo." };
+
+  if (!isStreetViewConfigured()) {
+    return { error: "Street View isn't set up yet — ask an admin to add a Google Maps API key." };
+  }
+
+  const fetched = await fetchStreetViewPhotoForQuote(quoteId, address);
+  if (!fetched) {
+    return { error: "No Street View imagery found for this address. Try uploading a photo instead." };
+  }
+
+  await logActivity({
+    actorId: user.id,
+    customerName,
+    description: `${user.firstName} fetched a Street View photo for ${customerName}'s quote`,
+    status: "allocated",
+    entityType: "quote_property_photo",
+    entityId: quoteId,
+  });
 
   revalidatePath(`/quotes/${quoteId}`);
   return {};

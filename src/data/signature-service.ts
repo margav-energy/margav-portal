@@ -13,6 +13,8 @@ import { renderSignedDocumentPdf, type RepSignature } from "@/lib/esignature/pdf
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
+import { buildWaiverSnapshot, type WaiverSnapshot } from "@/lib/esignature/waiver-document";
+import { buildSignedWaiverPdf } from "@/lib/esignature/waiver-pdf";
 import { signedConfirmationEmailHtml } from "@/lib/esignature/email-templates";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 
@@ -30,9 +32,21 @@ export const SIGNATURE_IMAGES_BUCKET = "signature-images";
 export const SIGNED_DOCUMENTS_BUCKET = "signed-documents";
 
 export type SignatureStatus = "pending" | "viewed" | "signed" | "declined" | "expired";
-export type SignatureDocumentType = "quote" | "boiler_installation_agreement";
+export type SignatureDocumentType = "quote" | "boiler_installation_agreement" | "cooling_off_waiver";
 
-type AnySnapshot = DocumentSnapshot | AgreementSnapshot;
+type AnySnapshot = DocumentSnapshot | AgreementSnapshot | WaiverSnapshot;
+
+/** Human-readable name for whichever document a `signature_requests` row is — used in confirmation emails, decline notifications, and history/activity entries. */
+function documentLabelFor(documentType: SignatureDocumentType): string {
+  switch (documentType) {
+    case "boiler_installation_agreement":
+      return "installation agreement";
+    case "cooling_off_waiver":
+      return "cooling-off waiver";
+    default:
+      return "quote";
+  }
+}
 
 export interface SignatureRequestSummary {
   id: string;
@@ -249,6 +263,63 @@ export async function createAgreementSignatureRequest(
   return { accessToken: data.access_token, snapshot, signerEmail: email };
 }
 
+/**
+ * Called from `sendCoolingOffWaiver` (`src/components/quotes/actions.ts`)
+ * — the fixed Cooling-Off Waiver T&Cs document. Boiler-only, same reasoning
+ * as `createAgreementSignatureRequest` (the document itself is written for
+ * a boiler installation).
+ */
+export async function createWaiverSignatureRequest(
+  quoteId: string,
+): Promise<{ accessToken: string; snapshot: WaiverSnapshot; signerEmail: string } | { error: string }> {
+  const result = await getQuoteDetail(quoteId);
+  if (!result) return { error: "Quote not found." };
+  const { quote, detail } = result;
+
+  if (quote.productType !== "boiler") {
+    return { error: "The cooling-off waiver is only available for boiler quotes." };
+  }
+
+  const email = detail.customer.email.trim();
+  if (!email) {
+    return { error: "This customer has no email address on file. Add one on the Customer card before sending for signature." };
+  }
+
+  const snapshot = buildWaiverSnapshot(quote, detail as BoilerQuoteDetail);
+  const documentHash = hashDocument(snapshot);
+
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+
+  await supabase
+    .from("signature_requests")
+    .update({ status: "expired" })
+    .eq("quote_id", quoteId)
+    .eq("document_type", "cooling_off_waiver")
+    .eq("status", "pending");
+
+  const { data, error } = await supabase
+    .from("signature_requests")
+    .insert({
+      quote_id: quoteId,
+      document_type: "cooling_off_waiver",
+      signer_name: detail.customer.name,
+      signer_email: email,
+      document_snapshot: snapshot,
+      document_hash: documentHash,
+      created_by: user?.id ?? null,
+    })
+    .select("access_token")
+    .single();
+
+  if (error || !data) {
+    console.error("createWaiverSignatureRequest failed", error);
+    return { error: "Could not create the signature request. Please try again." };
+  }
+
+  return { accessToken: data.access_token, snapshot, signerEmail: email };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Public side (unauthenticated, token-gated) — used by /sign/[token].
 // ─────────────────────────────────────────────────────────────────────────
@@ -432,6 +503,41 @@ async function performAgreementSignedSideEffects(row: SignatureRequestRow): Prom
   revalidatePath("/quotes");
 }
 
+/** Same shape as `performAgreementSignedSideEffects`, for the Cooling-Off Waiver. */
+async function performWaiverSignedSideEffects(row: SignatureRequestRow): Promise<void> {
+  const supabase = createServiceRoleClient();
+
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select("customer_name, representative_id")
+    .eq("id", row.quote_id)
+    .maybeSingle();
+
+  const customerName = quote?.customer_name ?? row.signer_name;
+  const description = "The customer signed the cooling-off waiver";
+  await Promise.all([
+    supabase.from("quote_history").insert({ quote_id: row.quote_id, is_system: true, description }),
+    supabase.from("activities").insert({
+      is_system: true,
+      customer_name: customerName,
+      description: `${description} — ${customerName}`,
+      status: "allocated",
+      entity_type: "quote",
+      entity_id: row.quote_id,
+    }),
+    quote?.representative_id
+      ? notifyUser({
+          userId: quote.representative_id,
+          title: "Cooling-off waiver signed",
+          body: `${customerName} signed the cooling-off waiver.`,
+        })
+      : Promise.resolve(),
+  ]);
+
+  revalidatePath(`/quotes/${row.quote_id}`);
+  revalidatePath("/quotes");
+}
+
 export interface SubmitSignatureParams {
   token: string;
   typedName: string;
@@ -439,6 +545,8 @@ export interface SubmitSignatureParams {
   signatureImageDataUrl: string;
   ip: string;
   userAgent: string;
+  /** Cooling-Off Waiver only — the customer's own pick for "Agreed installation date" (ISO date), overriding whatever the snapshot started with (see `WaiverSnapshot.agreedInstallDate`'s doc comment). Ignored for every other document type. */
+  installDate?: string;
 }
 
 export async function submitSignature(params: SubmitSignatureParams): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -466,6 +574,7 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   }
 
   const repSignature = await lookupRepSignature(supabase, row.quote_id);
+  const repSignatureForOverlay = repSignature ? { name: repSignature.name, image: repSignature.image, signedAtLabel } : null;
 
   let pdfBuffer: Buffer;
   try {
@@ -480,7 +589,24 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
           userAgent: params.userAgent,
           documentHash: row.document_hash,
         },
-        repSignature ? { name: repSignature.name, image: repSignature.image, signedAtLabel } : null,
+        repSignatureForOverlay,
+      );
+    } else if (row.document_type === "cooling_off_waiver") {
+      const waiverSnapshot = row.document_snapshot as WaiverSnapshot;
+      pdfBuffer = await buildSignedWaiverPdf(
+        // The customer's own pick on the signing page (if they made one)
+        // wins over whatever the snapshot started with — see
+        // `SubmitSignatureParams.installDate`'s doc comment.
+        { ...waiverSnapshot, agreedInstallDate: params.installDate || waiverSnapshot.agreedInstallDate },
+        {
+          typedName: params.typedName,
+          signatureImage: signatureImageBuffer,
+          signedAtLabel,
+          ip: params.ip,
+          userAgent: params.userAgent,
+          documentHash: row.document_hash,
+        },
+        repSignatureForOverlay,
       );
     } else {
       const snapshot = row.document_snapshot as DocumentSnapshot;
@@ -532,8 +658,7 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   // Best-effort — the signature itself is already recorded above, so a
   // failed confirmation email shouldn't fail the signing.
   if (isResendConfigured()) {
-    const documentLabel =
-      row.document_type === "boiler_installation_agreement" ? "installation agreement" : "quote";
+    const documentLabel = documentLabelFor(row.document_type);
     try {
       await sendEmail({
         to: row.signer_email,
@@ -557,6 +682,8 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
 
   if (row.document_type === "boiler_installation_agreement") {
     await performAgreementSignedSideEffects(row);
+  } else if (row.document_type === "cooling_off_waiver") {
+    await performWaiverSignedSideEffects(row);
   } else {
     await performQuoteSignedSideEffects(row);
   }
@@ -582,7 +709,9 @@ export async function declineSignature(
     return { ok: false, error: "Could not record the decline. Please try again." };
   }
 
-  const documentLabel = row.document_type === "boiler_installation_agreement" ? "installation agreement" : "quote";
+  const documentLabel = documentLabelFor(row.document_type);
+  const notifyTitle =
+    row.document_type === "quote" ? "Quote signature declined" : `${documentLabel[0].toUpperCase()}${documentLabel.slice(1)} declined`;
   const { data: quote } = await supabase
     .from("quotes")
     .select("customer_name, representative_id")
@@ -604,7 +733,7 @@ export async function declineSignature(
     quote?.representative_id
       ? notifyUser({
           userId: quote.representative_id,
-          title: `${row.document_type === "boiler_installation_agreement" ? "Installation agreement" : "Quote signature"} declined`,
+          title: notifyTitle,
           body: `${customerName} declined to sign the ${documentLabel}.`,
         })
       : Promise.resolve(),

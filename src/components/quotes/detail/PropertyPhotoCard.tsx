@@ -2,27 +2,35 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Image as ImageIcon, Trash2, UploadCloud } from "lucide-react";
+import { Image as ImageIcon, MapPin, Trash2, UploadCloud } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import {
+  fetchStreetViewPhotoAction,
   removePropertyPhotoAction,
   uploadPropertyPhotoAction,
 } from "@/app/quotes/[id]/property-photo-actions";
 
 /**
  * The site/property photo shown alongside Customer details — replaces the
- * old static `PropertyImagePlaceholder`. There's no automated fetch of
- * this from the address (no Street View/maps integration anywhere in this
- * app); it's a plain manual upload, one photo per quote, replaced in place
- * on re-upload (see supabase/migrations/0023_quote_property_photo.sql).
+ * old static `PropertyImagePlaceholder`. A new quote auto-fetches this from
+ * Street View if it can (see `fetchStreetViewPhotoForQuote` in
+ * src/data/property-photo-service.ts, called from `createQuote`/
+ * `createQuoteForAppointment`); "Fetch from Street View" here is a manual
+ * retry for whenever that didn't produce a photo (no coverage yet, the API
+ * key wasn't set up at the time, ...) — otherwise it's a plain manual
+ * upload, one photo per quote, replaced in place on re-upload (see
+ * supabase/migrations/0023_quote_property_photo.sql).
  */
 export function PropertyPhotoCard({
   quoteId,
   customerName,
+  address,
   photoUrl,
 }: {
   quoteId: string;
   customerName: string;
+  /** Full address string (street + postcode) to geocode against Street View. */
+  address: string;
   photoUrl: string | undefined;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +61,15 @@ export function PropertyPhotoCard({
     setError(null);
     startTransition(async () => {
       const result = await removePropertyPhotoAction(quoteId);
+      if (result.error) setError(result.error);
+      else router.refresh();
+    });
+  }
+
+  function handleFetchStreetView() {
+    setError(null);
+    startTransition(async () => {
+      const result = await fetchStreetViewPhotoAction(quoteId, address, customerName);
       if (result.error) setError(result.error);
       else router.refresh();
     });
@@ -95,11 +112,22 @@ export function PropertyPhotoCard({
     <Card className="flex min-h-[220px] flex-col items-center justify-center gap-2 bg-slate-50 p-5 text-slate-300">
       <ImageIcon className="h-8 w-8" />
       <p className="text-xs font-medium text-slate-400">No site photo available</p>
-      <label className="mt-1 flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
-        <UploadCloud className="h-3.5 w-3.5" />
-        {isPending ? "Uploading…" : "Upload photo"}
-        <input type="file" accept="image/*" onChange={handleFileChosen} disabled={isPending} className="hidden" />
-      </label>
+      <div className="mt-1 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleFetchStreetView}
+          disabled={isPending}
+          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+        >
+          <MapPin className="h-3.5 w-3.5" />
+          {isPending ? "Fetching…" : "Fetch from Street View"}
+        </button>
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+          <UploadCloud className="h-3.5 w-3.5" />
+          {isPending ? "Uploading…" : "Upload photo"}
+          <input type="file" accept="image/*" onChange={handleFileChosen} disabled={isPending} className="hidden" />
+        </label>
+      </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
     </Card>
   );

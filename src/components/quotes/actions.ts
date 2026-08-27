@@ -1,14 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteOrigin } from "@/lib/site-origin";
 import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
-import { createAgreementSignatureRequest, createSignatureRequest } from "@/data/signature-service";
+import { fetchStreetViewPhotoForQuote } from "@/data/property-photo-service";
+import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest } from "@/data/signature-service";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
-import { signAgreementEmailHtml, signQuoteEmailHtml } from "@/lib/esignature/email-templates";
+import { signAgreementEmailHtml, signQuoteEmailHtml, signWaiverEmailHtml } from "@/lib/esignature/email-templates";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
@@ -187,6 +189,11 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
     return { error: "Could not create the quote. Please try again." };
   }
 
+  // Best-effort — runs after the response is sent so it never adds latency
+  // to quote creation, and is a no-op if Street View isn't configured or
+  // has no coverage for this address (see `fetchStreetViewPhotoForQuote`).
+  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${input.postcode.trim()}`));
+
   await insertQuoteHistory({
     quoteId: data.id,
     actorId: user?.id,
@@ -262,6 +269,9 @@ export async function createQuoteForAppointment(
     console.error("createQuoteForAppointment failed", error);
     return { error: "Could not create the linked quote. Please try again." };
   }
+
+  // Best-effort — see the equivalent call in `createQuote` above.
+  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${input.postcode.trim()}`));
 
   await insertQuoteHistory({
     quoteId: data.id,
@@ -1259,6 +1269,56 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
       actorId: user?.id,
       customerName,
       description: `Sent installation agreement for signature — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return { ok: true };
+}
+
+export async function sendCoolingOffWaiver(quoteId: string): Promise<SendQuoteResult> {
+  if (!isResendConfigured()) {
+    return {
+      ok: false,
+      error: "Email sending isn't configured yet. Ask an admin to set up Resend (see .env.local.example).",
+    };
+  }
+
+  const request = await createWaiverSignatureRequest(quoteId);
+  if ("error" in request) return { ok: false, error: request.error };
+  const { accessToken, snapshot, signerEmail } = request;
+
+  const origin = await getSiteOrigin();
+  const signLink = `${origin}/sign/${accessToken}`;
+
+  try {
+    await sendEmail({
+      to: signerEmail,
+      subject: `Margav Heating — Cooling-Off Waiver to sign (${snapshot.reference})`,
+      text:
+        `Hi ${snapshot.customerName},\n\n` +
+        `Please review and sign your Cooling-Off Waiver for quote ${snapshot.reference}:\n\n` +
+        `${signLink}\n\n` +
+        `This link is unique to you — please don't share it.\n\n` +
+        `Margav Heating`,
+      html: signWaiverEmailHtml({ customerName: snapshot.customerName, reference: snapshot.reference, signLink }),
+    });
+  } catch (error) {
+    console.error("sendCoolingOffWaiver: email send failed", error);
+    return { ok: false, error: "Couldn't email the signing link. Please try again or contact support." };
+  }
+
+  const user = await getCurrentUser();
+  const customerName = snapshot.customerName;
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the cooling-off waiver for signature" }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Sent cooling-off waiver for signature — ${customerName}`,
       status: "allocated",
       entityType: "quote",
       entityId: quoteId,
