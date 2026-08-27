@@ -191,7 +191,7 @@ export function SolarQuoteDetail({
             onChangeTermYears={handleChangeTermYears}
           />
           <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
-          <PricingCard items={detail.pricingBreakdown} />
+          <PricingCard items={detail.pricingBreakdown} extras={extras} />
           <PricingAdjustmentsCard
             quoteId={detail.quoteId}
             customerName={customer.name}

@@ -136,18 +136,21 @@ export function monthlyPlanTermYearsFor(row: QuoteRow): number | undefined {
  * `costPrice` itself comes from different places depending on product —
  * boiler quotes pass Margav's calculated install cost (see
  * `boilerCostBreakdown` in src/lib/boiler-install-cost.ts, `.total`) along
- * with its `costLineItems` breakdown; solar has no cost model yet, so
- * callers pass `manualCostPriceFrom(row.profit_breakdown)` instead (whatever
- * a rep entered via the Profit card's edit modal) and no line items.
+ * with its `costLineItems` breakdown and `materialsCost` (the `"materials"`
+ * subset of those line items — what the Profit card shows as "Cost price");
+ * solar has no cost model yet, so callers pass
+ * `manualCostPriceFrom(row.profit_breakdown)` instead (whatever a rep
+ * entered via the Profit card's edit modal) and no line items/materialsCost.
  */
 export function buildProfitBreakdown(
   costPrice: number,
   sellPrice: number,
-  costLineItems?: { name: string; amount: number }[],
+  costLineItems?: { name: string; amount: number; category: "materials" | "extra" }[],
+  materialsCost?: number,
 ): ProfitBreakdown {
   const profit = sellPrice - costPrice;
   const marginPercent = sellPrice > 0 ? Math.round((profit / sellPrice) * 1000) / 10 : 0;
-  return { costPrice, sellPrice, profit, marginPercent, costLineItems };
+  return { costPrice, sellPrice, profit, marginPercent, costLineItems, materialsCost };
 }
 
 /** Solar-only: the cost price a rep manually entered via the Profit card, persisted in `quotes.profit_breakdown.costPrice` by `updateQuoteCostPrice`. 0 until someone sets one. */

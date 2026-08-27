@@ -5,20 +5,24 @@
  * this file has no I/O of its own, so it stays trivially testable).
  *
  * These are Margav's real, definitive install costs — the Profit card's
- * cost price for a boiler quote *is* this number, not an editable estimate.
- * Never render these figures anywhere a customer sees — the e-signature
- * PDF, the presenter deck, and outbound emails all intentionally have no
- * path to `ProfitBreakdown`; keep it that way.
+ * Cost price and Profit/Margin for a boiler quote *are* these numbers, not
+ * an editable estimate (Cost price shows `materialsCost`; Profit/Margin
+ * derive from the full `total` — see `BoilerCostBreakdown`). Never render
+ * these figures anywhere a customer sees — the e-signature PDF, the
+ * presenter deck, and outbound emails all intentionally have no path to
+ * `ProfitBreakdown`; keep it that way.
  *
  * The boiler unit itself varies by size; Fernox Filter, the Gateway, the
  * standard flue, Installer Cost, and Rep Comms are flat per install
  * regardless of kW (every boiler install gets exactly one of each, whether
  * or not a rep itemizes them as an Extras line on the quote — see
  * `flatInstallLineItems`), which is what makes margin shrink as the boiler
- * gets bigger against Margav's fixed `DEFAULT_BOILER_SELL_PRICE`.
- * `extraCostsByName`, unlike those, only counts for a given quote when the
- * matching Extras catalog entry is actually on it — see
- * `boilerCostBreakdown`.
+ * gets bigger against Margav's fixed `DEFAULT_BOILER_SELL_PRICE`. A quote's
+ * "Extras" (Roof kit, Gas run per metre, ...) never factor in here at all —
+ * they're priced individually on the Pricing card instead (their sell
+ * price is revenue, not a cost to weigh against margin), and the Profit
+ * card only ever shows these six rows: Cost price, Installer Cost, Rep
+ * Comms, Sell price, Profit, Margin.
  */
 
 /**
@@ -42,14 +46,11 @@ export interface BoilerCostSettings {
   commission: number;
   /**
    * Real supplier cost for specific "Extras" catalog entries
-   * (`src/lib/extras-catalog.ts`) that are genuinely optional per job —
-   * e.g. `{ "Roof kit": 87.36, "Gas run per metre": 35.88, "Flue extension
-   * per metre": 35.88 }` — keyed by the catalog entry's exact `name`.
-   * Unlike the fixed per-install costs above, these only contribute to a
-   * quote's cost price when that extra is actually on the quote (scaled by
-   * its quantity) — a job with no roof kit shouldn't be costed as if it had
-   * one. Any extra not listed here (a free-text extra, or a catalog entry
-   * with no tracked cost) contributes nothing.
+   * (`src/lib/extras-catalog.ts`) — e.g. `{ "Roof kit": 87.36, "Gas run per
+   * metre": 35.88, "Flue extension per metre": 35.88 }` — keyed by the
+   * catalog entry's exact `name`. Not currently read anywhere: Extras are
+   * priced on the Pricing card, not the Profit card (see this file's
+   * top-of-file doc comment) — kept here in case that changes.
    */
   extraCostsByName: Record<string, number>;
 }
@@ -72,24 +73,27 @@ export const DEFAULT_BOILER_COST_SETTINGS: BoilerCostSettings = {
 export interface BoilerCostLineItem {
   name: string;
   amount: number;
+  /**
+   * "materials" — the boiler unit itself, flue, Fernox Filter, Gateway —
+   * sums to `materialsCost`, what the Profit card shows as "Cost price".
+   * "extra" — Installer Cost and Rep Comms — real costs too, but broken
+   * out as their own rows rather than folded into "Cost price", so the
+   * figure a rep can eyeball against "unit + flue + filter + gateway"
+   * always matches. Both categories count toward `total`, which is what
+   * Profit/Margin actually derive from (see ProfitCard.tsx).
+   */
+  category: "materials" | "extra";
 }
 
 export interface BoilerCostBreakdown {
   /** Ordered: each boiler unit's own cost, then the flat per-install
-   *  items, then whichever optional extras are actually costed — sums
-   *  exactly to `total`, so the Profit card can render this list directly
-   *  instead of just a single number. */
+   *  items — sums exactly to `total`, so the Profit card can render this
+   *  list directly instead of just a single number. */
   lineItems: BoilerCostLineItem[];
   total: number;
+  /** Sum of just the `"materials"` line items — see `BoilerCostLineItem`. */
+  materialsCost: number;
 }
-
-/**
- * Which of `boilerCostBreakdown`'s line items the Profit card actually
- * breaks out on screen — everything else (the boiler unit itself, flue,
- * Fernox Filter, Gateway, extras) still contributes to `total`, just isn't
- * itemized individually there (see ProfitCard.tsx).
- */
-export const VISIBLE_COST_LINE_ITEM_NAMES = ["Installer Cost", "Rep Comms"];
 
 /**
  * Nearest defined tier to `outputKw` — handles boiler sizes outside the
@@ -114,43 +118,43 @@ function nearestUnitCost(outputKw: number, unitCostsByKw: Record<number, number>
 function flatInstallLineItems(unitCount: number, settings: BoilerCostSettings): BoilerCostLineItem[] {
   if (unitCount === 0) return [];
   return [
-    { name: 'Horizontal "Standard" 60/100 Flue w/Terminal (1000mm)', amount: settings.standardFlue * unitCount },
-    { name: "Fernox System Filter", amount: settings.fernoxSystemFilter * unitCount },
-    { name: "Gateway with Smart Touch", amount: settings.gatewayWithComfortTouch * unitCount },
-    { name: "Installer Cost", amount: settings.installerCost * unitCount },
-    { name: "Rep Comms", amount: settings.commission * unitCount },
+    {
+      name: 'Horizontal "Standard" 60/100 Flue w/Terminal (1000mm)',
+      amount: settings.standardFlue * unitCount,
+      category: "materials",
+    },
+    { name: "Fernox System Filter", amount: settings.fernoxSystemFilter * unitCount, category: "materials" },
+    { name: "Gateway with Smart Touch", amount: settings.gatewayWithComfortTouch * unitCount, category: "materials" },
+    { name: "Installer Cost", amount: settings.installerCost * unitCount, category: "extra" },
+    { name: "Rep Comms", amount: settings.commission * unitCount, category: "extra" },
   ];
-}
-
-/** Real cost of the optional extras actually on the quote, as named line items — only entries with a tracked cost (`extraCostsByName`) count, scaled by quantity; anything else (free-text, an untracked catalog entry) contributes no row at all. */
-function extrasLineItems(extras: { name: string; quantity: number }[], settings: BoilerCostSettings): BoilerCostLineItem[] {
-  return extras
-    .map((extra) => ({ name: extra.name, amount: (settings.extraCostsByName[extra.name] ?? 0) * extra.quantity }))
-    .filter((item) => item.amount > 0);
 }
 
 /**
  * The boiler quote's full cost breakdown — each boiler unit's own real
- * install cost (unit cost by kW), the flat per-install items, and whichever
- * optional extras are actually on the quote. `total` is what the Profit
- * card's "Cost price" shows; `lineItems` is the same figure broken out for
- * display, in the same order.
+ * install cost (unit cost by kW) plus the flat per-install items. `total`
+ * is what Profit/Margin derive from; `lineItems` is the same figure broken
+ * out for display, in the same order. Deliberately takes no `extras` — a
+ * quote's Extras are never costed here at all, see this file's top-of-file
+ * doc comment.
  */
 export function boilerCostBreakdown(
   units: { outputKw: number; make: string; model: string }[],
-  extras: { name: string; quantity: number }[],
   settings: BoilerCostSettings,
 ): BoilerCostBreakdown {
-  const unitLineItems = units.map((unit) => ({
+  const unitLineItems: BoilerCostLineItem[] = units.map((unit) => ({
     name: unit.make && unit.model ? `${unit.make} ${unit.model}` : `${unit.outputKw}kW boiler unit`,
     amount: nearestUnitCost(unit.outputKw, settings.unitCostsByKw),
+    category: "materials",
   }));
 
-  const lineItems = [
-    ...unitLineItems,
-    ...flatInstallLineItems(units.length, settings),
-    ...extrasLineItems(extras, settings),
-  ];
+  const lineItems = [...unitLineItems, ...flatInstallLineItems(units.length, settings)];
 
-  return { lineItems, total: lineItems.reduce((sum, item) => sum + item.amount, 0) };
+  return {
+    lineItems,
+    total: lineItems.reduce((sum, item) => sum + item.amount, 0),
+    materialsCost: lineItems
+      .filter((item) => item.category === "materials")
+      .reduce((sum, item) => sum + item.amount, 0),
+  };
 }

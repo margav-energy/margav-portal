@@ -66,5 +66,11 @@ export interface ProfitBreakdown {
    *  made of (see `boilerCostBreakdown` in src/lib/boiler-install-cost.ts),
    *  in display order, summing exactly to `costPrice`. Absent for solar,
    *  which has no cost model to break down. */
-  costLineItems?: { name: string; amount: number }[];
+  costLineItems?: { name: string; amount: number; category: "materials" | "extra" }[];
+  /** Boiler quotes only — the `"materials"` subset of `costLineItems`
+   *  (boiler unit + flue + Fernox Filter + Gateway), what the Profit card
+   *  shows as "Cost price". `costPrice` itself stays the full total
+   *  (materials + Installer Cost + Rep Comms) — that's still what
+   *  Profit/Margin derive from. Absent for solar. */
+  materialsCost?: number;
 }

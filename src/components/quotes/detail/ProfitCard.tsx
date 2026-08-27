@@ -9,7 +9,6 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { updateQuoteCostPrice } from "@/components/quotes/actions";
-import { VISIBLE_COST_LINE_ITEM_NAMES } from "@/lib/boiler-install-cost";
 import type { ProfitBreakdown } from "@/types/quote-detail-shared";
 
 /** `profit`/`marginPercent` always derive from `costPrice` + the Pricing card total. */
@@ -89,14 +88,20 @@ export function ProfitCard({
     void updateQuoteCostPrice(quoteId, costPrice, customerName);
   }
 
-  // Cost price is still the full sum of everything (boiler unit, flue,
-  // Fernox Filter, Gateway, Installer Cost, Rep Comms, extras — see
-  // `boilerCostBreakdown` in src/lib/boiler-install-cost.ts) — just not
-  // broken out line by line here. Installer Cost and Rep Comms are the two
-  // exceptions kept visible.
-  const visibleCostLineItems =
-    profit.costLineItems?.filter((item) => VISIBLE_COST_LINE_ITEM_NAMES.includes(item.name)) ?? [];
-  const hasCostLineItems = visibleCostLineItems.length > 0;
+  // The Profit card only ever shows six rows: Cost price, Installer Cost,
+  // Rep Comms, Sell price, Profit, Margin — never a quote's Extras (those
+  // are priced individually on the Pricing card instead, see PricingCard's
+  // caller). "Cost price" is the `"materials"` subset of the breakdown —
+  // boiler unit + flue + Fernox Filter + Gateway (see `materialsCost` on
+  // `BoilerCostBreakdown` in src/lib/boiler-install-cost.ts) — always a
+  // rep-checkable "unit + flue + filter + gateway" figure. Installer Cost
+  // and Rep Comms are real costs too, just kept out of that figure and
+  // broken out below it instead — `profit.costPrice` (materials + those)
+  // is untouched and is still what Profit/Margin derive from. Solar has no
+  // line items/materialsCost, so it falls back to showing the plain,
+  // rep-editable `costPrice` with nothing broken out.
+  const extraCostLineItems = profit.costLineItems?.filter((item) => item.category === "extra") ?? [];
+  const costPriceDisplay = profit.materialsCost ?? profit.costPrice;
 
   return (
     <Collapsible title="Profit">
@@ -104,18 +109,10 @@ export function ProfitCard({
         {/* Red throughout, same as Discount elsewhere in this app — these
             are outgoing costs, unlike Profit/Margin below which are the
             result and are shown in green. */}
-        {visibleCostLineItems.map((item, index) => (
-          <div key={index} className="flex items-baseline justify-between">
-            <span className="text-sm text-slate-500">{item.name}</span>
-            <span className="text-sm font-medium text-red-600">-{formatCurrency(item.amount)}</span>
-          </div>
-        ))}
-        <div
-          className={`flex items-baseline justify-between ${hasCostLineItems ? "border-t border-slate-100 pt-2" : ""}`}
-        >
+        <div className="flex items-baseline justify-between">
           <span className="text-sm text-slate-500">Cost price</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-red-600">{formatCurrency(profit.costPrice)}</span>
+            <span className="text-sm font-semibold text-red-600">{formatCurrency(costPriceDisplay)}</span>
             {editable && (
               <button
                 type="button"
@@ -128,7 +125,17 @@ export function ProfitCard({
             )}
           </div>
         </div>
-        <KeyDetailField label="Sell price" value={formatCurrency(profit.sellPrice)} />
+        {extraCostLineItems.map((item, index) => (
+          <div key={index} className="flex items-baseline justify-between">
+            <span className="text-sm text-slate-500">{item.name}</span>
+            <span className="text-sm font-medium text-red-600">{formatCurrency(item.amount)}</span>
+          </div>
+        ))}
+        <KeyDetailField
+          label="Sell price"
+          value={formatCurrency(profit.sellPrice)}
+          className={extraCostLineItems.length > 0 ? "border-t border-slate-100 pt-2" : ""}
+        />
         <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} valueClassName="text-brand-green-mid" />
         <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} valueClassName="text-brand-green-mid" />
       </div>

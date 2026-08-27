@@ -248,7 +248,6 @@ export async function getQuoteDetail(
     // boilerCostSettings is always populated here — fetched above whenever isBoiler is true.
     const costBreakdown = boilerCostBreakdown(
       boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
-      extras,
       boilerCostSettings!,
     );
 
@@ -264,7 +263,12 @@ export async function getQuoteDetail(
         { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
         { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
       ]),
-      profitBreakdown: buildProfitBreakdown(costBreakdown.total, sellPrice, costBreakdown.lineItems),
+      profitBreakdown: buildProfitBreakdown(
+        costBreakdown.total,
+        sellPrice,
+        costBreakdown.lineItems,
+        costBreakdown.materialsCost,
+      ),
     };
 
     return { quote, detail };

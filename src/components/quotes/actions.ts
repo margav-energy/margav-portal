@@ -16,7 +16,9 @@ import { QUOTE_PIPELINE_STATUS_STYLES } from "@/lib/status-colors";
 import {
   mapFreeTextRow,
   mapLineItemRow,
+  parseLineItems,
   serializeLineItems,
+  sumLineItems,
   type LineItemRow,
 } from "@/data/quotes-mappers";
 import type {
@@ -76,6 +78,45 @@ function buildCustomerAddressLines(address: string, postcode: string): string[] 
 function revalidateQuote(quoteId: string) {
   revalidatePath(`/quotes/${quoteId}`);
   revalidatePath("/quotes");
+}
+
+/**
+ * `quotes.amount` — the "Value" column on the Quotes list — is a stored
+ * column, not derived at read time like the detail page's `sellPrice`
+ * (see the doc comment on `buildProfitBreakdown` in quotes-mappers.ts).
+ * Every mutation that can change what a quote is worth (units/arrays,
+ * extras/standard additionals/free-text extras) calls this afterward so
+ * the list stays in sync instead of showing whatever `amount` was at
+ * quote creation (0 for an appointment-linked quote) forever after.
+ */
+async function syncQuoteAmount(quoteId: string): Promise<void> {
+  const supabase = await createClient();
+  const [unitsResult, arraysResult, lineItemsResult] = await Promise.all([
+    supabase.from("boiler_units").select("price, items").eq("quote_id", quoteId),
+    supabase.from("solar_arrays").select("items").eq("quote_id", quoteId),
+    supabase.from("quote_line_items").select("quantity, unit_price").eq("quote_id", quoteId),
+  ]);
+
+  const unitsTotal = (unitsResult.data ?? []).reduce(
+    (sum, unit) => sum + Number(unit.price ?? 0) + sumLineItems(parseLineItems(unit.items)),
+    0,
+  );
+  const arraysTotal = (arraysResult.data ?? []).reduce(
+    (sum, array) => sum + sumLineItems(parseLineItems(array.items)),
+    0,
+  );
+  const lineItemsTotal = sumLineItems(
+    (lineItemsResult.data ?? []).map((row) => ({
+      quantity: Number(row.quantity),
+      unitPrice: Number(row.unit_price),
+    })),
+  );
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({ amount: unitsTotal + arraysTotal + lineItemsTotal })
+    .eq("id", quoteId);
+  if (error) console.error("syncQuoteAmount failed", error);
 }
 
 async function nextSortOrder(
@@ -713,6 +754,7 @@ export async function createBoilerUnit(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return { ...unit, id: data.id as string };
@@ -754,6 +796,7 @@ export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, custom
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;
@@ -779,6 +822,7 @@ export async function deleteBoilerUnit(quoteId: string, unitId: string, unitLabe
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;
@@ -826,6 +870,7 @@ export async function createSolarArray(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return { ...array, id: data.id as string };
@@ -861,6 +906,7 @@ export async function updateSolarArray(quoteId: string, array: SolarArray, custo
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;
@@ -891,6 +937,7 @@ export async function deleteSolarArray(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;
@@ -951,6 +998,7 @@ export async function createQuoteLineItem(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
 
@@ -998,6 +1046,7 @@ export async function updateQuoteLineItem(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;
@@ -1033,6 +1082,7 @@ export async function deleteQuoteLineItem(
       entityType: "quote",
       entityId: quoteId,
     }),
+    syncQuoteAmount(quoteId),
   ]);
   revalidateQuote(quoteId);
   return true;

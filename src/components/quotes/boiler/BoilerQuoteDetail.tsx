@@ -153,7 +153,6 @@ export function BoilerQuoteDetail({
 
   const costBreakdown = boilerCostBreakdown(
     boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
-    extras,
     boilerCostSettings,
   );
   const profitAmount = totalCost - costBreakdown.total;
@@ -163,6 +162,7 @@ export function BoilerQuoteDetail({
     profit: profitAmount,
     marginPercent: totalCost > 0 ? Math.round((profitAmount / totalCost) * 1000) / 10 : 0,
     costLineItems: costBreakdown.lineItems,
+    materialsCost: costBreakdown.materialsCost,
   };
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
@@ -269,7 +269,7 @@ export function BoilerQuoteDetail({
             onChangeTermYears={handleChangeTermYears}
           />
           {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
-          <PricingCard items={pricingBreakdown} />
+          <PricingCard items={pricingBreakdown} extras={extras} />
           <PricingAdjustmentsCard
             quoteId={detail.quoteId}
             customerName={customer.name}
