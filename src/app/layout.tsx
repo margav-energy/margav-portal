@@ -15,7 +15,7 @@ const poppins = Poppins({
 
 export const metadata: Metadata = {
   title: "Margav Portal",
-  description: "Margav Energy internal operations portal",
+  description: "Margav Heating internal operations portal",
 };
 
 export default async function RootLayout({

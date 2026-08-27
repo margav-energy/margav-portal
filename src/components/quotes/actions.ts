@@ -174,6 +174,11 @@ export interface CreateQuoteForAppointmentInput {
   address: string;
   productType: "solar" | "boiler";
   notes?: string | null;
+  /** Whoever created the appointment — attributed as the author of the
+   *  `quote_notes` row this seeds from `notes` below, so it doesn't show
+   *  up as "Unknown". Absent for old call sites/tests; the note still
+   *  gets created either way. */
+  createdBy?: string | null;
 }
 
 /**
@@ -230,6 +235,21 @@ export async function createQuoteForAppointment(
     entityId: data.id,
     isSystem: true,
   });
+
+  // Carries whatever was typed into the appointment form's "Notes" field
+  // over to the ONE place a note is actually visible on a quote — the
+  // Notes panel (backed by `quote_notes`, not the flat `quotes.notes`
+  // column set above, which nothing in the UI ever reads back). Without
+  // this, that text is saved (to `quotes.notes`) but invisible, so
+  // whoever typed it re-types it via "Leave a note" the moment they open
+  // the quote — this is what fixes that.
+  const trimmedNotes = input.notes?.trim();
+  if (trimmedNotes) {
+    const { error: noteError } = await supabase
+      .from("quote_notes")
+      .insert({ quote_id: data.id, author_id: input.createdBy ?? null, body: trimmedNotes });
+    if (noteError) console.error("createQuoteForAppointment: seeding quote_notes failed", noteError);
+  }
 
   revalidatePath("/quotes");
 
@@ -582,7 +602,10 @@ export async function updatePricingAdjustments(
     insertQuoteHistory({
       quoteId,
       actorId: user?.id,
-      description: `Set VAT ${formatCurrency(adjustments.vatAmount)}, discount ${formatCurrency(adjustments.discountAmount)}, deposit ${formatCurrency(adjustments.depositAmount)}`,
+      // VAT isn't editable from PricingAdjustmentsCard for now (see its
+      // comment), so it's left out here too — otherwise every discount/
+      // deposit edit would misleadingly log "Set VAT" alongside them.
+      description: `Set discount ${formatCurrency(adjustments.discountAmount)}, deposit ${formatCurrency(adjustments.depositAmount)}`,
     }),
     logActivity({
       actorId: user?.id,
@@ -1099,13 +1122,13 @@ export async function sendQuote(quoteId: string): Promise<SendQuoteResult> {
   try {
     await sendEmail({
       to: signerEmail,
-      subject: `Your Margav Energy quote (${snapshot.reference}) is ready to sign`,
+      subject: `Your Margav Heating quote (${snapshot.reference}) is ready to sign`,
       text:
         `Hi ${snapshot.customerName},\n\n` +
         `Your ${snapshot.productTypeLabel} quote (${snapshot.reference}, ${snapshot.totalPriceLabel}) is ready to review and sign:\n\n` +
         `${signLink}\n\n` +
         `This link is unique to you — please don't share it.\n\n` +
-        `Margav Energy`,
+        `Margav Heating`,
       html: signQuoteEmailHtml({
         customerName: snapshot.customerName,
         reference: snapshot.reference,
@@ -1163,13 +1186,13 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
   try {
     await sendEmail({
       to: signerEmail,
-      subject: `Margav Energy — Boiler Installation Agreement to sign (${snapshot.reference})`,
+      subject: `Margav Heating — Boiler Installation Agreement to sign (${snapshot.reference})`,
       text:
         `Hi ${snapshot.customerName},\n\n` +
         `Please review and sign your Boiler Installation Agreement for quote ${snapshot.reference}:\n\n` +
         `${signLink}\n\n` +
         `This link is unique to you — please don't share it.\n\n` +
-        `Margav Energy`,
+        `Margav Heating`,
       html: signAgreementEmailHtml({ customerName: snapshot.customerName, reference: snapshot.reference, signLink }),
     });
   } catch (error) {

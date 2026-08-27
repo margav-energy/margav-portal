@@ -6,7 +6,7 @@ import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
 import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
-import { PropertyImagePlaceholder } from "@/components/quotes/detail/PropertyImagePlaceholder";
+import { PropertyPhotoCard } from "@/components/quotes/detail/PropertyPhotoCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
 import { PricingCard } from "@/components/quotes/detail/PricingCard";
@@ -49,6 +49,7 @@ export function SolarQuoteDetail({
   signedDocumentUrl,
   documents,
   isAdmin,
+  propertyPhotoUrl,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
@@ -57,6 +58,7 @@ export function SolarQuoteDetail({
   signedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
   isAdmin: boolean;
+  propertyPhotoUrl: string | undefined;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -86,6 +88,11 @@ export function SolarQuoteDetail({
   const router = useRouter();
 
   const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  // What the customer actually owes and what the signed document's monthly
+  // plan figure is based on (see `buildDocumentSnapshot` in
+  // src/lib/esignature/document.ts) — the Payment Method card's own preview
+  // needs to match that, not the pre-discount subtotal above.
+  const totalAfterDiscount = totalCost - pricingAdjustments.discountAmount;
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
     setSelectedPaymentMethod(method);
@@ -140,7 +147,7 @@ export function SolarQuoteDetail({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="flex flex-col gap-6 md:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <PropertyImagePlaceholder />
+            <PropertyPhotoCard quoteId={detail.quoteId} customerName={customer.name} photoUrl={propertyPhotoUrl} />
             <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} />
           </div>
           <SolarPropertyCard
@@ -179,7 +186,7 @@ export function SolarQuoteDetail({
           <PaymentMethodCard
             selected={selectedPaymentMethod}
             termYears={monthlyPlanTermYears}
-            totalCost={totalCost}
+            totalCost={totalAfterDiscount}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
           />

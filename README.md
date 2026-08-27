@@ -1,4 +1,4 @@
-Margav Portal — Margav Energy's internal operations portal (Next.js 16 App Router, React 19, Tailwind v4, Supabase).
+Margav Portal — Margav Heating's internal operations portal (Next.js 16 App Router, React 19, Tailwind v4, Supabase).
 
 ## Setup
 

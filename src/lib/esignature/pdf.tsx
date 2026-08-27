@@ -47,7 +47,7 @@ export interface RepSignature {
 function QuoteDocumentBody({ snapshot }: { snapshot: DocumentSnapshot }) {
   return (
     <>
-      <Text style={styles.brand}>Margav Energy</Text>
+      <Text style={styles.brand}>Margav Heating</Text>
       <Text style={styles.subBrand}>Quote {snapshot.reference} — {snapshot.productTypeLabel}</Text>
 
       <View style={styles.row}>
@@ -125,7 +125,7 @@ export async function renderSignedDocumentPdf(
             <Text style={styles.label}>Signed {audit.signedAtLabel}</Text>
           </View>
           <View style={styles.signatureBlock}>
-            <Text style={styles.signatureRole}>For Margav Energy</Text>
+            <Text style={styles.signatureRole}>For Margav Heating</Text>
             {repSignature ? (
               <>
                 {/* eslint-disable-next-line jsx-a11y/alt-text -- see note above. */}

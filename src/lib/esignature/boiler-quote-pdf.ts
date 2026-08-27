@@ -80,7 +80,7 @@ const COVER_TEXT_X = 195.6; // matches the template's own placeholder start x
  * last item row.
  *
  * Column x-bounds and the styling (navy header bar, zebra row shading, the
- * pale-green "Total incl. VAT" highlight) are lifted from the template's
+ * pale-green "Total" row highlight) are lifted from the template's
  * own values — extracted via pdfjs-dist's operator list, not guessed —
  * so the regenerated block still looks like the rest of the document.
  */
@@ -115,14 +115,14 @@ const CELL_TEXT_PAD = 6;
 const MAX_ITEM_ROWS = 9;
 
 /**
- * "Monthly Plan Options" — the same three representative terms/amounts
- * `QuoteDocumentPreview` shows on-screen (`snapshot.monthlyPlans`,
- * computed in document.ts regardless of the quote's actually-selected
- * payment method, same as there). The business template has no section
- * for this at all; drawn directly below the pricing summary, wherever
- * that ends up given however many item rows there were — see
- * `MAX_ITEM_ROWS`'s comment for why that's capped low enough to always
- * leave room for this block above the page's floor.
+ * "Monthly Plan" — the single term actually selected on the Payment Method
+ * card, same as `QuoteDocumentPreview` shows on-screen (`snapshot.monthlyPlans`,
+ * computed in document.ts; empty when the quote isn't on a Monthly Plan at
+ * all). The business template has no section for this at all; drawn
+ * directly below the pricing summary, wherever that ends up given however
+ * many item rows there were — see `MAX_ITEM_ROWS`'s comment for why that's
+ * capped low enough to always leave room for this block above the page's
+ * floor.
  */
 const MONTHLY_PLAN_GAP_ABOVE = 20;
 const MONTHLY_PLAN_HEADER_HEIGHT = 14;
@@ -133,7 +133,7 @@ const MONTHLY_PLAN_LABEL_COLOR = rgb(100 / 255, 116 / 255, 139 / 255);
 const MONTHLY_PLAN_DISCLAIMER_COLOR = rgb(0.58, 0.64, 0.72);
 
 /** Alternating white/zebra-gray row backgrounds, header navy, and the
- *  pricing summary's pale-green "Total incl. VAT" highlight — all sampled
+ *  pricing summary's pale-green "Total" row highlight — all sampled
  *  from the template's own fill colors, not chosen freehand. */
 const ZEBRA_GRAY = rgb(226 / 255, 232 / 255, 240 / 255);
 
@@ -327,6 +327,33 @@ function drawAcceptanceSignature(page: PDFPage, image: PDFImage, layout: { x1: n
   });
 }
 
+const STRIKETHROUGH_GRAY = rgb(148 / 255, 163 / 255, 184 / 255);
+
+/** Draws `text` then a horizontal line through its middle — pdf-lib has no
+ *  text-decoration primitive, so this measures the glyph run itself and
+ *  lays the line under it by hand. */
+function drawStrikethroughText(page: PDFPage, font: PDFFont, text: string, x: number, y: number, size: number, color: ReturnType<typeof rgb>) {
+  page.drawText(text, { x, y, size, font, color });
+  const width = font.widthOfTextAtSize(text, size);
+  page.drawLine({ start: { x, y: y + size * 0.32 }, end: { x: x + width, y: y + size * 0.32 }, thickness: 0.6, color });
+}
+
+/**
+ * Right-aligned "£139.88 £0.00" pair, `original` struck through, for a line
+ * item that's included at no charge but has a real worth (see
+ * `originalUnitPriceLabel` in document.ts) — replaces the plain amount cell
+ * for just that row's Total column.
+ */
+function drawIncludedAmount(page: PDFPage, font: PDFFont, original: string, amount: string, rightEdge: number, y: number) {
+  const gap = 5;
+  const amountSize = 9.5;
+  const originalSize = 8;
+  const amountX = rightAlignedX(font, amount, amountSize, rightEdge);
+  const originalX = amountX - gap - font.widthOfTextAtSize(original, originalSize);
+  drawStrikethroughText(page, font, original, originalX, y + 0.75, originalSize, STRIKETHROUGH_GRAY);
+  page.drawText(amount, { x: amountX, y, size: amountSize, font, color: NAVY });
+}
+
 function drawRow(
   page: PDFPage,
   font: PDFFont,
@@ -346,20 +373,26 @@ function drawRow(
 
 /**
  * Draws below the pricing summary, starting `topY` (the deposit row's own
- * bottom edge) minus a gap — three boxes (1/5/10-year representative
- * terms) plus the same APR disclaimer `QuoteDocumentPreview` shows.
- * No-ops if the snapshot has no plans at all (a locked snapshot from
- * before this field existed, or a non-positive total).
+ * bottom edge) minus a gap — one box for the selected term plus the same
+ * APR disclaimer `QuoteDocumentPreview` shows. No-ops if the snapshot has
+ * no plan at all (quote isn't on a Monthly Plan, or a locked snapshot from
+ * before this field existed).
  */
 function drawMonthlyPlanSection(page: PDFPage, font: PDFFont, plans: DocumentSnapshot["monthlyPlans"], topY: number) {
   if (!plans || plans.length === 0) return;
 
   const sectionTop = topY - MONTHLY_PLAN_GAP_ABOVE;
-  page.drawText("Monthly Plan Options", { x: TABLE_X1, y: sectionTop - 9, size: 9, font, color: NAVY });
+  page.drawText("Monthly Plan", { x: TABLE_X1, y: sectionTop - 9, size: 9, font, color: NAVY });
 
   const boxesTop = sectionTop - MONTHLY_PLAN_HEADER_HEIGHT;
   const boxesBottom = boxesTop - MONTHLY_PLAN_BOX_HEIGHT;
-  const boxWidth = (TABLE_X2 - TABLE_X1 - (plans.length - 1) * MONTHLY_PLAN_BOX_GAP) / plans.length;
+  // Box width holds steady at the old 3-column width even when there's
+  // only the one selected term to show, rather than stretching a single
+  // box across the full table width.
+  const boxWidth =
+    plans.length === 1
+      ? (TABLE_X2 - TABLE_X1 - 2 * MONTHLY_PLAN_BOX_GAP) / 3
+      : (TABLE_X2 - TABLE_X1 - (plans.length - 1) * MONTHLY_PLAN_BOX_GAP) / plans.length;
 
   plans.forEach((plan, index) => {
     const x = TABLE_X1 + index * (boxWidth + MONTHLY_PLAN_BOX_GAP);
@@ -441,9 +474,25 @@ function drawPricingPage(page: PDFPage, font: PDFFont, snapshot: DocumentSnapsho
         { text: item.name, x1: TABLE_COLUMNS.description.x1, x2: TABLE_COLUMNS.description.x2, align: "left", color: NAVY },
         { text: String(item.quantity ?? 1), x1: TABLE_COLUMNS.qty.x1, x2: TABLE_COLUMNS.qty.x2, align: "right", color: NAVY },
         { text: item.unitPriceLabel ?? item.amountLabel, x1: TABLE_COLUMNS.unitPrice.x1, x2: TABLE_COLUMNS.unitPrice.x2, align: "right", color: NAVY },
-        { text: item.amountLabel, x1: TABLE_COLUMNS.total.x1, x2: TABLE_COLUMNS.total.x2, align: "right", color: NAVY },
       ],
     );
+
+    // Included-at-no-charge items (Gateway/Fernox/Flue — see
+    // `originalUnitPriceLabel` in document.ts) get their real worth struck
+    // through next to the £0.00 they're actually charged, instead of the
+    // plain amount cell every other row gets.
+    const baselineY = y + ROW_HEIGHT / 2 - 3.5;
+    if (item.originalUnitPriceLabel) {
+      drawIncludedAmount(page, font, item.originalUnitPriceLabel, item.amountLabel, TABLE_COLUMNS.total.x2 - CELL_TEXT_PAD, baselineY);
+    } else {
+      page.drawText(item.amountLabel, {
+        x: rightAlignedX(font, item.amountLabel, 9.5, TABLE_COLUMNS.total.x2 - CELL_TEXT_PAD),
+        y: baselineY,
+        size: 9.5,
+        font,
+        color: NAVY,
+      });
+    }
   });
 
   // Pricing summary, shifted to sit directly under however many item rows
@@ -451,9 +500,8 @@ function drawPricingPage(page: PDFPage, font: PDFFont, snapshot: DocumentSnapsho
   const lastItemRowY = firstRowY - (items.length - 1) * ROW_PITCH;
   const summaryFields = [
     { label: "Subtotal", value: snapshot.subtotalLabel ?? snapshot.totalPriceLabel, highlight: false },
-    { label: "VAT", value: snapshot.vatLabel ?? "£0.00", highlight: false },
     { label: "Discount", value: snapshot.discountLabel ? `-${snapshot.discountLabel}` : "£0.00", highlight: false },
-    { label: "Total incl. VAT", value: snapshot.totalPriceLabel, highlight: true },
+    { label: "Total", value: snapshot.totalPriceLabel, highlight: true },
     { label: "Deposit", value: snapshot.depositLabel ?? "£0.00", highlight: false },
   ];
   const summaryFirstRowTop = lastItemRowY - SECTION_GAP;

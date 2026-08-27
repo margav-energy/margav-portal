@@ -8,11 +8,6 @@
 export const MONTHLY_PLAN_TERM_YEARS = [1, 2, 3, 4, 5, 10] as const;
 export type MonthlyPlanTermYears = (typeof MONTHLY_PLAN_TERM_YEARS)[number];
 
-/** Shortest/mid/longest of the real terms above — the 3-column "Monthly
- *  Plans" comparison on the quote document (src/lib/esignature/document.ts)
- *  has room for a handful, not all six. */
-export const HEADLINE_MONTHLY_PLAN_TERM_YEARS: MonthlyPlanTermYears[] = [1, 5, 10];
-
 export function isMonthlyPlanTermYears(value: number): value is MonthlyPlanTermYears {
   return (MONTHLY_PLAN_TERM_YEARS as readonly number[]).includes(value);
 }

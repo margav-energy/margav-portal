@@ -77,7 +77,7 @@ export async function renderSurveySummaryPdf(params: {
   const doc = (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.brand}>Margav Energy</Text>
+        <Text style={styles.brand}>Margav Heating</Text>
         <Text style={styles.subBrand}>Pre-Installation Survey — {job.reference}</Text>
         <Text style={styles.meta}>
           {job.customerName} · {job.addressLines.join(", ") || "—"} · Rep {job.repName}

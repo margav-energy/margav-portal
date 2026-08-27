@@ -38,14 +38,8 @@ export function QuoteSummarySidebarCard({ snapshot, pdfHref }: { snapshot: Docum
       <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-3 text-sm">
         {snapshot.subtotalLabel && (
           <div className="flex justify-between">
-            <span className="text-slate-500">Subtotal incl. VAT</span>
+            <span className="text-slate-500">Subtotal</span>
             <span className="font-medium text-slate-900">{snapshot.subtotalLabel}</span>
-          </div>
-        )}
-        {snapshot.vatLabel && (
-          <div className="flex justify-between">
-            <span className="text-slate-500">Included VAT</span>
-            <span className="font-medium text-slate-900">{snapshot.vatLabel}</span>
           </div>
         )}
         {snapshot.discountLabel && (
@@ -67,16 +61,18 @@ export function QuoteSummarySidebarCard({ snapshot, pdfHref }: { snapshot: Docum
         </div>
       )}
 
+      {/* The term actually selected on the Payment Method card — not a
+          1/5/10-year comparison, see `monthlyPlansFor` in document.ts. */}
       {snapshot.monthlyPlans && snapshot.monthlyPlans.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Monthly Plans</h3>
-          <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+          <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Monthly Plan</h3>
+          <div className="mt-2 flex flex-col gap-1.5">
             {snapshot.monthlyPlans.map((plan) => (
-              <div key={plan.years} className="rounded-lg bg-slate-50 px-1.5 py-2">
-                <p className="text-[11px] text-slate-500">
-                  {plan.years} {plan.years === 1 ? "yr" : "yrs"}
-                </p>
-                <p className="mt-0.5 text-xs font-semibold text-slate-900">{plan.monthlyLabel}</p>
+              <div key={plan.years} className="flex items-baseline justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-xs text-slate-500">
+                  {plan.years} {plan.years === 1 ? "year" : "years"}
+                </span>
+                <span className="text-xs font-semibold text-slate-900">{plan.monthlyLabel}/mo</span>
               </div>
             ))}
           </div>

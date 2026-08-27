@@ -537,10 +537,10 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
     try {
       await sendEmail({
         to: row.signer_email,
-        subject: `Your signed Margav Energy ${documentLabel} (${row.document_snapshot.reference})`,
+        subject: `Your signed Margav Heating ${documentLabel} (${row.document_snapshot.reference})`,
         text:
           `Hi ${row.signer_name},\n\nThanks for signing ${documentLabel} ${row.document_snapshot.reference}. ` +
-          `Your signed copy is attached to this email for your records.\n\nMargav Energy`,
+          `Your signed copy is attached to this email for your records.\n\nMargav Heating`,
         html: signedConfirmationEmailHtml({
           customerName: row.signer_name,
           reference: row.document_snapshot.reference,

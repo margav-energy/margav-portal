@@ -102,6 +102,9 @@ create table if not exists public.quotes (
   is_favourite boolean not null default false,
   is_locked boolean not null default false,
   archived_at timestamptz,
+  -- Site/property photo shown next to Customer details, see
+  -- supabase/migrations/0023_quote_property_photo.sql.
+  property_photo_path text,
   property_details jsonb not null default '{}'::jsonb,
   key_details jsonb not null default '{}'::jsonb,
   profit_breakdown jsonb not null default '{}'::jsonb,
@@ -423,3 +426,12 @@ create policy "quote_documents_bucket_all_authenticated"
   to authenticated
   using (bucket_id = 'quote-documents')
   with check (bucket_id = 'quote-documents');
+
+-- Storage access for the `property-photos` bucket, see
+-- supabase/migrations/0023_quote_property_photo.sql.
+drop policy if exists "property_photos_bucket_all_authenticated" on storage.objects;
+create policy "property_photos_bucket_all_authenticated"
+  on storage.objects for all
+  to authenticated
+  using (bucket_id = 'property-photos')
+  with check (bucket_id = 'property-photos');

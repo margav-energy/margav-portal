@@ -11,7 +11,7 @@ import { Resend } from "resend";
  * Every email sends from this one address regardless of who's logged in —
  * Margav's instruction was that all portal email comes from Lucy.
  */
-export const EMAIL_FROM = "Margav Energy <lucy@margav.energy>";
+export const EMAIL_FROM = "Margav Heating <lucy@margav.energy>";
 
 export function isResendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);

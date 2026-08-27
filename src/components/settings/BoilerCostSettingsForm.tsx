@@ -22,9 +22,23 @@ function toRows(unitCostsByKw: Record<number, number>): UnitCostRow[] {
     .map(([kw, cost]) => ({ key: crypto.randomUUID(), kw, cost: String(cost) }));
 }
 
+/** One costed-extra row's local (string) form state — same shape as `UnitCostRow` but keyed by an Extras catalog entry name (see `src/lib/extras-catalog.ts`) instead of a kW tier. */
+interface ExtraCostRow {
+  key: string;
+  name: string;
+  cost: string;
+}
+
+function toExtraRows(extraCostsByName: Record<string, number>): ExtraCostRow[] {
+  return Object.entries(extraCostsByName)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, cost]) => ({ key: crypto.randomUUID(), name, cost: String(cost) }));
+}
+
 export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSettings }) {
   const [state, formAction, pending] = useActionState(updateBoilerCostSettingsAction, initialState);
   const [rows, setRows] = useState<UnitCostRow[]>(() => toRows(settings.unitCostsByKw));
+  const [extraRows, setExtraRows] = useState<ExtraCostRow[]>(() => toExtraRows(settings.extraCostsByName));
 
   function updateRow(key: string, field: "kw" | "cost", value: string) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
@@ -36,6 +50,18 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
 
   function removeRow(key: string) {
     setRows((current) => current.filter((row) => row.key !== key));
+  }
+
+  function updateExtraRow(key: string, field: "name" | "cost", value: string) {
+    setExtraRows((current) => current.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
+  }
+
+  function addExtraRow() {
+    setExtraRows((current) => [...current, { key: crypto.randomUUID(), name: "", cost: "" }]);
+  }
+
+  function removeExtraRow(key: string) {
+    setExtraRows((current) => current.filter((row) => row.key !== key));
   }
 
   return (
@@ -116,6 +142,18 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
           className={inputClassName}
         />
       </FormField>
+      <FormField label="Standard 60/100 Flue" htmlFor="standardFlue" required>
+        <input
+          id="standardFlue"
+          name="standardFlue"
+          type="number"
+          min="0"
+          step="0.01"
+          required
+          defaultValue={settings.standardFlue}
+          className={inputClassName}
+        />
+      </FormField>
       <FormField label="Installer cost" htmlFor="installerCost" required>
         <input
           id="installerCost"
@@ -152,6 +190,57 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
           className={inputClassName}
         />
       </FormField>
+
+      <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[180px_1fr] sm:gap-4">
+        <span className="text-sm font-medium text-slate-600 sm:pt-2 sm:text-right">Extra costs</span>
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-slate-400">
+            Real cost of an optional Extras catalog entry (e.g. Roof kit) — only counted for a quote when that extra
+            is actually added to it. Name must match the Extras catalog entry exactly.
+          </p>
+          {extraRows.map((row) => (
+            <div key={row.key} className="flex items-center gap-2">
+              <input
+                type="text"
+                name="extraCostName"
+                placeholder="Extra name"
+                value={row.name}
+                onChange={(event) => updateExtraRow(row.key, "name", event.target.value)}
+                className={`${inputClassName} flex-1`}
+              />
+              <div className="flex flex-1 items-center gap-1.5">
+                <span className="text-sm text-slate-400">£</span>
+                <input
+                  type="number"
+                  name="extraCostAmount"
+                  min="0"
+                  step="0.01"
+                  placeholder="Cost"
+                  value={row.cost}
+                  onChange={(event) => updateExtraRow(row.key, "cost", event.target.value)}
+                  className={inputClassName}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeExtraRow(row.key)}
+                aria-label={`Remove ${row.name || "this"} extra cost`}
+                className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addExtraRow}
+            className="flex w-fit items-center gap-1 text-xs font-medium text-brand-blue hover:underline"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add an extra cost
+          </button>
+        </div>
+      </div>
 
       {state?.error && (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 sm:ml-[196px]">

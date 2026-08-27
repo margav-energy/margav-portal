@@ -46,6 +46,35 @@ function parseUnitCosts(formData: FormData): { unitCostsByKw: Record<number, num
   return { unitCostsByKw };
 }
 
+/**
+ * Parses the repeated `extraCostName`/`extraCostAmount` inputs (one pair
+ * per costed-extra row — see `BoilerCostSettingsForm`) the same way
+ * `parseUnitCosts` handles the boiler-size rows above. Blank rows are
+ * skipped rather than rejected; a name with no valid cost is an error.
+ */
+function parseExtraCosts(formData: FormData): { extraCostsByName: Record<string, number>; error?: string } {
+  const nameValues = formData.getAll("extraCostName").map(String);
+  const costValues = formData.getAll("extraCostAmount").map(String);
+  const extraCostsByName: Record<string, number> = {};
+
+  for (let i = 0; i < nameValues.length; i++) {
+    const name = nameValues[i]?.trim();
+    const costRaw = costValues[i]?.trim();
+    if (!name && !costRaw) continue;
+
+    const cost = Number(costRaw);
+    if (!name) {
+      return { extraCostsByName, error: "Enter a name for every extra cost row." };
+    }
+    if (!costRaw || !Number.isFinite(cost) || cost < 0) {
+      return { extraCostsByName, error: `Enter a valid cost for "${name}".` };
+    }
+    extraCostsByName[name] = cost;
+  }
+
+  return { extraCostsByName };
+}
+
 function parseNonNegativeNumber(formData: FormData, field: string, label: string): number | { error: string } {
   const raw = String(formData.get(field) ?? "").trim();
   const value = Number(raw);
@@ -86,13 +115,21 @@ export async function updateBoilerCostSettingsAction(
   const commission = parseNonNegativeNumber(formData, "commission", "Commission");
   if (typeof commission !== "number") return commission;
 
+  const standardFlue = parseNonNegativeNumber(formData, "standardFlue", "Standard 60/100 Flue cost");
+  if (typeof standardFlue !== "number") return standardFlue;
+
+  const { extraCostsByName, error: extraCostsError } = parseExtraCosts(formData);
+  if (extraCostsError) return { error: extraCostsError };
+
   const settings: BoilerCostSettings = {
     unitCostsByKw,
     fernoxSystemFilter,
     gatewayWithComfortTouch,
+    standardFlue,
     installerCost,
     costPerSale,
     commission,
+    extraCostsByName,
   };
 
   const ok = await updateBoilerCostSettings(settings, user.id);

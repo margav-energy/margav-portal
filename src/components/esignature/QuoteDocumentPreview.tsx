@@ -34,7 +34,7 @@ export function QuoteDocumentPreview({
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-green-gradient text-sm font-bold text-white">
             M
           </div>
-          <span className="text-lg font-semibold tracking-tight">Margav Energy</span>
+          <span className="text-lg font-semibold tracking-tight">Margav Heating</span>
         </div>
 
         {snapshot.headlineLabel && (
@@ -81,7 +81,12 @@ export function QuoteDocumentPreview({
             {snapshot.lineItems.map((item) => (
               <div key={item.name} className="flex justify-between gap-4 py-2 text-sm">
                 <span className="text-slate-600">{item.name}</span>
-                <span className="shrink-0 font-medium text-slate-900">{item.amountLabel}</span>
+                <span className="shrink-0 font-medium text-slate-900">
+                  {item.originalUnitPriceLabel && (
+                    <span className="mr-1.5 text-slate-400 line-through">{item.originalUnitPriceLabel}</span>
+                  )}
+                  {item.amountLabel}
+                </span>
               </div>
             ))}
           </div>
@@ -89,14 +94,8 @@ export function QuoteDocumentPreview({
           <div className="mt-3 flex flex-col gap-1.5 border-t border-slate-100 pt-3 text-sm">
             {snapshot.subtotalLabel && (
               <div className="flex justify-between">
-                <span className="text-slate-500">Subtotal incl. VAT</span>
+                <span className="text-slate-500">Subtotal</span>
                 <span className="font-medium text-slate-900">{snapshot.subtotalLabel}</span>
-              </div>
-            )}
-            {snapshot.vatLabel && (
-              <div className="flex justify-between">
-                <span className="text-slate-500">Included VAT</span>
-                <span className="font-medium text-slate-900">{snapshot.vatLabel}</span>
               </div>
             )}
             {snapshot.discountLabel && (
@@ -120,16 +119,18 @@ export function QuoteDocumentPreview({
           <p className="mt-1 text-xs text-slate-400">Payment method: {snapshot.paymentMethodLabel}</p>
         </div>
 
+        {/* The term actually selected on the Payment Method card — not a
+            1/5/10-year comparison, see `monthlyPlansFor` in document.ts. */}
         {monthlyPlans.length > 0 && (
           <div>
-            <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Monthly plans</h2>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            <h2 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">Monthly plan</h2>
+            <div className="mt-3 flex flex-col gap-2">
               {monthlyPlans.map((plan) => (
-                <div key={plan.years} className="rounded-lg bg-slate-50 px-2 py-3">
-                  <p className="text-xs text-slate-500">
+                <div key={plan.years} className="flex items-baseline justify-between rounded-lg bg-slate-50 px-3 py-3">
+                  <span className="text-sm text-slate-500">
                     {plan.years} {plan.years === 1 ? "year" : "years"}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{plan.monthlyLabel}</p>
+                  </span>
+                  <span className="text-sm font-semibold text-slate-900">{plan.monthlyLabel}/mo</span>
                 </div>
               ))}
             </div>

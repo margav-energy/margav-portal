@@ -64,7 +64,7 @@ export function SignForm({
       <StatusScreen
         icon={<CheckCircle2 className="h-10 w-10 text-brand-green-mid" />}
         title="Signed — thank you"
-        body={`This ${documentLabel} has been signed and Margav Energy has been notified. You'll receive a copy for your records.`}
+        body={`This ${documentLabel} has been signed and Margav Heating has been notified. You'll receive a copy for your records.`}
       />
     );
   }
@@ -74,7 +74,7 @@ export function SignForm({
       <StatusScreen
         icon={<XCircle className="h-10 w-10 text-slate-400" />}
         title="Signature declined"
-        body={`You've declined to sign this ${documentLabel}. Margav Energy has been notified — get in touch if you'd like to discuss it further.`}
+        body={`You've declined to sign this ${documentLabel}. Margav Heating has been notified — get in touch if you'd like to discuss it further.`}
       />
     );
   }
@@ -133,7 +133,7 @@ export function SignForm({
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <div className="text-center">
-          <p className="text-lg font-bold text-slate-900">Margav Energy</p>
+          <p className="text-lg font-bold text-slate-900">Margav Heating</p>
           <p className="text-sm text-slate-500">
             {isAgreement ? "Boiler Installation Agreement" : `Quote ${request.snapshot.reference}`}
             {!isAgreement && " — " + (request.snapshot as DocumentSnapshot).productTypeLabel}

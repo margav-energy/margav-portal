@@ -132,10 +132,15 @@ export function PricingSlide({ detail }: { detail: BoilerQuoteDetail }) {
 
 export function MonthlyCostSlide({ detail }: { detail: BoilerQuoteDetail }) {
   const totalCost = totalCostFor(detail);
+  // The monthly figure needs to match what the signed document actually
+  // shows (see `buildDocumentSnapshot` in src/lib/esignature/document.ts),
+  // which is post-discount — `totalCost` above stays pre-discount since
+  // it's also what the "System & installation" row displays.
+  const principalForMonthly = totalCost - detail.discountAmount;
   const [termYears, setTermYears] = useState(detail.monthlyPlanTermYears ?? 10);
   const [isPending, startTransition] = useTransition();
   const apr = aprForTermYears(termYears);
-  const monthlyPayment = monthlyRepayment(totalCost, termYears);
+  const monthlyPayment = monthlyRepayment(principalForMonthly, termYears);
 
   function handleChangeTermYears(years: number) {
     setTermYears(years);

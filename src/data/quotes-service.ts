@@ -246,7 +246,11 @@ export async function getQuoteDetail(
       sumLineItems(boilerUnits.flatMap((unit) => unit.items));
     const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
     // boilerCostSettings is always populated here — fetched above whenever isBoiler is true.
-    const costPrice = boilerCostPrice(boilerUnits.map((unit) => unit.outputKw), boilerCostSettings!);
+    const costPrice = boilerCostPrice(
+      boilerUnits.map((unit) => unit.outputKw),
+      extras,
+      boilerCostSettings!,
+    );
 
     const detail: BoilerQuoteDetail = {
       quoteId: row.id,

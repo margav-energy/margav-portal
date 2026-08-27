@@ -20,9 +20,9 @@ function buttonHtml(href: string, label: string): string {
 function wrapper(bodyHtml: string): string {
   return (
     `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:480px;">` +
-    `<p style="font-size:18px;font-weight:bold;margin:0 0 4px;">Margav Energy</p>` +
+    `<p style="font-size:18px;font-weight:bold;margin:0 0 4px;">Margav Heating</p>` +
     bodyHtml +
-    `<p style="font-size:12px;color:#94a3b8;margin-top:32px;">Margav Energy</p>` +
+    `<p style="font-size:12px;color:#94a3b8;margin-top:32px;">Margav Heating</p>` +
     `</div>`
   );
 }

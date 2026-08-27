@@ -7,6 +7,7 @@ import { requireStaffUser } from "@/data/current-user";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
+import { getPropertyPhotoUrl } from "@/data/property-photo-service";
 import { toISODate } from "@/lib/date-utils";
 import { BoilerQuoteDetail } from "@/components/quotes/boiler/BoilerQuoteDetail";
 import { SolarQuoteDetail } from "@/components/quotes/solar/SolarQuoteDetail";
@@ -33,6 +34,7 @@ export default async function QuoteDetailPage({
     agreementSignatureRequest,
     agreementSignedDocumentUrl,
     documents,
+    propertyPhotoUrl,
   ] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
@@ -41,6 +43,7 @@ export default async function QuoteDetailPage({
     isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
     isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
     getQuoteDocuments(id),
+    getPropertyPhotoUrl(id),
   ]);
 
   return (
@@ -65,6 +68,7 @@ export default async function QuoteDetailPage({
           agreementSignedDocumentUrl={agreementSignedDocumentUrl}
           documents={documents}
           isAdmin={user.role === "admin"}
+          propertyPhotoUrl={propertyPhotoUrl}
         />
       ) : (
         <SolarQuoteDetail
@@ -75,6 +79,7 @@ export default async function QuoteDetailPage({
           signedDocumentUrl={signedDocumentUrl}
           documents={documents}
           isAdmin={user.role === "admin"}
+          propertyPhotoUrl={propertyPhotoUrl}
         />
       )}
     </div>

@@ -19,13 +19,15 @@ function EditAdjustmentsModal({
   onClose: () => void;
   onSave: (adjustments: PricingAdjustments) => void;
 }) {
-  const [vat, setVat] = useState(String(adjustments.vatAmount));
   const [discount, setDiscount] = useState(String(adjustments.discountAmount));
   const [deposit, setDeposit] = useState(String(adjustments.depositAmount));
 
   function handleSave() {
     onSave({
-      vatAmount: Number(vat) || 0,
+      // VAT is left out of this form for now — prices already include it
+      // (see the card-level comment below) — so whatever's already stored
+      // passes through untouched rather than being editable here.
+      vatAmount: adjustments.vatAmount,
       discountAmount: Number(discount) || 0,
       depositAmount: Number(deposit) || 0,
     });
@@ -35,24 +37,13 @@ function EditAdjustmentsModal({
   return (
     <Modal title="Edit pricing adjustments" onClose={onClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
-        <FormField label="Included VAT (£)" htmlFor="vat-amount">
-          <input
-            id="vat-amount"
-            type="number"
-            min="0"
-            step="0.01"
-            autoFocus
-            className={inputClassName}
-            value={vat}
-            onChange={(event) => setVat(event.target.value)}
-          />
-        </FormField>
         <FormField label="Discount (£)" htmlFor="discount-amount">
           <input
             id="discount-amount"
             type="number"
             min="0"
             step="0.01"
+            autoFocus
             className={inputClassName}
             value={discount}
             onChange={(event) => setDiscount(event.target.value)}
@@ -84,11 +75,16 @@ function EditAdjustmentsModal({
 
 /**
  * The "System Summary" figures a generated quote can't derive on its own —
- * VAT (informational: this business quotes VAT-inclusive, so it's never
- * added on top of the subtotal), a discount, and a deposit. Feeds
- * `buildDocumentSnapshot` (src/lib/esignature/document.ts), so editing here
- * changes what both the customer's /sign/[token] page and "View Quote"
- * show.
+ * a discount and a deposit. Feeds `buildDocumentSnapshot`
+ * (src/lib/esignature/document.ts), so editing here changes what both the
+ * customer's /sign/[token] page and "View Quote" show.
+ *
+ * VAT (`adjustments.vatAmount`) is deliberately left out of this card for
+ * now — this business quotes VAT-inclusive prices, so a separate "Included
+ * VAT" line was never anything but informational, and showing it invited
+ * confusion about whether it was added on top. The underlying field/column
+ * is untouched (still round-tripped by `handleSave` below) so nothing is
+ * lost if it comes back later — it's just not displayed or editable here.
  */
 export function PricingAdjustmentsCard({
   quoteId,
@@ -115,13 +111,15 @@ export function PricingAdjustmentsCard({
     <Collapsible title="System Summary">
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm text-slate-500">Subtotal incl. VAT</span>
+          <span className="text-sm text-slate-500">Subtotal</span>
           <span className="text-sm font-semibold text-slate-900">{formatCurrency(subtotal)}</span>
         </div>
         <div className="flex items-baseline justify-between">
-          <span className="text-sm text-slate-500">Included VAT</span>
+          <span className="text-sm text-slate-500">Discount</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-slate-900">{formatCurrency(adjustments.vatAmount)}</span>
+            <span className="text-sm font-semibold text-slate-900">
+              -{formatCurrency(adjustments.discountAmount)}
+            </span>
             <button
               type="button"
               onClick={() => setIsEditing(true)}
@@ -132,7 +130,6 @@ export function PricingAdjustmentsCard({
             </button>
           </div>
         </div>
-        <KeyDetailField label="Discount" value={`-${formatCurrency(adjustments.discountAmount)}`} />
         <div className="mt-1 flex items-baseline justify-between border-t border-slate-100 pt-2">
           <span className="text-sm font-semibold text-slate-700">Total</span>
           <span className="text-sm font-semibold text-slate-900">{formatCurrency(total)}</span>

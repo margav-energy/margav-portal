@@ -68,6 +68,7 @@ export async function createAppointmentAction(
       address: result.address,
       productType: result.productType,
       notes: input.notes,
+      createdBy: user?.id ?? null,
     }).catch((error) => console.error("createQuoteForAppointment failed", error)),
   ]);
 

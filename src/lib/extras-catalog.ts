@@ -12,8 +12,12 @@ export interface ExtraCatalogEntry {
 }
 
 export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
-  /** Worth £120, but included at no extra charge — shown struck through, charged as £0. */
-  { name: "Gateway with Comfort Touch", defaultUnitPrice: 120, lockedPrice: true },
+  /** Worth £139.88, but included at no extra charge — shown struck through, charged as £0. */
+  { name: "Gateway with Comfort Touch", defaultUnitPrice: 139.88, lockedPrice: true },
+  /** Worth £93.60, but included at no extra charge — shown struck through, charged as £0. */
+  { name: "Fernox Filter", defaultUnitPrice: 93.6, lockedPrice: true },
+  /** Worth £54.08, but included at no extra charge — shown struck through, charged as £0. */
+  { name: "Standard 60/100 Flue", defaultUnitPrice: 54.08, lockedPrice: true },
   /** £150 one-off — quantity stays 1. */
   { name: "Roof kit", defaultUnitPrice: 150 },
   /** £55 per metre — quantity is the number of metres. */

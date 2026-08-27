@@ -4,7 +4,8 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { getProfileById } from "@/data/profiles-service";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { sumLineItems } from "@/data/quotes-mappers";
-import { HEADLINE_MONTHLY_PLAN_TERM_YEARS, monthlyRepayment } from "@/lib/finance";
+import { monthlyRepayment } from "@/lib/finance";
+import { findCatalogEntry } from "@/lib/extras-catalog";
 import { addDays, parseISODate, toISODate } from "@/lib/date-utils";
 import type { Quote } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
@@ -37,12 +38,11 @@ export interface DocumentSnapshot {
   customerAddressLines: string[];
   customerEmail?: string;
   customerPhone?: string;
-  /** Sum of `lineItems` before the discount below — "Subtotal incl. VAT"
-   *  on the System Summary. */
+  /** Sum of `lineItems` before the discount below — "Subtotal" on the
+   *  System Summary. Already VAT-inclusive (this business quotes
+   *  VAT-inclusive prices) — VAT itself is deliberately left out of this
+   *  snapshot for now, see `PricingAdjustmentsCard`. */
   subtotalLabel?: string;
-  /** Informational only — this business quotes VAT-inclusive prices, so
-   *  it's never added on top of the subtotal. */
-  vatLabel?: string;
   discountLabel?: string;
   /** Absent when there's no deposit for this quote. */
   depositLabel?: string;
@@ -60,9 +60,19 @@ export interface DocumentSnapshot {
     quantity?: number;
     unitPriceLabel?: string;
     amount?: number;
+    /** Set only for an Extras catalog entry that's included at no charge
+     *  but has a real worth (e.g. "Gateway with Comfort Touch", see
+     *  `lockedPrice` in src/lib/extras-catalog.ts) — the value it would
+     *  normally cost, to render struck through next to the £0.00
+     *  `amountLabel` the customer actually pays. Absent for every other
+     *  line item, and on a snapshot locked before this field existed. */
+    originalUnitPriceLabel?: string;
   }[];
-  /** A handful of representative terms, not the full list in
-   *  `MONTHLY_PLAN_TERM_YEARS` — see `HEADLINE_MONTHLY_PLAN_TERM_YEARS`. */
+  /** The term the customer actually picked on the Payment Method card, not
+   *  a comparison across `MONTHLY_PLAN_TERM_YEARS` — a single-element array
+   *  (kept as an array so the renderers below didn't need a shape change),
+   *  or absent/empty when the quote isn't on a Monthly Plan at all (e.g.
+   *  BACS) — there's no "selected" term to show then. */
   monthlyPlans?: { years: number; monthlyLabel: string }[];
   /** "Unassigned" when nobody's assigned — same as the quote header shows. */
   repName?: string;
@@ -119,11 +129,16 @@ function headlineFor(
   };
 }
 
-function monthlyPlansFor(totalPrice: number): { years: number; monthlyLabel: string }[] {
-  return HEADLINE_MONTHLY_PLAN_TERM_YEARS.map((years) => ({
-    years,
-    monthlyLabel: formatCurrency(monthlyRepayment(totalPrice, years)),
-  }));
+/** The single term actually selected on the Payment Method card — absent
+ *  when the quote isn't on a Monthly Plan (e.g. BACS), since there's
+ *  nothing "selected" to show then. */
+function monthlyPlansFor(
+  totalPrice: number,
+  detail: BoilerQuoteDetail | SolarQuoteDetail,
+): { years: number; monthlyLabel: string }[] {
+  if (detail.selectedPaymentMethod !== "monthly_plan" || !detail.monthlyPlanTermYears) return [];
+  const years = detail.monthlyPlanTermYears;
+  return [{ years, monthlyLabel: formatCurrency(monthlyRepayment(totalPrice, years)) }];
 }
 
 /**
@@ -156,14 +171,29 @@ async function repEmailFor(repId: string | undefined): Promise<string | undefine
  */
 const AGGREGATED_SECTION_NAMES = new Set(["Extras", "Standard additionals", "Free-text extras"]);
 
-function lineItemFrom(name: string, quantity: number, unitPrice: number): DocumentSnapshot["lineItems"][number] {
+function lineItemFrom(
+  name: string,
+  quantity: number,
+  unitPrice: number,
+  originalUnitPrice?: number,
+): DocumentSnapshot["lineItems"][number] {
   return {
     name,
     quantity,
     unitPriceLabel: formatCurrency(unitPrice),
     amount: quantity * unitPrice,
     amountLabel: formatCurrency(quantity * unitPrice),
+    originalUnitPriceLabel: originalUnitPrice ? formatCurrency(originalUnitPrice) : undefined,
   };
+}
+
+/** Extras go through the catalog (see `findCatalogEntry`) so a locked-price
+ *  entry — always charged £0 on the line itself — carries its real worth
+ *  through as `originalUnitPriceLabel` too. */
+function extraLineItemFrom(item: { name: string; quantity: number; unitPrice: number }): DocumentSnapshot["lineItems"][number] {
+  const catalogEntry = findCatalogEntry(item.name);
+  const originalUnitPrice = catalogEntry?.lockedPrice ? catalogEntry.defaultUnitPrice : undefined;
+  return lineItemFrom(item.name, item.quantity, item.unitPrice, originalUnitPrice);
 }
 
 function itemizedLineItems(detail: BoilerQuoteDetail | SolarQuoteDetail): DocumentSnapshot["lineItems"] {
@@ -171,7 +201,7 @@ function itemizedLineItems(detail: BoilerQuoteDetail | SolarQuoteDetail): Docume
     .filter((item) => !AGGREGATED_SECTION_NAMES.has(item.name))
     .map((item) => lineItemFrom(item.name, item.quantity, item.unitPrice));
 
-  const extraLines = detail.extras.map((item) => lineItemFrom(item.name, item.quantity, item.unitPrice));
+  const extraLines = detail.extras.map(extraLineItemFrom);
   const standardAdditionalLines = detail.standardAdditionals.map((item) =>
     lineItemFrom(item.name, item.quantity, item.unitPrice),
   );
@@ -190,8 +220,9 @@ export async function buildDocumentSnapshot(
   // sum of exactly what's itemized here, same as `totalCostFor()` in
   // src/components/quotes/presenter/slides/PersonalizedSlides.tsx. The
   // actual amount owed is that minus whatever discount's been entered
-  // (see PricingAdjustmentsCard) — VAT is informational only, already
-  // included in the subtotal, never added on top.
+  // (see PricingAdjustmentsCard) — VAT is already included in the
+  // subtotal (never added on top) and, for now, left out of this snapshot
+  // entirely rather than broken out as its own line.
   const subtotal = sumLineItems(detail.pricingBreakdown);
   const total = subtotal - detail.discountAmount;
   const { headline, subheadline } = headlineFor(quote, detail);
@@ -212,13 +243,12 @@ export async function buildDocumentSnapshot(
     customerEmail: detail.customer.email || undefined,
     customerPhone: detail.customer.phone || undefined,
     subtotalLabel: formatCurrency(subtotal),
-    vatLabel: formatCurrency(detail.vatAmount),
     discountLabel: detail.discountAmount > 0 ? formatCurrency(detail.discountAmount) : undefined,
     depositLabel: detail.depositAmount > 0 ? formatCurrency(detail.depositAmount) : undefined,
     totalPriceLabel: formatCurrency(total),
     paymentMethodLabel: paymentMethodLabel(detail),
     lineItems: itemizedLineItems(detail),
-    monthlyPlans: monthlyPlansFor(total),
+    monthlyPlans: monthlyPlansFor(total, detail),
     repName: detail.assignedRep,
     repEmail,
     repPhone: repProfile?.phone,

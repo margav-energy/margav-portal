@@ -20,7 +20,10 @@ export function PaymentMethodCard({
   selected: PaymentMethodOption;
   /** Only meaningful when `selected === "monthly_plan"`. */
   termYears: number | undefined;
-  /** The quote's total (Pricing card sum) — the principal the monthly repayment is calculated on. */
+  /** The amount actually owed — subtotal minus discount, same figure the
+   *  signed document's own monthly plan is based on (see
+   *  `buildDocumentSnapshot` in src/lib/esignature/document.ts) — the
+   *  principal the monthly repayment is calculated on. */
   totalCost: number;
   onSelect: (option: PaymentMethodOption) => void;
   onChangeTermYears: (years: number) => void;

@@ -13,13 +13,15 @@ interface BoilerCostSettingsRow {
   unit_costs_by_kw: unknown;
   fernox_system_filter: number | string;
   gateway_comfort_touch: number | string;
+  standard_flue: number | string;
   installer_cost: number | string;
   cost_per_sale: number | string;
   commission: number | string;
+  extra_costs_by_name: unknown;
 }
 
 const COLUMNS =
-  "unit_costs_by_kw, fernox_system_filter, gateway_comfort_touch, installer_cost, cost_per_sale, commission";
+  "unit_costs_by_kw, fernox_system_filter, gateway_comfort_touch, standard_flue, installer_cost, cost_per_sale, commission, extra_costs_by_name";
 
 function parseUnitCosts(raw: unknown): Record<number, number> {
   if (!raw || typeof raw !== "object") return {};
@@ -32,14 +34,27 @@ function parseUnitCosts(raw: unknown): Record<number, number> {
   return result;
 }
 
+/** Same shape as `parseUnitCosts` but string-keyed (an Extras catalog entry name, not a kW tier) — no numeric coercion on the key. */
+function parseExtraCosts(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  const result: Record<string, number> = {};
+  for (const [name, cost] of Object.entries(raw as Record<string, unknown>)) {
+    const costNumber = Number(cost);
+    if (name && Number.isFinite(costNumber)) result[name] = costNumber;
+  }
+  return result;
+}
+
 function mapRow(row: BoilerCostSettingsRow): BoilerCostSettings {
   return {
     unitCostsByKw: parseUnitCosts(row.unit_costs_by_kw),
     fernoxSystemFilter: Number(row.fernox_system_filter),
     gatewayWithComfortTouch: Number(row.gateway_comfort_touch),
+    standardFlue: Number(row.standard_flue),
     installerCost: Number(row.installer_cost),
     costPerSale: Number(row.cost_per_sale),
     commission: Number(row.commission),
+    extraCostsByName: parseExtraCosts(row.extra_costs_by_name),
   };
 }
 
@@ -70,9 +85,11 @@ export async function updateBoilerCostSettings(
       ),
       fernox_system_filter: settings.fernoxSystemFilter,
       gateway_comfort_touch: settings.gatewayWithComfortTouch,
+      standard_flue: settings.standardFlue,
       installer_cost: settings.installerCost,
       cost_per_sale: settings.costPerSale,
       commission: settings.commission,
+      extra_costs_by_name: settings.extraCostsByName,
       updated_at: new Date().toISOString(),
       updated_by: updatedBy ?? null,
     })

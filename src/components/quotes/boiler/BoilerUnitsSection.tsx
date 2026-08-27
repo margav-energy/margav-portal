@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { createBoilerUnit, deleteBoilerUnit, updateBoilerUnit } from "@/components/quotes/actions";
+import { BOILER_LABEL_OPTIONS, BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boiler-catalog";
+import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
 
@@ -62,6 +64,8 @@ type UnitForm = Omit<BoilerUnit, "id" | "outputKw" | "cylinderLitres" | "warrant
   items: LineItem[];
 };
 
+type UnitFormErrors = Partial<Record<"label" | "make" | "model", string>>;
+
 function toForm(unit?: BoilerUnit): UnitForm {
   return {
     label: unit?.label ?? "",
@@ -73,7 +77,11 @@ function toForm(unit?: BoilerUnit): UnitForm {
     installType: unit?.installType ?? "Combi",
     cylinderLitres: unit?.cylinderLitres != null ? String(unit.cylinderLitres) : "",
     warrantyYears: unit ? String(unit.warrantyYears) : "",
-    price: unit ? String(unit.price) : "",
+    // Margav sells every boiler at the same price regardless of size —
+    // margin comes from the cost side (see boiler-install-cost.ts), not
+    // from charging more for a bigger unit — so a new unit starts here
+    // rather than blank. Still fully editable for the rare exception.
+    price: unit ? String(unit.price) : String(DEFAULT_BOILER_SELL_PRICE),
     items: unit?.items ?? [],
   };
 }
@@ -90,9 +98,21 @@ function UnitFormModal({
   onSave: (unit: Omit<BoilerUnit, "id">) => void;
 }) {
   const [form, setForm] = useState<UnitForm>(() => toForm(initial));
+  const [errors, setErrors] = useState<UnitFormErrors>({});
 
   function set<K extends keyof UnitForm>(key: K, value: UnitForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+    if (key === "label" || key === "make" || key === "model") {
+      setErrors((current) => ({ ...current, [key]: undefined }));
+    }
+  }
+
+  /** Model choices depend on the selected make, so switching make always
+   *  clears whatever model was previously selected — a model valid for one
+   *  make isn't guaranteed to exist for another. */
+  function handleMakeChange(value: string) {
+    setForm((current) => ({ ...current, make: value, model: "" }));
+    setErrors((current) => ({ ...current, make: undefined, model: undefined }));
   }
 
   /** Re-suggests the cylinder for a new output — only while there's actually a cylinder to have (not a Combi). */
@@ -135,7 +155,13 @@ function UnitFormModal({
   }
 
   function handleSave() {
-    if (!form.label.trim()) return;
+    const nextErrors: UnitFormErrors = {};
+    if (!form.label.trim()) nextErrors.label = "Select a label";
+    if (!form.make.trim()) nextErrors.make = "Select a make";
+    if (!form.model.trim()) nextErrors.model = "Select a model";
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
     onSave({
       label: form.label.trim(),
       make: form.make.trim(),
@@ -155,29 +181,53 @@ function UnitFormModal({
   return (
     <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
-        <FormField label="Label" htmlFor="unit-label" required>
-          <input
+        <FormField label="Label" htmlFor="unit-label" required error={errors.label}>
+          <select
             id="unit-label"
             className={inputClassName}
             value={form.label}
             onChange={(event) => set("label", event.target.value)}
-          />
+          >
+            <option value="">Select label</option>
+            {withLegacyOption(BOILER_LABEL_OPTIONS, form.label).map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
         </FormField>
-        <FormField label="Make" htmlFor="unit-make">
-          <input
+        <FormField label="Make" htmlFor="unit-make" required error={errors.make}>
+          <select
             id="unit-make"
             className={inputClassName}
             value={form.make}
-            onChange={(event) => set("make", event.target.value)}
-          />
+            onChange={(event) => handleMakeChange(event.target.value)}
+          >
+            <option value="">Select make</option>
+            {withLegacyOption(BOILER_MAKE_OPTIONS, form.make).map((make) => (
+              <option key={make} value={make}>
+                {make}
+              </option>
+            ))}
+          </select>
         </FormField>
-        <FormField label="Model" htmlFor="unit-model">
-          <input
+        <FormField label="Model" htmlFor="unit-model" required error={errors.model}>
+          <select
             id="unit-model"
-            className={inputClassName}
+            className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
             value={form.model}
+            disabled={!form.make}
+            aria-disabled={!form.make}
             onChange={(event) => set("model", event.target.value)}
-          />
+          >
+            <option value="">Select model</option>
+            {withLegacyOption(modelsForMake(form.make), form.model).map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+          {!form.make && <p className="text-xs text-slate-400">Select a make first.</p>}
         </FormField>
         <FormField label="Output (kW)" htmlFor="unit-output">
           <select
