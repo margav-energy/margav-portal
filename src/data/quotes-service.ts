@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
-import { boilerCostPrice } from "@/lib/boiler-install-cost";
+import { boilerCostBreakdown } from "@/lib/boiler-install-cost";
 import {
   buildPricingBreakdown,
   buildProfileMap,
@@ -246,8 +246,8 @@ export async function getQuoteDetail(
       sumLineItems(boilerUnits.flatMap((unit) => unit.items));
     const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
     // boilerCostSettings is always populated here — fetched above whenever isBoiler is true.
-    const costPrice = boilerCostPrice(
-      boilerUnits.map((unit) => unit.outputKw),
+    const costBreakdown = boilerCostBreakdown(
+      boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
       extras,
       boilerCostSettings!,
     );
@@ -264,7 +264,7 @@ export async function getQuoteDetail(
         { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
         { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
       ]),
-      profitBreakdown: buildProfitBreakdown(costPrice, sellPrice),
+      profitBreakdown: buildProfitBreakdown(costBreakdown.total, sellPrice, costBreakdown.lineItems),
     };
 
     return { quote, detail };

@@ -130,7 +130,7 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
           className={inputClassName}
         />
       </FormField>
-      <FormField label="Gateway with Comfort Touch" htmlFor="gatewayWithComfortTouch" required>
+      <FormField label="Gateway with Smart Touch" htmlFor="gatewayWithComfortTouch" required>
         <input
           id="gatewayWithComfortTouch"
           name="gatewayWithComfortTouch"
@@ -166,19 +166,7 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
           className={inputClassName}
         />
       </FormField>
-      <FormField label="Cost per sale" htmlFor="costPerSale" required>
-        <input
-          id="costPerSale"
-          name="costPerSale"
-          type="number"
-          min="0"
-          step="0.01"
-          required
-          defaultValue={settings.costPerSale}
-          className={inputClassName}
-        />
-      </FormField>
-      <FormField label="Commission" htmlFor="commission" required>
+      <FormField label="Rep Comms" htmlFor="commission" required>
         <input
           id="commission"
           name="commission"

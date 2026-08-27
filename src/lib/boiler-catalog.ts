@@ -1,13 +1,9 @@
 /**
- * Reference data for the "Add boiler" / "Edit boiler" form's Label, Make and
- * Model dropdowns (see `BoilerUnitsSection.tsx`). Kept as plain, easily
- * editable arrays — add a label, a manufacturer, or a model by adding an
- * entry here, no other code changes needed.
+ * Reference data for the "Add boiler" / "Edit boiler" form's Make and Model
+ * dropdowns (see `BoilerUnitsSection.tsx`). Kept as a plain, easily editable
+ * array — add a manufacturer or a model by adding an entry here, no other
+ * code changes needed.
  */
-
-/** No structured "boiler label" data exists elsewhere in the app yet — this
- *  is the source of truth for the Label dropdown until there is one. */
-export const BOILER_LABEL_OPTIONS = ["Boiler", "Combi Boiler", "System Boiler", "Regular Boiler"];
 
 export interface BoilerMakeOption {
   make: string;

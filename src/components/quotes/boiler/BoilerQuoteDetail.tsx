@@ -25,6 +25,7 @@ import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusC
 import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
 import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
 import { EXTRAS_CATALOG } from "@/lib/extras-catalog";
+import { boilerCostBreakdown } from "@/lib/boiler-install-cost";
 import {
   cancelQuoteAppointment,
   logWarrantyRegistration,
@@ -32,6 +33,7 @@ import {
   sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
+import type { BoilerCostSettings } from "@/lib/boiler-install-cost";
 import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
 import type { BoilerSurveyDetail } from "@/types/boiler-survey";
 import type { SignatureRequestSummary } from "@/data/signature-service";
@@ -58,6 +60,7 @@ export function BoilerQuoteDetail({
   documents,
   isAdmin,
   propertyPhotoUrl,
+  boilerCostSettings,
 }: {
   detail: BoilerQuoteDetailData;
   reps: RepProfile[];
@@ -71,6 +74,10 @@ export function BoilerQuoteDetail({
   documents: QuoteDocument[];
   isAdmin: boolean;
   propertyPhotoUrl: string | undefined;
+  /** Lets Pricing/Profit recompute client-side as boiler units/extras
+   *  change below, instead of only refreshing on next page load — see the
+   *  `totalCost`/`profit` computation further down. */
+  boilerCostSettings: BoilerCostSettings;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -89,7 +96,6 @@ export function BoilerQuoteDetail({
     detail.monthlyPlanTermYears,
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
-  const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
   const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
     vatAmount: detail.vatAmount,
     discountAmount: detail.discountAmount,
@@ -101,12 +107,63 @@ export function BoilerQuoteDetail({
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
   const router = useRouter();
 
-  const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  // Recomputed from live `boilerUnits`/`extras` state on every render
+  // (not stored in `detail`, which is only as fresh as the last page
+  // load) so Pricing/Payment method/Profit update the moment a boiler
+  // unit or extra is added/edited/removed, instead of only after a
+  // reload. `standardAdditionals`/`freeTextExtras` aren't editable from
+  // this page, so their totals stay as originally fetched.
+  const unitsTotal =
+    boilerUnits.reduce((sum, unit) => sum + unit.price, 0) +
+    boilerUnits.flatMap((unit) => unit.items).reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const extrasTotal = extras.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const standardAdditionalsTotal = detail.standardAdditionals.reduce(
+    (sum, item) => sum + item.quantity * item.unitPrice,
+    0,
+  );
+  const freeTextTotal = detail.freeTextExtras.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const totalCost = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
   // What the customer actually owes and what the signed document's monthly
   // plan figure is based on (see `buildDocumentSnapshot` in
   // src/lib/esignature/document.ts) — the Payment Method card's own preview
   // needs to match that, not the pre-discount subtotal above.
   const totalAfterDiscount = totalCost - pricingAdjustments.discountAmount;
+
+  // Same shape/filtering as `buildPricingBreakdown` in src/data/quotes-mappers.ts
+  // (server-only, can't be imported here) — a section only shows once
+  // there's actually something in it, same as there.
+  const pricingBreakdown = [
+    { id: "pricing-boiler", name: "Boiler + install", quantity: 1, unitPrice: unitsTotal, count: boilerUnits.length },
+    { id: "pricing-extras", name: "Extras", quantity: 1, unitPrice: extrasTotal, count: extras.length },
+    {
+      id: "pricing-standard-additionals",
+      name: "Standard additionals",
+      quantity: 1,
+      unitPrice: standardAdditionalsTotal,
+      count: detail.standardAdditionals.length,
+    },
+    {
+      id: "pricing-free-text",
+      name: "Free-text extras",
+      quantity: 1,
+      unitPrice: freeTextTotal,
+      count: detail.freeTextExtras.length,
+    },
+  ].filter((item) => item.count > 0);
+
+  const costBreakdown = boilerCostBreakdown(
+    boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
+    extras,
+    boilerCostSettings,
+  );
+  const profitAmount = totalCost - costBreakdown.total;
+  const profit: ProfitBreakdown = {
+    costPrice: costBreakdown.total,
+    sellPrice: totalCost,
+    profit: profitAmount,
+    marginPercent: totalCost > 0 ? Math.round((profitAmount / totalCost) * 1000) / 10 : 0,
+    costLineItems: costBreakdown.lineItems,
+  };
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
     setSelectedPaymentMethod(method);
@@ -212,7 +269,7 @@ export function BoilerQuoteDetail({
             onChangeTermYears={handleChangeTermYears}
           />
           {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
-          <PricingCard items={detail.pricingBreakdown} />
+          <PricingCard items={pricingBreakdown} />
           <PricingAdjustmentsCard
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -224,7 +281,9 @@ export function BoilerQuoteDetail({
             quoteId={detail.quoteId}
             customerName={customer.name}
             profit={profit}
-            onUpdated={setProfit}
+            // Boiler's cost/profit is fully derived above, not editable
+            // (see `editable={false}`) — this is never actually invoked.
+            onUpdated={() => {}}
             editable={false}
           />
           <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />

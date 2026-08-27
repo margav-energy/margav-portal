@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { createBoilerUnit, deleteBoilerUnit, updateBoilerUnit } from "@/components/quotes/actions";
-import { BOILER_LABEL_OPTIONS, BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boiler-catalog";
+import { BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boiler-catalog";
 import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
@@ -64,10 +64,14 @@ type UnitForm = Omit<BoilerUnit, "id" | "outputKw" | "cylinderLitres" | "warrant
   items: LineItem[];
 };
 
-type UnitFormErrors = Partial<Record<"label" | "make" | "model", string>>;
+type UnitFormErrors = Partial<Record<"make" | "model", string>>;
 
 function toForm(unit?: BoilerUnit): UnitForm {
   return {
+    // No longer collected in the form — derived from make + model on save
+    // (see handleSave) since the two dropdowns already fully identify the
+    // unit. Kept on the type/DB (BoilerUnit.label) since it's still what
+    // the unit card header and activity log describe the unit as.
     label: unit?.label ?? "",
     make: unit?.make ?? "",
     model: unit?.model ?? "",
@@ -102,7 +106,7 @@ function UnitFormModal({
 
   function set<K extends keyof UnitForm>(key: K, value: UnitForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
-    if (key === "label" || key === "make" || key === "model") {
+    if (key === "make" || key === "model") {
       setErrors((current) => ({ ...current, [key]: undefined }));
     }
   }
@@ -113,6 +117,16 @@ function UnitFormModal({
   function handleMakeChange(value: string) {
     setForm((current) => ({ ...current, make: value, model: "" }));
     setErrors((current) => ({ ...current, make: undefined, model: undefined }));
+  }
+
+  /** Intergas model names embed the kW output ("Xclusive 24") — selecting a
+   *  model auto-syncs Output so the two can't end up mismatched. Output
+   *  stays visible/editable for the rare case a model's trailing number
+   *  isn't its kW. */
+  function handleModelChange(value: string) {
+    set("model", value);
+    const outputMatch = value.match(/(\d+)\s*$/);
+    if (outputMatch) handleOutputKwChange(outputMatch[1]);
   }
 
   /** Re-suggests the cylinder for a new output — only while there's actually a cylinder to have (not a Combi). */
@@ -156,14 +170,15 @@ function UnitFormModal({
 
   function handleSave() {
     const nextErrors: UnitFormErrors = {};
-    if (!form.label.trim()) nextErrors.label = "Select a label";
     if (!form.make.trim()) nextErrors.make = "Select a make";
     if (!form.model.trim()) nextErrors.model = "Select a model";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     onSave({
-      label: form.label.trim(),
+      // Derived from make + model rather than asked for separately — the
+      // two dropdowns already fully identify the unit (see toForm).
+      label: `${form.make.trim()} ${form.model.trim()}`.trim(),
       make: form.make.trim(),
       model: form.model.trim(),
       outputKw: Number(form.outputKw) || 0,
@@ -181,21 +196,6 @@ function UnitFormModal({
   return (
     <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
-        <FormField label="Label" htmlFor="unit-label" required error={errors.label}>
-          <select
-            id="unit-label"
-            className={inputClassName}
-            value={form.label}
-            onChange={(event) => set("label", event.target.value)}
-          >
-            <option value="">Select label</option>
-            {withLegacyOption(BOILER_LABEL_OPTIONS, form.label).map((label) => (
-              <option key={label} value={label}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </FormField>
         <FormField label="Make" htmlFor="unit-make" required error={errors.make}>
           <select
             id="unit-make"
@@ -218,7 +218,7 @@ function UnitFormModal({
             value={form.model}
             disabled={!form.make}
             aria-disabled={!form.make}
-            onChange={(event) => set("model", event.target.value)}
+            onChange={(event) => handleModelChange(event.target.value)}
           >
             <option value="">Select model</option>
             {withLegacyOption(modelsForMake(form.make), form.model).map((model) => (
@@ -418,7 +418,7 @@ export function BoilerUnitsSection({
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
             <div>
               <p className="text-sm font-semibold text-slate-900">
-                {unit.label} &middot; {unit.make} {unit.model}
+                {unit.make} {unit.model}
               </p>
               <p className="text-sm text-slate-500">{specLine(unit)}</p>
             </div>

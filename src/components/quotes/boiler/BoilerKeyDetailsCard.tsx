@@ -26,8 +26,8 @@ export function BoilerKeyDetailsCard({
           value={`${keyDetails.estInstallDays} day${keyDetails.estInstallDays === 1 ? "" : "s"}`}
         />
         <KeyDetailField label="Price" value={formatCurrency(profit.sellPrice)} />
-        <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} />
-        <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} />
+        <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} valueClassName="text-brand-green-mid" />
+        <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} valueClassName="text-brand-green-mid" />
       </div>
     </Collapsible>
   );

@@ -15,13 +15,12 @@ interface BoilerCostSettingsRow {
   gateway_comfort_touch: number | string;
   standard_flue: number | string;
   installer_cost: number | string;
-  cost_per_sale: number | string;
   commission: number | string;
   extra_costs_by_name: unknown;
 }
 
 const COLUMNS =
-  "unit_costs_by_kw, fernox_system_filter, gateway_comfort_touch, standard_flue, installer_cost, cost_per_sale, commission, extra_costs_by_name";
+  "unit_costs_by_kw, fernox_system_filter, gateway_comfort_touch, standard_flue, installer_cost, commission, extra_costs_by_name";
 
 function parseUnitCosts(raw: unknown): Record<number, number> {
   if (!raw || typeof raw !== "object") return {};
@@ -52,7 +51,6 @@ function mapRow(row: BoilerCostSettingsRow): BoilerCostSettings {
     gatewayWithComfortTouch: Number(row.gateway_comfort_touch),
     standardFlue: Number(row.standard_flue),
     installerCost: Number(row.installer_cost),
-    costPerSale: Number(row.cost_per_sale),
     commission: Number(row.commission),
     extraCostsByName: parseExtraCosts(row.extra_costs_by_name),
   };
@@ -87,7 +85,6 @@ export async function updateBoilerCostSettings(
       gateway_comfort_touch: settings.gatewayWithComfortTouch,
       standard_flue: settings.standardFlue,
       installer_cost: settings.installerCost,
-      cost_per_sale: settings.costPerSale,
       commission: settings.commission,
       extra_costs_by_name: settings.extraCostsByName,
       updated_at: new Date().toISOString(),

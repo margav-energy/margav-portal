@@ -13,7 +13,7 @@ export interface ExtraCatalogEntry {
 
 export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
   /** Worth £139.88, but included at no extra charge — shown struck through, charged as £0. */
-  { name: "Gateway with Comfort Touch", defaultUnitPrice: 139.88, lockedPrice: true },
+  { name: "Gateway with Smart Touch", defaultUnitPrice: 139.88, lockedPrice: true },
   /** Worth £93.60, but included at no extra charge — shown struck through, charged as £0. */
   { name: "Fernox Filter", defaultUnitPrice: 93.6, lockedPrice: true },
   /** Worth £54.08, but included at no extra charge — shown struck through, charged as £0. */

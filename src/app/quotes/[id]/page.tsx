@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getAllProfiles } from "@/data/profiles-service";
+import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
 import { requireStaffUser } from "@/data/current-user";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
@@ -35,6 +36,7 @@ export default async function QuoteDetailPage({
     agreementSignedDocumentUrl,
     documents,
     propertyPhotoUrl,
+    boilerCostSettings,
   ] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
@@ -44,6 +46,10 @@ export default async function QuoteDetailPage({
     isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
     getQuoteDocuments(id),
     getPropertyPhotoUrl(id),
+    // Only boiler's Profit card recomputes cost/profit live client-side as
+    // boiler units/extras change (see BoilerQuoteDetail.tsx) — it needs
+    // these figures to do that with the same formula the server uses.
+    isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
   ]);
 
   return (
@@ -69,6 +75,8 @@ export default async function QuoteDetailPage({
           documents={documents}
           isAdmin={user.role === "admin"}
           propertyPhotoUrl={propertyPhotoUrl}
+          // Non-null whenever isBoiler is true (see the Promise.all above).
+          boilerCostSettings={boilerCostSettings!}
         />
       ) : (
         <SolarQuoteDetail

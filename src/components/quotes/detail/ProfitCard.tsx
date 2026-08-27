@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { updateQuoteCostPrice } from "@/components/quotes/actions";
+import { VISIBLE_COST_LINE_ITEM_NAMES } from "@/lib/boiler-install-cost";
 import type { ProfitBreakdown } from "@/types/quote-detail-shared";
 
 /** `profit`/`marginPercent` always derive from `costPrice` + the Pricing card total. */
@@ -88,13 +89,33 @@ export function ProfitCard({
     void updateQuoteCostPrice(quoteId, costPrice, customerName);
   }
 
+  // Cost price is still the full sum of everything (boiler unit, flue,
+  // Fernox Filter, Gateway, Installer Cost, Rep Comms, extras — see
+  // `boilerCostBreakdown` in src/lib/boiler-install-cost.ts) — just not
+  // broken out line by line here. Installer Cost and Rep Comms are the two
+  // exceptions kept visible.
+  const visibleCostLineItems =
+    profit.costLineItems?.filter((item) => VISIBLE_COST_LINE_ITEM_NAMES.includes(item.name)) ?? [];
+  const hasCostLineItems = visibleCostLineItems.length > 0;
+
   return (
     <Collapsible title="Profit">
       <div className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between">
+        {/* Red throughout, same as Discount elsewhere in this app — these
+            are outgoing costs, unlike Profit/Margin below which are the
+            result and are shown in green. */}
+        {visibleCostLineItems.map((item, index) => (
+          <div key={index} className="flex items-baseline justify-between">
+            <span className="text-sm text-slate-500">{item.name}</span>
+            <span className="text-sm font-medium text-red-600">-{formatCurrency(item.amount)}</span>
+          </div>
+        ))}
+        <div
+          className={`flex items-baseline justify-between ${hasCostLineItems ? "border-t border-slate-100 pt-2" : ""}`}
+        >
           <span className="text-sm text-slate-500">Cost price</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-slate-900">{formatCurrency(profit.costPrice)}</span>
+            <span className="text-sm font-semibold text-red-600">{formatCurrency(profit.costPrice)}</span>
             {editable && (
               <button
                 type="button"
@@ -108,8 +129,8 @@ export function ProfitCard({
           </div>
         </div>
         <KeyDetailField label="Sell price" value={formatCurrency(profit.sellPrice)} />
-        <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} />
-        <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} />
+        <KeyDetailField label="Profit" value={formatCurrency(profit.profit)} valueClassName="text-brand-green-mid" />
+        <KeyDetailField label="Margin" value={`${profit.marginPercent}%`} valueClassName="text-brand-green-mid" />
       </div>
 
       {editable && isEditing && (

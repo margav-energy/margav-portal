@@ -62,4 +62,9 @@ export interface ProfitBreakdown {
   sellPrice: number;
   profit: number;
   marginPercent: number;
+  /** Boiler quotes only — `costPrice` broken out into what it's actually
+   *  made of (see `boilerCostBreakdown` in src/lib/boiler-install-cost.ts),
+   *  in display order, summing exactly to `costPrice`. Absent for solar,
+   *  which has no cost model to break down. */
+  costLineItems?: { name: string; amount: number }[];
 }

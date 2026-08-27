@@ -10,14 +10,15 @@
  * PDF, the presenter deck, and outbound emails all intentionally have no
  * path to `ProfitBreakdown`; keep it that way.
  *
- * The boiler unit itself varies by size; Fernox Filter, the Gateway, and
- * the standard flue are flat per install regardless of kW (every boiler
- * install gets exactly one of each, whether or not a rep itemizes them as
- * an Extras line on the quote — see `fixedInstallTotal`), which is what
- * makes margin shrink as the boiler gets bigger against Margav's fixed
- * `DEFAULT_BOILER_SELL_PRICE`. `extraCostsByName`, unlike those, only
- * counts for a given quote when the matching Extras catalog entry is
- * actually on it — see `boilerCostPrice`.
+ * The boiler unit itself varies by size; Fernox Filter, the Gateway, the
+ * standard flue, Installer Cost, and Rep Comms are flat per install
+ * regardless of kW (every boiler install gets exactly one of each, whether
+ * or not a rep itemizes them as an Extras line on the quote — see
+ * `flatInstallLineItems`), which is what makes margin shrink as the boiler
+ * gets bigger against Margav's fixed `DEFAULT_BOILER_SELL_PRICE`.
+ * `extraCostsByName`, unlike those, only counts for a given quote when the
+ * matching Extras catalog entry is actually on it — see
+ * `boilerCostBreakdown`.
  */
 
 /**
@@ -37,7 +38,7 @@ export interface BoilerCostSettings {
   /** The standard 60/100 flue every boiler install gets — same "always counted" treatment as the two costs above. */
   standardFlue: number;
   installerCost: number;
-  costPerSale: number;
+  /** The rep's payout on the sale — shown as "Rep Comms" on the Profit card. */
   commission: number;
   /**
    * Real supplier cost for specific "Extras" catalog entries
@@ -60,7 +61,6 @@ export const DEFAULT_BOILER_COST_SETTINGS: BoilerCostSettings = {
   gatewayWithComfortTouch: 139.88,
   standardFlue: 54.08,
   installerCost: 700.0,
-  costPerSale: 300.0,
   commission: 300.0,
   extraCostsByName: {
     "Roof kit": 87.36,
@@ -69,16 +69,27 @@ export const DEFAULT_BOILER_COST_SETTINGS: BoilerCostSettings = {
   },
 };
 
-function fixedInstallTotal(settings: BoilerCostSettings): number {
-  return (
-    settings.fernoxSystemFilter +
-    settings.gatewayWithComfortTouch +
-    settings.standardFlue +
-    settings.installerCost +
-    settings.costPerSale +
-    settings.commission
-  );
+export interface BoilerCostLineItem {
+  name: string;
+  amount: number;
 }
+
+export interface BoilerCostBreakdown {
+  /** Ordered: each boiler unit's own cost, then the flat per-install
+   *  items, then whichever optional extras are actually costed — sums
+   *  exactly to `total`, so the Profit card can render this list directly
+   *  instead of just a single number. */
+  lineItems: BoilerCostLineItem[];
+  total: number;
+}
+
+/**
+ * Which of `boilerCostBreakdown`'s line items the Profit card actually
+ * breaks out on screen — everything else (the boiler unit itself, flue,
+ * Fernox Filter, Gateway, extras) still contributes to `total`, just isn't
+ * itemized individually there (see ProfitCard.tsx).
+ */
+export const VISIBLE_COST_LINE_ITEM_NAMES = ["Installer Cost", "Rep Comms"];
 
 /**
  * Nearest defined tier to `outputKw` — handles boiler sizes outside the
@@ -93,29 +104,53 @@ function nearestUnitCost(outputKw: number, unitCostsByKw: Record<number, number>
   return unitCostsByKw[closest];
 }
 
-/** Total real cost of installing one boiler unit: its own unit cost (by kW) plus every flat per-install cost. */
-export function boilerUnitInstallCost(outputKw: number, settings: BoilerCostSettings): number {
-  return nearestUnitCost(outputKw, settings.unitCostsByKw) + fixedInstallTotal(settings);
+/**
+ * The flat per-install costs, each its own named line item — every boiler
+ * install gets exactly one of each, scaled by how many units are actually
+ * on the quote (the rare multi-unit property, e.g. an annexe needing its
+ * own boiler, genuinely needs its own filter/gateway/flue/installer visit/
+ * commission per unit, not one shared set).
+ */
+function flatInstallLineItems(unitCount: number, settings: BoilerCostSettings): BoilerCostLineItem[] {
+  if (unitCount === 0) return [];
+  return [
+    { name: 'Horizontal "Standard" 60/100 Flue w/Terminal (1000mm)', amount: settings.standardFlue * unitCount },
+    { name: "Fernox System Filter", amount: settings.fernoxSystemFilter * unitCount },
+    { name: "Gateway with Smart Touch", amount: settings.gatewayWithComfortTouch * unitCount },
+    { name: "Installer Cost", amount: settings.installerCost * unitCount },
+    { name: "Rep Comms", amount: settings.commission * unitCount },
+  ];
 }
 
-/** Real cost of the optional extras actually on the quote — only entries with a tracked cost (`extraCostsByName`) count, scaled by quantity; anything else (free-text, an untracked catalog entry) is £0. */
-function extrasInstallCost(extras: { name: string; quantity: number }[], settings: BoilerCostSettings): number {
-  return extras.reduce((sum, extra) => sum + (settings.extraCostsByName[extra.name] ?? 0) * extra.quantity, 0);
+/** Real cost of the optional extras actually on the quote, as named line items — only entries with a tracked cost (`extraCostsByName`) count, scaled by quantity; anything else (free-text, an untracked catalog entry) contributes no row at all. */
+function extrasLineItems(extras: { name: string; quantity: number }[], settings: BoilerCostSettings): BoilerCostLineItem[] {
+  return extras
+    .map((extra) => ({ name: extra.name, amount: (settings.extraCostsByName[extra.name] ?? 0) * extra.quantity }))
+    .filter((item) => item.amount > 0);
 }
 
 /**
- * The boiler quote's cost price — the sum of each boiler unit's real
- * install cost (the overwhelming majority of quotes have exactly one; the
- * rare multi-unit property, e.g. an annexe needing its own boiler, is
- * treated as two full installs, since each genuinely needs its own filter/
- * gateway/flue/installer visit/commission) plus the real cost of whichever
- * optional extras are actually on the quote.
+ * The boiler quote's full cost breakdown — each boiler unit's own real
+ * install cost (unit cost by kW), the flat per-install items, and whichever
+ * optional extras are actually on the quote. `total` is what the Profit
+ * card's "Cost price" shows; `lineItems` is the same figure broken out for
+ * display, in the same order.
  */
-export function boilerCostPrice(
-  outputKws: number[],
+export function boilerCostBreakdown(
+  units: { outputKw: number; make: string; model: string }[],
   extras: { name: string; quantity: number }[],
   settings: BoilerCostSettings,
-): number {
-  const unitsCost = outputKws.reduce((sum, kw) => sum + boilerUnitInstallCost(kw, settings), 0);
-  return unitsCost + extrasInstallCost(extras, settings);
+): BoilerCostBreakdown {
+  const unitLineItems = units.map((unit) => ({
+    name: unit.make && unit.model ? `${unit.make} ${unit.model}` : `${unit.outputKw}kW boiler unit`,
+    amount: nearestUnitCost(unit.outputKw, settings.unitCostsByKw),
+  }));
+
+  const lineItems = [
+    ...unitLineItems,
+    ...flatInstallLineItems(units.length, settings),
+    ...extrasLineItems(extras, settings),
+  ];
+
+  return { lineItems, total: lineItems.reduce((sum, item) => sum + item.amount, 0) };
 }

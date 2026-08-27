@@ -13,7 +13,7 @@ export interface BoilerCostSettingsFormState {
 
 /**
  * Parses the repeated `unitKw`/`unitCost` inputs (one pair per boiler size
- * row — see `BoilerCostSettingsForm`) into the map `boilerCostPrice` reads.
+ * row — see `BoilerCostSettingsForm`) into the map `boilerCostBreakdown` reads.
  * Blank rows (a size the admin started typing then abandoned) are skipped
  * rather than rejected, so removing a row's text has the same effect as
  * clicking its remove button.
@@ -102,17 +102,14 @@ export async function updateBoilerCostSettingsAction(
   const gatewayWithComfortTouch = parseNonNegativeNumber(
     formData,
     "gatewayWithComfortTouch",
-    "Gateway with Comfort Touch cost",
+    "Gateway with Smart Touch cost",
   );
   if (typeof gatewayWithComfortTouch !== "number") return gatewayWithComfortTouch;
 
   const installerCost = parseNonNegativeNumber(formData, "installerCost", "Installer cost");
   if (typeof installerCost !== "number") return installerCost;
 
-  const costPerSale = parseNonNegativeNumber(formData, "costPerSale", "Cost per sale");
-  if (typeof costPerSale !== "number") return costPerSale;
-
-  const commission = parseNonNegativeNumber(formData, "commission", "Commission");
+  const commission = parseNonNegativeNumber(formData, "commission", "Rep Comms");
   if (typeof commission !== "number") return commission;
 
   const standardFlue = parseNonNegativeNumber(formData, "standardFlue", "Standard 60/100 Flue cost");
@@ -127,7 +124,6 @@ export async function updateBoilerCostSettingsAction(
     gatewayWithComfortTouch,
     standardFlue,
     installerCost,
-    costPerSale,
     commission,
     extraCostsByName,
   };
