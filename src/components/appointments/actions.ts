@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
+import { formatUkPhone, formatUkPostcode, normalizeEmail, toTitleCase } from "@/lib/utils";
 import {
   acceptAppointment,
   allocateAppointment,
@@ -33,11 +34,26 @@ function revalidateAppointmentPaths() {
 
 export type CreateAppointmentActionInput = Omit<CreateAppointmentInput, "createdBy">;
 
+/** Admin-only — see the page-level guard on `/appointments/create` (src/app/appointments/create/page.tsx). */
 export async function createAppointmentAction(
   input: CreateAppointmentActionInput,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getCurrentUser();
-  const result = await createAppointment({ ...input, createdBy: user?.id ?? null });
+  if (!user) return { ok: false, error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { ok: false, error: "Only admins can create appointments." };
+
+  // Normalized here too, not just in the form — this is the one place every
+  // appointment (from this form or any future caller) actually gets saved.
+  input = {
+    ...input,
+    firstName: toTitleCase(input.firstName.trim()),
+    lastName: toTitleCase(input.lastName.trim()),
+    postcode: formatUkPostcode(input.postcode.trim()),
+    email: normalizeEmail(input.email),
+    phone: formatUkPhone(input.phone),
+  };
+
+  const result = await createAppointment({ ...input, createdBy: user.id });
 
   if (!result) {
     return { ok: false, error: "Could not save the appointment. Please try again." };
@@ -47,7 +63,7 @@ export async function createAppointmentAction(
 
   await Promise.all([
     logActivity({
-      actorId: user?.id,
+      actorId: user.id,
       customerName,
       description: input.rebookedFromId
         ? "Rebooked a cancelled appointment"
@@ -68,7 +84,7 @@ export async function createAppointmentAction(
       address: result.address,
       productType: result.productType,
       notes: input.notes,
-      createdBy: user?.id ?? null,
+      createdBy: user.id,
     }).catch((error) => console.error("createQuoteForAppointment failed", error)),
   ]);
 

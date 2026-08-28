@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export interface CurrentUser {
@@ -19,9 +19,19 @@ export interface CurrentUser {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Same "stale/invalid refresh token throws instead of returning null"
+  // hazard as `updateSession` (src/lib/supabase/proxy.ts) — that's the
+  // primary defense (it clears the bad cookie so this rarely even fires),
+  // but this is called from plenty of places `src/proxy.ts` doesn't gate
+  // (e.g. `/login` itself), so it needs its own net rather than crashing
+  // the page.
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (error) {
+    console.error("getCurrentUser: getUser failed — treating as signed out", error);
+  }
 
   if (!user) return null;
 
@@ -74,4 +84,18 @@ export async function requireInstallerUser(): Promise<CurrentUser> {
   if (!user) redirect("/login");
   if (user.role !== "installer") redirect("/");
   return user;
+}
+
+/**
+ * A rep only gets to open a quote's detail/view/presenter pages if it's
+ * assigned to them; admins can open any quote. Call after
+ * `requireStaffUser()`, once the quote's `assignedRepId` is known (from
+ * `getQuoteDetail`, src/data/quotes-service.ts). 404s rather than
+ * redirecting, so a rep guessing/bookmarking another rep's quote URL sees
+ * "not found" instead of a bounce that would confirm the quote exists —
+ * same reasoning as `getInstallerJobDetail`'s ownership check
+ * (src/data/installer-jobs-service.ts) for installers and their jobs.
+ */
+export function assertQuoteOwnedByUser(user: CurrentUser, assignedRepId: string | undefined): void {
+  if (user.role === "rep" && assignedRepId !== user.id) notFound();
 }

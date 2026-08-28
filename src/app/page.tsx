@@ -22,10 +22,14 @@ export default async function DashboardPage() {
   // already lives at /availability (see src/app/availability/page.tsx).
   if (user.role === "installer") redirect("/availability");
 
+  // Reps only see quotes assigned to them; admins see everything (see
+  // `getAllQuotes`'s doc comment in quotes-service.ts).
+  const representativeId = user.role === "rep" ? user.id : undefined;
+
   const [summary, sentToSign, signed] = await Promise.all([
-    getQuoteSummary(),
-    getQuotesByStage("sent_to_sign"),
-    getQuotesByStage("signed"),
+    getQuoteSummary(representativeId),
+    getQuotesByStage("sent_to_sign", representativeId),
+    getQuotesByStage("signed", representativeId),
   ]);
 
   return (

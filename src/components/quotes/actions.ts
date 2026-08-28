@@ -15,6 +15,7 @@ import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
 import { QUOTE_PIPELINE_STATUS_STYLES } from "@/lib/status-colors";
+import { formatUkPhone, formatUkPostcode, normalizeEmail, toTitleCase } from "@/lib/utils";
 import {
   mapFreeTextRow,
   mapLineItemRow,
@@ -161,25 +162,31 @@ export interface CreateQuoteResult {
  * arrays, notes, ...) gets added afterward from the detail page.
  */
 export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteResult> {
-  const customerName = input.customerName.trim();
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  // Reps work quotes an admin has already created and assigned to them —
+  // see the "New quote" button being admin-only in QuotesPageHeader.tsx.
+  if (user.role !== "admin") return { error: "Only admins can create quotes." };
+
+  const customerName = toTitleCase(input.customerName.trim());
   if (!customerName) return { error: "Customer name is required." };
+  const postcode = formatUkPostcode(input.postcode.trim());
 
   const supabase = await createClient();
-  const user = await getCurrentUser();
 
   const { data, error } = await supabase
     .from("quotes")
     .insert({
       customer_name: customerName,
-      postcode: input.postcode.trim(),
+      postcode,
       address: input.address.trim(),
-      customer_address_lines: buildCustomerAddressLines(input.address, input.postcode),
+      customer_address_lines: buildCustomerAddressLines(input.address, postcode),
       product_type: input.productType,
       amount: input.amount,
       payment_type: input.paymentType,
       pipeline_status: "new_lead",
       sent_date: new Date().toISOString().slice(0, 10),
-      created_by: user?.id ?? null,
+      created_by: user.id,
     })
     .select("id")
     .single();
@@ -192,17 +199,17 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   // Best-effort — runs after the response is sent so it never adds latency
   // to quote creation, and is a no-op if Street View isn't configured or
   // has no coverage for this address (see `fetchStreetViewPhotoForQuote`).
-  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${input.postcode.trim()}`));
+  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
 
   await insertQuoteHistory({
     quoteId: data.id,
-    actorId: user?.id,
-    description: `${user?.firstName ?? "Someone"} created this quote`,
+    actorId: user.id,
+    description: `${user.firstName} created this quote`,
   });
   await logActivity({
-    actorId: user?.id,
+    actorId: user.id,
     customerName,
-    description: `${user?.firstName ?? "Someone"} created a new quote for ${customerName}`,
+    description: `${user.firstName} created a new quote for ${customerName}`,
     status: "allocated",
     entityType: "quote",
     entityId: data.id,
@@ -242,8 +249,9 @@ export interface CreateQuoteForAppointmentInput {
 export async function createQuoteForAppointment(
   input: CreateQuoteForAppointmentInput,
 ): Promise<CreateQuoteResult> {
-  const customerName = input.customerName.trim();
+  const customerName = toTitleCase(input.customerName.trim());
   if (!customerName) return { error: "Customer name is required." };
+  const postcode = formatUkPostcode(input.postcode.trim());
 
   const supabase = await createClient();
 
@@ -252,11 +260,11 @@ export async function createQuoteForAppointment(
     .insert({
       appointment_id: input.appointmentId,
       customer_name: customerName,
-      customer_email: input.customerEmail || null,
-      customer_phone: input.customerPhone || null,
-      postcode: input.postcode.trim(),
+      customer_email: input.customerEmail ? normalizeEmail(input.customerEmail) : null,
+      customer_phone: input.customerPhone ? formatUkPhone(input.customerPhone) : null,
+      postcode,
       address: input.address.trim(),
-      customer_address_lines: buildCustomerAddressLines(input.address, input.postcode),
+      customer_address_lines: buildCustomerAddressLines(input.address, postcode),
       product_type: input.productType,
       notes: input.notes || null,
       pipeline_status: "new_lead",
@@ -271,7 +279,7 @@ export async function createQuoteForAppointment(
   }
 
   // Best-effort — see the equivalent call in `createQuote` above.
-  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${input.postcode.trim()}`));
+  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
 
   await insertQuoteHistory({
     quoteId: data.id,
@@ -410,6 +418,14 @@ export async function updateQuotePipelineStatusAction(
   return {};
 }
 
+/**
+ * Admin-only — reps work whatever's already been assigned to them, they
+ * don't reassign who a quote belongs to (see the rep-assign dropdown being
+ * hidden for non-admins in QuoteHeader.tsx). Returns `null` on failure
+ * (including "not an admin") rather than an `{ error }` shape since the
+ * caller applies the change optimistically and doesn't surface this
+ * return value — same as the pre-existing `!rep` early-return below.
+ */
 export async function assignQuoteRepresentative(
   quoteId: string,
   repId: string,
@@ -417,6 +433,7 @@ export async function assignQuoteRepresentative(
 ): Promise<{ repId: string; repName: string } | null> {
   const supabase = await createClient();
   const [user, rep] = await Promise.all([getCurrentUser(), getProfileById(repId)]);
+  if (!user || user.role !== "admin") return null;
   if (!rep) return null;
 
   const { error } = await supabase.from("quotes").update({ representative_id: repId }).eq("id", quoteId);
@@ -513,12 +530,13 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
   const supabase = await createClient();
   const user = await getCurrentUser();
 
+  const customerName = toTitleCase(customer.name.trim());
   const { error } = await supabase
     .from("quotes")
     .update({
-      customer_name: customer.name,
-      customer_email: customer.email || null,
-      customer_phone: customer.phone || null,
+      customer_name: customerName,
+      customer_email: customer.email ? normalizeEmail(customer.email) : null,
+      customer_phone: customer.phone ? formatUkPhone(customer.phone) : null,
       customer_address_lines: customer.addressLines,
     })
     .eq("id", quoteId);
@@ -532,8 +550,8 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
     insertQuoteHistory({ quoteId, actorId: user?.id, description: "Updated customer details" }),
     logActivity({
       actorId: user?.id,
-      customerName: customer.name,
-      description: `Updated customer details — ${customer.name}`,
+      customerName,
+      description: `Updated customer details — ${customerName}`,
       status: "allocated",
       entityType: "quote",
       entityId: quoteId,

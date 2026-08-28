@@ -1,22 +1,22 @@
 import "server-only";
 
 /**
- * getAddress.io integration (https://getaddress.io) — postcode → address
- * autocomplete for `CreateAppointmentForm`'s "Find address" button. Called
- * server-side only (via `src/components/appointments/address-lookup-actions.ts`)
- * so the API key never reaches the browser — getAddress.io's own docs flag
- * this as the reason "Domain Tokens" exist, but a plain server-side proxy
- * avoids needing one at all.
+ * Google Places API — postcode/address autocomplete for `CreateAppointmentForm`'s
+ * "Find address" button. Called server-side only (via
+ * `src/components/appointments/address-lookup-actions.ts`) so the API key
+ * never reaches the browser.
  *
- * Add `GETADDRESS_API_KEY` to `.env.local` to enable this — see
- * `.env.local.example`. Until it's set, `isAddressLookupConfigured()`
- * returns false and the form falls back to manual entry, same as before.
+ * Replaces the earlier getAddress.io integration (same `GOOGLE_MAPS_API_KEY`
+ * used by `src/lib/google-street-view.ts` — one Google Cloud project/key
+ * covers both, as long as the key's API restrictions allow "Places API").
+ * Until it's set, `isAddressLookupConfigured()` returns false and the form
+ * falls back to manual entry, same as before.
  */
 
-const GETADDRESS_BASE_URL = "https://api.getAddress.io";
+const PLACES_BASE_URL = "https://maps.googleapis.com/maps/api/place";
 
 export function isAddressLookupConfigured(): boolean {
-  return Boolean(process.env.GETADDRESS_API_KEY);
+  return Boolean(process.env.GOOGLE_MAPS_API_KEY);
 }
 
 export interface AddressSuggestion {
@@ -34,69 +34,111 @@ export interface AddressDetails {
 }
 
 interface AutocompleteResponse {
-  suggestions?: { id: string; address: string; url: string }[];
+  status: string;
+  predictions?: { place_id: string; description: string }[];
 }
 
-interface GetAddressResponse {
-  postcode?: string;
-  line_1?: string;
-  line_2?: string;
-  line_3?: string;
-  town_or_city?: string;
-  county?: string;
+interface AddressComponent {
+  long_name: string;
+  short_name: string;
+  types: string[];
+}
+
+interface PlaceDetailsResponse {
+  status: string;
+  result?: { address_components?: AddressComponent[] };
+}
+
+function componentsByType(components: AddressComponent[], type: string): AddressComponent | undefined {
+  return components.find((component) => component.types.includes(type));
 }
 
 /**
- * Full postcode searches return every address at that postcode (getAddress.io's
- * `all` param defaults to true for postcode-shaped terms), which matches this
- * form's "type a postcode, pick your house" flow.
+ * Restricted to GB. No `types` filter — Google classifies a bare UK
+ * postcode as `postal_code`, not `address`, so filtering to `types=address`
+ * silently zeroes out the exact "type a postcode" input this flow expects
+ * (unlike getAddress.io, Google doesn't enumerate every individual property
+ * at a postcode either way — it predicts against whatever's typed, so
+ * fuller free text like a house number + street name returns better/more
+ * specific results than a postcode alone).
  */
 export async function searchAddresses(term: string): Promise<AddressSuggestion[]> {
-  const apiKey = process.env.GETADDRESS_API_KEY;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   const trimmed = term.trim();
   if (!apiKey || !trimmed) return [];
 
   try {
-    const response = await fetch(
-      `${GETADDRESS_BASE_URL}/autocomplete/${encodeURIComponent(trimmed)}?api-key=${apiKey}`,
-    );
+    const url =
+      `${PLACES_BASE_URL}/autocomplete/json?input=${encodeURIComponent(trimmed)}` +
+      `&components=country:gb&key=${apiKey}`;
+    const response = await fetch(url);
 
     if (!response.ok) {
-      console.error("getAddress.io autocomplete failed", response.status, await response.text());
+      console.error("Places autocomplete request failed", response.status, await response.text());
       return [];
     }
 
     const data = (await response.json()) as AutocompleteResponse;
-    return (data.suggestions ?? []).map((suggestion) => ({ id: suggestion.id, address: suggestion.address }));
+    if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+      console.error("Places autocomplete returned an error status", data.status);
+      return [];
+    }
+
+    return (data.predictions ?? []).map((prediction) => ({
+      id: prediction.place_id,
+      address: prediction.description,
+    }));
   } catch (error) {
-    console.error("getAddress.io autocomplete request failed", error);
+    console.error("Places autocomplete request failed", error);
     return [];
   }
 }
 
+/**
+ * Google returns a flat `address_components[]` array tagged with types
+ * (`street_number`, `route`, `postal_town`, ...) rather than getAddress.io's
+ * ready-made `line_1`/`line_2`/`town_or_city` fields, so this assembles the
+ * same shape the rest of the app already expects from those component types.
+ */
 export async function getAddressDetails(id: string): Promise<AddressDetails | null> {
-  const apiKey = process.env.GETADDRESS_API_KEY;
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey || !id) return null;
 
   try {
-    const response = await fetch(`${GETADDRESS_BASE_URL}/get/${encodeURIComponent(id)}?api-key=${apiKey}`);
+    const url =
+      `${PLACES_BASE_URL}/details/json?place_id=${encodeURIComponent(id)}` +
+      `&fields=address_component&key=${apiKey}`;
+    const response = await fetch(url);
 
     if (!response.ok) {
-      console.error("getAddress.io get failed", response.status, await response.text());
+      console.error("Places details request failed", response.status, await response.text());
       return null;
     }
 
-    const data = (await response.json()) as GetAddressResponse;
+    const data = (await response.json()) as PlaceDetailsResponse;
+    const components = data.result?.address_components;
+    if (data.status !== "OK" || !components) {
+      console.error("Places details returned an error status", data.status);
+      return null;
+    }
+
+    const streetNumber = componentsByType(components, "street_number")?.long_name ?? "";
+    const route = componentsByType(components, "route")?.long_name ?? "";
+    const line1 = [streetNumber, route].filter(Boolean).join(" ");
+
     return {
-      postcode: data.postcode ?? "",
-      line1: data.line_1 ?? "",
-      line2: data.line_2 ?? "",
-      line3: data.line_3 ?? "",
-      townOrCity: data.town_or_city ?? "",
-      county: data.county ?? "",
+      postcode: componentsByType(components, "postal_code")?.long_name ?? "",
+      line1,
+      line2: componentsByType(components, "sublocality")?.long_name ?? "",
+      line3: "",
+      townOrCity:
+        componentsByType(components, "postal_town")?.long_name ??
+        componentsByType(components, "locality")?.long_name ??
+        "",
+      county: componentsByType(components, "administrative_area_level_2")?.long_name ?? "",
     };
   } catch (error) {
-    console.error("getAddress.io get request failed", error);
+    console.error("Places details request failed", error);
     return null;
   }
 }

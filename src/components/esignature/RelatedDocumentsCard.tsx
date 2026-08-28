@@ -10,11 +10,12 @@ export interface RelatedDocumentLink {
 
 /**
  * Cross-links to the *other* documents tied to this job — the boiler
- * survey and the Installation Agreement — so a quote doesn't read as an
- * island when there's more to the deal. Shown on both the internal "View
- * Quote" page (src/app/quotes/[id]/view/page.tsx, using authenticated
- * data) and the customer's /sign/[token] page (using the public/service-role
- * equivalents — see getPublicRelatedDocument, getPublicSurveyDocumentUrl).
+ * survey, the Installation Agreement, the Cooling-Off Waiver — so a quote
+ * doesn't read as an island when there's more to the deal. Shown on both
+ * the internal "View Quote" page (src/app/quotes/[id]/view/page.tsx, using
+ * authenticated data) and the customer's /sign/[token] page (using the
+ * public/service-role equivalents — see getPublicRelatedDocuments,
+ * getPublicSurveyDocumentUrl).
  */
 export function RelatedDocumentsCard({ documents }: { documents: RelatedDocumentLink[] }) {
   if (documents.length === 0) return null;

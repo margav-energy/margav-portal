@@ -1,4 +1,4 @@
-import { getPublicRelatedDocument, getPublicSignatureRequest } from "@/data/signature-service";
+import { getPublicRelatedDocuments, getPublicSignatureRequest } from "@/data/signature-service";
 import { getPublicSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { SignForm } from "@/app/sign/[token]/SignForm";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
@@ -30,12 +30,12 @@ export default async function PublicSignPage({
     request.documentType === "cooling_off_waiver" ||
     (request.snapshot as DocumentSnapshot).productTypeLabel === "Boiler";
 
-  const [relatedDocument, surveyDocumentUrl] = await Promise.all([
-    getPublicRelatedDocument(request.snapshot.quoteId, request.documentType),
+  const [relatedDocuments, surveyDocumentUrl] = await Promise.all([
+    getPublicRelatedDocuments(request.snapshot.quoteId, request.documentType),
     isBoilerJob ? getPublicSurveyDocumentUrl(request.snapshot.quoteId) : Promise.resolve(undefined),
   ]);
 
   return (
-    <SignForm token={token} request={request} relatedDocument={relatedDocument} surveyDocumentUrl={surveyDocumentUrl} />
+    <SignForm token={token} request={request} relatedDocuments={relatedDocuments} surveyDocumentUrl={surveyDocumentUrl} />
   );
 }

@@ -293,18 +293,31 @@ export function QuoteHeader({
             }}
             onSelect={(option) => handleToggleLocked(option === "Lock")}
           />
-          <DropdownButton
-            label={assignedRepName}
-            icon={
+          {isAdmin ? (
+            <DropdownButton
+              label={assignedRepName}
+              icon={
+                <InitialsAvatar
+                  name={assignedRepName}
+                  initials={initialsFor(assignedRepName)}
+                  className="h-5 w-5 text-[10px]"
+                />
+              }
+              options={reps.map((rep) => rep.fullName)}
+              onSelect={handleChangeRep}
+            />
+          ) : (
+            // Reps can see who a quote's assigned to but not reassign it —
+            // see `assignQuoteRepresentative`'s doc comment in actions.ts.
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
               <InitialsAvatar
                 name={assignedRepName}
                 initials={initialsFor(assignedRepName)}
                 className="h-5 w-5 text-[10px]"
               />
-            }
-            options={reps.map((rep) => rep.fullName)}
-            onSelect={handleChangeRep}
-          />
+              {assignedRepName}
+            </div>
+          )}
         </div>
       </div>
 

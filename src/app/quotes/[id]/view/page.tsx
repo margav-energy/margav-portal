@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Download, Info } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
-import { requireStaffUser } from "@/data/current-user";
+import { assertQuoteOwnedByUser, requireStaffUser } from "@/data/current-user";
 import { buildDocumentSnapshot } from "@/lib/esignature/document";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
@@ -28,7 +28,7 @@ import { UploadedDocumentViewer } from "@/components/quotes/detail/UploadedDocum
 export default async function ViewQuotePage({
   params,
 }: PageProps<"/quotes/[id]/view">) {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
   const { id } = await params;
   const result = await getQuoteDetail(id);
@@ -36,6 +36,8 @@ export default async function ViewQuotePage({
   if (!result) notFound();
 
   const { quote, detail } = result;
+  assertQuoteOwnedByUser(user, detail.assignedRepId);
+
   const isBoiler = quote.productType === "boiler";
 
   const [

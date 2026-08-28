@@ -377,38 +377,50 @@ export interface PublicRelatedDocument {
 }
 
 /**
- * Cross-link between a quote's two documents — from the quote's own
+ * Cross-links to a quote's *other* documents — from the quote's own
  * `/sign/[token]` page, "you also need to sign the Installation Agreement"
  * (or vice versa), so the customer doesn't need a second email to notice
- * the other one exists. Service-role, like `getPublicSignatureRequest`
+ * the other ones exist. Service-role, like `getPublicSignatureRequest`
  * above: the customer has no authenticated session for
  * `getLatestSignatureRequest` (the portal-side equivalent) to use.
+ *
+ * A boiler quote can have up to two *other* document types alongside
+ * whichever one this page is for (quote, installation agreement,
+ * cooling-off waiver) — so this returns one entry per other document type
+ * that has ever been sent, not just the single most recent request overall
+ * (that would silently drop one of the two whenever all three exist).
+ * Within a document type, only the latest request is used (an earlier one
+ * may have expired and been superseded).
  */
-export async function getPublicRelatedDocument(
+export async function getPublicRelatedDocuments(
   quoteId: string,
   excludeDocumentType: SignatureDocumentType,
-): Promise<PublicRelatedDocument | undefined> {
+): Promise<PublicRelatedDocument[]> {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("signature_requests")
-    .select("document_type, status, access_token")
+    .select("document_type, status, access_token, created_at")
     .eq("quote_id", quoteId)
     .neq("document_type", excludeDocumentType)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("getPublicRelatedDocument failed", error);
-    return undefined;
+    console.error("getPublicRelatedDocuments failed", error);
+    return [];
   }
-  if (!data) return undefined;
+  if (!data) return [];
 
-  return {
-    documentType: data.document_type as SignatureDocumentType,
-    status: data.status as SignatureStatus,
-    accessToken: data.access_token,
-  };
+  const latestByType = new Map<string, (typeof data)[number]>();
+  for (const row of data) {
+    // Rows are newest-first, so the first one seen per type is the latest.
+    if (!latestByType.has(row.document_type)) latestByType.set(row.document_type, row);
+  }
+
+  return [...latestByType.values()].map((row) => ({
+    documentType: row.document_type as SignatureDocumentType,
+    status: row.status as SignatureStatus,
+    accessToken: row.access_token,
+  }));
 }
 
 /** The rep's saved signature (Settings → "My signature") for the quote's assigned rep — used for the quote itself and the Installation Agreement. Missing gracefully (rep hasn't set one up, or no assigned rep). */

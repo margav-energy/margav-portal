@@ -1,9 +1,15 @@
 import { Suspense } from "react";
-import { requireStaffUser } from "@/data/current-user";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/data/current-user";
 import { CreateAppointmentFormLoader } from "@/components/appointments/CreateAppointmentFormLoader";
 
+// Admin-only — reps work appointments an admin has already booked, they
+// don't create new ones (same "admin creates, rep works" split as quotes —
+// see `createQuote`'s role check in src/components/quotes/actions.ts).
 export default async function CreateAppointmentPage() {
-  await requireStaffUser();
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (user.role !== "admin") redirect("/");
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { FormSection } from "@/components/ui/FormSection";
 import { FormField, inputClassName } from "@/components/ui/FormField";
@@ -12,7 +12,7 @@ import {
   searchAddressesAction,
 } from "@/components/appointments/address-lookup-actions";
 import type { AddressSuggestion } from "@/lib/address-lookup";
-import { cn } from "@/lib/utils";
+import { cn, formatUkPhone, formatUkPostcode, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
 
 interface FormValues {
   firstName: string;
@@ -111,6 +111,7 @@ export function CreateAppointmentForm({
   const [isSaved, setIsSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const addressSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function update<K extends keyof FormValues>(field: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -119,21 +120,56 @@ export function CreateAppointmentForm({
     setSaveError(null);
   }
 
-  async function handleFindAddress() {
-    if (!values.postcode.trim()) return;
-    setIsLookingUpAddress(true);
-    setAddressSuggestions([]);
+  /** Auto-fixes casing on blur rather than every keystroke, so it doesn't
+   *  fight the rep mid-type (e.g. capitalizing before they've typed a
+   *  hyphenated second half). */
+  function handleNameBlur(field: "firstName" | "lastName") {
+    setValues((current) => ({ ...current, [field]: toTitleCase(current[field]) }));
+  }
+
+  function handlePostcodeBlur() {
+    setValues((current) => ({ ...current, postcode: formatUkPostcode(current.postcode) }));
+  }
+
+  function handleEmailBlur() {
+    setValues((current) => ({ ...current, email: normalizeEmail(current.email) }));
+  }
+
+  function handlePhoneBlur() {
+    setValues((current) => ({ ...current, phone: formatUkPhone(current.phone) }));
+  }
+
+  /**
+   * Live search as the rep types the address itself, not the postcode —
+   * Google's autocomplete predicts against place/street text, so a bare
+   * postcode alone only resolves to the postcode area (no house-level
+   * data to fill Address line 1 with). Typing the house name/number +
+   * street here is what returns full, specific address matches, same as
+   * typing into Google Maps' own search box.
+   */
+  function handleAddressLine1Change(value: string) {
+    update("addressLine1", value);
     setAddressNoticeVisible(false);
 
-    const { configured, suggestions } = await searchAddressesAction(values.postcode);
-    setIsLookingUpAddress(false);
-
-    if (!configured) {
-      // No GETADDRESS_API_KEY set yet — same manual-entry fallback as before.
-      setAddressNoticeVisible(true);
+    if (addressSearchDebounceRef.current) clearTimeout(addressSearchDebounceRef.current);
+    if (value.trim().length < 3) {
+      setAddressSuggestions([]);
       return;
     }
-    setAddressSuggestions(suggestions);
+
+    addressSearchDebounceRef.current = setTimeout(() => {
+      setIsLookingUpAddress(true);
+      searchAddressesAction(value).then(({ configured, suggestions }) => {
+        setIsLookingUpAddress(false);
+        if (!configured) {
+          // No GOOGLE_MAPS_API_KEY set yet — same manual-entry fallback as before.
+          setAddressNoticeVisible(true);
+          setAddressSuggestions([]);
+          return;
+        }
+        setAddressSuggestions(suggestions);
+      });
+    }, 300);
   }
 
   async function handleSelectAddress(suggestion: AddressSuggestion) {
@@ -168,8 +204,11 @@ export function CreateAppointmentForm({
         nextErrors[field] = `${FIELD_LABELS[field]} is required`;
       }
     }
-    if (values.email && !/^\S+@\S+\.\S+$/.test(values.email)) {
+    if (values.email && !isValidEmail(values.email)) {
       nextErrors.email = "Enter a valid email address";
+    }
+    if (values.phone && !isValidUkPhone(values.phone)) {
+      nextErrors.phone = "Enter a valid UK phone number";
     }
     setErrors(nextErrors);
 
@@ -244,6 +283,7 @@ export function CreateAppointmentForm({
             className={inputClassName}
             value={values.firstName}
             onChange={(event) => update("firstName", event.target.value)}
+            onBlur={() => handleNameBlur("firstName")}
           />
         </FormField>
         <FormField label="Last name" required htmlFor="lastName" error={errors.lastName}>
@@ -252,6 +292,7 @@ export function CreateAppointmentForm({
             className={inputClassName}
             value={values.lastName}
             onChange={(event) => update("lastName", event.target.value)}
+            onBlur={() => handleNameBlur("lastName")}
           />
         </FormField>
         <FormField label="Phone number" required htmlFor="phone" error={errors.phone}>
@@ -261,6 +302,7 @@ export function CreateAppointmentForm({
             className={inputClassName}
             value={values.phone}
             onChange={(event) => update("phone", event.target.value)}
+            onBlur={handlePhoneBlur}
           />
         </FormField>
         <FormField label="Email address" required htmlFor="email" error={errors.email}>
@@ -270,54 +312,51 @@ export function CreateAppointmentForm({
             className={inputClassName}
             value={values.email}
             onChange={(event) => update("email", event.target.value)}
+            onBlur={handleEmailBlur}
           />
         </FormField>
         <FormField label="Postcode" required htmlFor="postcode" error={errors.postcode}>
-          <div className="flex gap-2">
+          <input
+            id="postcode"
+            className={cn(inputClassName, "max-w-[160px]")}
+            value={values.postcode}
+            onChange={(event) => update("postcode", event.target.value)}
+            onBlur={handlePostcodeBlur}
+          />
+        </FormField>
+        <FormField label="Address line 1" required htmlFor="addressLine1" error={errors.addressLine1}>
+          <div className="relative">
             <input
-              id="postcode"
-              className={cn(inputClassName, "max-w-[160px]")}
-              value={values.postcode}
-              onChange={(event) => update("postcode", event.target.value)}
+              id="addressLine1"
+              autoComplete="off"
+              placeholder="Start typing the house name/number and street…"
+              className={inputClassName}
+              value={values.addressLine1}
+              onChange={(event) => handleAddressLine1Change(event.target.value)}
             />
-            <Button type="button" variant="secondary" onClick={handleFindAddress} disabled={isLookingUpAddress}>
-              {isLookingUpAddress ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Finding…
-                </span>
-              ) : (
-                "Find address"
-              )}
-            </Button>
+            {isLookingUpAddress && (
+              <Loader2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-slate-400" />
+            )}
+            {addressSuggestions.length > 0 && (
+              <div className="absolute inset-x-0 z-10 mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                {addressSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    onClick={() => handleSelectAddress(suggestion)}
+                    className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
+                  >
+                    {suggestion.address}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {addressNoticeVisible && (
             <p className="text-xs text-slate-400">
               Address lookup isn&rsquo;t connected yet — enter the address manually below.
             </p>
           )}
-          {addressSuggestions.length > 0 && (
-            <div className="mt-1 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-              {addressSuggestions.map((suggestion) => (
-                <button
-                  key={suggestion.id}
-                  type="button"
-                  onClick={() => handleSelectAddress(suggestion)}
-                  className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm text-slate-700 last:border-b-0 hover:bg-slate-50"
-                >
-                  {suggestion.address}
-                </button>
-              ))}
-            </div>
-          )}
-        </FormField>
-        <FormField label="Address line 1" required htmlFor="addressLine1" error={errors.addressLine1}>
-          <input
-            id="addressLine1"
-            className={inputClassName}
-            value={values.addressLine1}
-            onChange={(event) => update("addressLine1", event.target.value)}
-          />
         </FormField>
         <FormField label="Address line 2" htmlFor="addressLine2">
           <input

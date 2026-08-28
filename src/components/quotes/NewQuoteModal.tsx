@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { createQuote, type CreateQuoteInput } from "@/components/quotes/actions";
+import { formatUkPostcode, toTitleCase } from "@/lib/utils";
 
 const EMPTY: CreateQuoteInput = {
   customerName: "",
@@ -56,6 +57,7 @@ export function NewQuoteModal({ onClose }: { onClose: () => void }) {
             className={inputClassName}
             value={values.customerName}
             onChange={(event) => update("customerName", event.target.value)}
+            onBlur={() => update("customerName", toTitleCase(values.customerName))}
             autoFocus
           />
         </FormField>
@@ -65,6 +67,7 @@ export function NewQuoteModal({ onClose }: { onClose: () => void }) {
             className={inputClassName}
             value={values.postcode}
             onChange={(event) => update("postcode", event.target.value)}
+            onBlur={() => update("postcode", formatUkPostcode(values.postcode))}
           />
         </FormField>
         <FormField label="Address" htmlFor="address">

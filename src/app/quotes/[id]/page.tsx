@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
-import { requireStaffUser } from "@/data/current-user";
+import { assertQuoteOwnedByUser, requireStaffUser } from "@/data/current-user";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
@@ -26,6 +26,8 @@ export default async function QuoteDetailPage({
   if (!result) notFound();
 
   const { quote, detail } = result;
+  assertQuoteOwnedByUser(user, detail.assignedRepId);
+
   const isBoiler = quote.productType === "boiler";
   const [
     survey,

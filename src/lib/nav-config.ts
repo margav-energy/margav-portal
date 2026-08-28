@@ -66,7 +66,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Create Appointment",
     href: "/appointments/create",
     icon: Plus,
-    roles: ["admin", "rep"],
+    roles: ["admin"],
   },
   {
     type: "group",

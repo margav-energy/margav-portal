@@ -10,14 +10,21 @@ import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
  * quote's *current* data (same live-vs-locked distinction as
  * src/app/quotes/[id]/view/page.tsx itself). `requireStaffUser` both gates
  * this to admin/rep (installers can't reach /quotes/[id] either) and
- * redirects signed-out requests to /login.
+ * redirects signed-out requests to /login. A rep hitting this directly for
+ * a quote that isn't theirs gets the same 404 as a nonexistent quote — see
+ * `assertQuoteOwnedByUser`'s doc comment (src/data/current-user.ts); that
+ * helper itself isn't used here since it calls `notFound()`, which is for
+ * page/layout rendering, not Route Handlers.
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
   const { id } = await params;
   const result = await getQuoteDetail(id);
   if (!result) return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+  if (user.role === "rep" && result.detail.assignedRepId !== user.id) {
+    return NextResponse.json({ error: "Quote not found" }, { status: 404 });
+  }
 
   const snapshot = await buildDocumentSnapshot(result.quote, result.detail);
   const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);

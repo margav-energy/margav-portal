@@ -65,15 +65,24 @@ async function fetchProfileMap(): Promise<ProfileMap> {
   return buildProfileMap(profiles);
 }
 
-export async function getAllQuotes(): Promise<Quote[]> {
+/**
+ * `representativeId`, when passed, limits the result to that rep's own
+ * quotes — used to restrict the `rep` role to "only see quotes assigned to
+ * them" (see `requireStaffUser` callers in `src/app/quotes/page.tsx` and
+ * `src/app/page.tsx`). Admins pass `undefined` and see everything, same as
+ * before this existed.
+ */
+export async function getAllQuotes(representativeId?: string): Promise<Quote[]> {
   const supabase = await createClient();
+  let query = supabase
+    .from("quotes")
+    .select(QUOTE_COLUMNS)
+    .is("archived_at", null)
+    .gte("sent_date", autoArchiveCutoffIso());
+  if (representativeId) query = query.eq("representative_id", representativeId);
+
   const [{ data, error }, profiles] = await Promise.all([
-    supabase
-      .from("quotes")
-      .select(QUOTE_COLUMNS)
-      .is("archived_at", null)
-      .gte("sent_date", autoArchiveCutoffIso())
-      .order("sent_date", { ascending: false }),
+    query.order("sent_date", { ascending: false }),
     fetchProfileMap(),
   ]);
 
@@ -85,16 +94,19 @@ export async function getAllQuotes(): Promise<Quote[]> {
   return (data ?? []).map((row) => mapQuoteRow(row as QuoteRow, profiles));
 }
 
-export async function getQuotesByStage(stage: QuoteStage): Promise<Quote[]> {
+/** See `getAllQuotes`'s doc comment — `representativeId` restricts the rep role the same way here. */
+export async function getQuotesByStage(stage: QuoteStage, representativeId?: string): Promise<Quote[]> {
   const supabase = await createClient();
+  let query = supabase
+    .from("quotes")
+    .select(QUOTE_COLUMNS)
+    .is("archived_at", null)
+    .gte("sent_date", autoArchiveCutoffIso())
+    .eq("stage", stage);
+  if (representativeId) query = query.eq("representative_id", representativeId);
+
   const [{ data, error }, profiles] = await Promise.all([
-    supabase
-      .from("quotes")
-      .select(QUOTE_COLUMNS)
-      .is("archived_at", null)
-      .gte("sent_date", autoArchiveCutoffIso())
-      .eq("stage", stage)
-      .order("sent_date", { ascending: false }),
+    query.order("sent_date", { ascending: false }),
     fetchProfileMap(),
   ]);
 
@@ -297,25 +309,30 @@ export async function getQuoteDetail(
   return { quote, detail };
 }
 
-export async function getQuoteSummary(): Promise<{
+/** See `getAllQuotes`'s doc comment — `representativeId` restricts the rep role the same way here. */
+export async function getQuoteSummary(representativeId?: string): Promise<{
   totalQuotes: number;
   totalSigned: number;
 }> {
   const supabase = await createClient();
   const cutoff = autoArchiveCutoffIso();
-  const [totalResult, signedResult] = await Promise.all([
-    supabase
-      .from("quotes")
-      .select("id", { count: "exact", head: true })
-      .is("archived_at", null)
-      .gte("sent_date", cutoff),
-    supabase
-      .from("quotes")
-      .select("id", { count: "exact", head: true })
-      .is("archived_at", null)
-      .gte("sent_date", cutoff)
-      .eq("stage", "signed"),
-  ]);
+  let totalQuery = supabase
+    .from("quotes")
+    .select("id", { count: "exact", head: true })
+    .is("archived_at", null)
+    .gte("sent_date", cutoff);
+  let signedQuery = supabase
+    .from("quotes")
+    .select("id", { count: "exact", head: true })
+    .is("archived_at", null)
+    .gte("sent_date", cutoff)
+    .eq("stage", "signed");
+  if (representativeId) {
+    totalQuery = totalQuery.eq("representative_id", representativeId);
+    signedQuery = signedQuery.eq("representative_id", representativeId);
+  }
+
+  const [totalResult, signedResult] = await Promise.all([totalQuery, signedQuery]);
 
   if (totalResult.error) console.error("getQuoteSummary failed", totalResult.error);
   if (signedResult.error) console.error("getQuoteSummary failed", signedResult.error);

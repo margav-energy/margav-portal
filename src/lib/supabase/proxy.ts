@@ -45,9 +45,30 @@ export async function updateSession(request: NextRequest) {
   });
 
   // Do not remove — re-fetches the session and keeps the cookie fresh.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // A stale/invalid refresh-token cookie (an old session, a token revoked
+  // server-side, one left over from a different Supabase project on this
+  // domain) makes `getUser()` *throw* an `AuthApiError` instead of
+  // returning `{ user: null }`. Left uncaught, that's an unhandled error on
+  // every single request from that browser — this proxy runs on every
+  // request — which both spammed the logs and, worse, meant that browser
+  // never got a chance to shed the bad cookie: it just kept sending the
+  // same broken token forever. Treat a thrown auth error the same as
+  // "signed out" and clear it (`scope: "local"` — no network round trip,
+  // just drops the cookie via the `setAll` handler above) so the *next*
+  // request from this browser is clean instead of repeating the failure.
+  let user = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (error) {
+    console.error("updateSession: getUser failed — treating as signed out", error);
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (signOutError) {
+      console.error("updateSession: signOut after failed getUser also failed", signOutError);
+    }
+  }
 
   const { pathname } = request.nextUrl;
 

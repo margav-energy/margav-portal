@@ -60,12 +60,12 @@ function StaticDocumentPreview({
 export function SignForm({
   token,
   request,
-  relatedDocument,
+  relatedDocuments = [],
   surveyDocumentUrl,
 }: {
   token: string;
   request: PublicSignatureRequest;
-  relatedDocument?: PublicRelatedDocument;
+  relatedDocuments?: PublicRelatedDocument[];
   surveyDocumentUrl?: string;
 }) {
   const staticTemplate = isStaticTemplateType(request.documentType) ? DOCUMENT_META[request.documentType] : undefined;
@@ -138,15 +138,15 @@ export function SignForm({
     document.getElementById("sign-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  const relatedDocuments: RelatedDocumentLink[] = [];
+  const relatedDocumentLinks: RelatedDocumentLink[] = [];
   if (surveyDocumentUrl) {
-    relatedDocuments.push({ label: "Boiler survey", href: surveyDocumentUrl, statusLabel: "Submitted" });
+    relatedDocumentLinks.push({ label: "Boiler survey", href: surveyDocumentUrl, statusLabel: "Submitted" });
   }
-  if (relatedDocument) {
+  for (const relatedDocument of relatedDocuments) {
     const label = isStaticTemplateType(relatedDocument.documentType)
       ? DOCUMENT_META[relatedDocument.documentType].relatedLabel
       : "Quote";
-    relatedDocuments.push({
+    relatedDocumentLinks.push({
       label,
       href: `/sign/${relatedDocument.accessToken}`,
       statusLabel:
@@ -210,7 +210,7 @@ export function SignForm({
           />
         )}
 
-        <RelatedDocumentsCard documents={relatedDocuments} />
+        <RelatedDocumentsCard documents={relatedDocumentLinks} />
 
         <form
           id="sign-form"

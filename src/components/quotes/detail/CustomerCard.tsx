@@ -9,6 +9,7 @@ import { PhoneLink } from "@/components/ui/PhoneLink";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuoteCustomer } from "@/components/quotes/actions";
+import { formatUkPhone, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
 import type { CustomerDetails } from "@/types/quote-detail-shared";
 
 function Row({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
@@ -35,13 +36,23 @@ function EditCustomerModal({
   const [email, setEmail] = useState(customer.email);
   const [phone, setPhone] = useState(customer.phone);
   const [address, setAddress] = useState(customer.addressLines.join("\n"));
+  const [error, setError] = useState<string | null>(null);
 
   function handleSave() {
     if (!name.trim()) return;
+    if (email.trim() && !isValidEmail(email.trim())) {
+      setError("Enter a valid email address");
+      return;
+    }
+    if (phone.trim() && !isValidUkPhone(phone.trim())) {
+      setError("Enter a valid UK phone number");
+      return;
+    }
+
     const updated: CustomerDetails = {
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
+      name: toTitleCase(name.trim()),
+      email: email.trim() ? normalizeEmail(email) : "",
+      phone: phone.trim() ? formatUkPhone(phone) : "",
       addressLines: address
         .split("\n")
         .map((line) => line.trim())
@@ -60,6 +71,7 @@ function EditCustomerModal({
             className={inputClassName}
             value={name}
             onChange={(event) => setName(event.target.value)}
+            onBlur={() => setName((current) => toTitleCase(current))}
           />
         </FormField>
         <FormField label="Email" htmlFor="customer-email">
@@ -68,7 +80,11 @@ function EditCustomerModal({
             type="email"
             className={inputClassName}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              setError(null);
+            }}
+            onBlur={() => setEmail((current) => (current.trim() ? normalizeEmail(current) : current))}
           />
         </FormField>
         <FormField label="Phone" htmlFor="customer-phone">
@@ -76,9 +92,14 @@ function EditCustomerModal({
             id="customer-phone"
             className={inputClassName}
             value={phone}
-            onChange={(event) => setPhone(event.target.value)}
+            onChange={(event) => {
+              setPhone(event.target.value);
+              setError(null);
+            }}
+            onBlur={() => setPhone((current) => (current.trim() ? formatUkPhone(current) : current))}
           />
         </FormField>
+        {error && <p className="text-xs text-red-600">{error}</p>}
         <FormField label="Address" htmlFor="customer-address">
           <textarea
             id="customer-address"
