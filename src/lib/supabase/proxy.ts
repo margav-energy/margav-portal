@@ -20,6 +20,23 @@ function isPublicPath(pathname: string): boolean {
 }
 
 /**
+ * Both redirect branches below build a brand-new `NextResponse.redirect(...)`
+ * — which does NOT carry whatever cookies `getUser()`'s `setAll` handler
+ * wrote onto `supabaseResponse` (a refreshed session token, or a cleared
+ * invalid one — see the `catch` below). Without this, a redirect always
+ * drops that write, so a browser with a stale/invalid refresh-token cookie
+ * that gets redirected to /login never actually sheds that cookie: it just
+ * sends the same broken token again on the next request, forever. Copying
+ * the cookies across is what makes the "clear it" half of that fix real.
+ */
+function withCookiesFrom(response: NextResponse, source: NextResponse): NextResponse {
+  for (const cookie of source.cookies.getAll()) {
+    response.cookies.set(cookie.name, cookie.value, cookie);
+  }
+  return response;
+}
+
+/**
  * Called from the root `src/proxy.ts` on every request (Next.js 16 renamed
  * `middleware.ts` to `proxy.ts` — see node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md).
  * Refreshes the Supabase session cookie and gates access to the app.
@@ -76,14 +93,14 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirectTo", pathname);
-    return NextResponse.redirect(url);
+    return withCookiesFrom(NextResponse.redirect(url), supabaseResponse);
   }
 
   if (user && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
-    return NextResponse.redirect(url);
+    return withCookiesFrom(NextResponse.redirect(url), supabaseResponse);
   }
 
   return supabaseResponse;
