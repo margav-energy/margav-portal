@@ -111,6 +111,7 @@ export function BoilerQuoteDetail({
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
   const [isWaiverModalOpen, setIsWaiverModalOpen] = useState(false);
+  const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
 
   // Recomputed from live `boilerUnits`/`extras` state on every render
@@ -160,6 +161,7 @@ export function BoilerQuoteDetail({
   const costBreakdown = boilerCostBreakdown(
     boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
     boilerCostSettings,
+    extras,
   );
   const profitAmount = totalCost - costBreakdown.total;
   const profit: ProfitBreakdown = {
@@ -188,6 +190,18 @@ export function BoilerQuoteDetail({
     if (note) setNotes((current) => [note, ...current]);
   }
 
+  /**
+   * Optimistic, same pattern as `handleToggleFavorite`/`handleToggleLocked`
+   * in QuoteHeader — without this, the click had no visible effect anywhere
+   * on this page (see the "Cancelled" pill this now drives), which read as
+   * "the button doesn't work".
+   */
+  async function handleCancelApp() {
+    setIsAppointmentCancelled(true);
+    const ok = await cancelQuoteAppointment(detail.quoteId, customer.name);
+    if (!ok) setIsAppointmentCancelled(false);
+  }
+
   const primaryUnit = boilerUnits[0];
 
   const actionButtons = buildActionButtons({
@@ -199,7 +213,7 @@ export function BoilerQuoteDetail({
       window.open("https://www.myintergasregistration.co.uk/app/installer_login", "_blank", "noopener,noreferrer");
       void logWarrantyRegistration(detail.quoteId, customer.name);
     },
-    onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
+    onCancelApp: () => void handleCancelApp(),
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
     onInstallationAgreement: () => setIsAgreementModalOpen(true),
@@ -226,6 +240,7 @@ export function BoilerQuoteDetail({
         onChangeRep={(_repId, repName) => setAssignedRep(repName)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         noteCount={notes.length}
+        appointmentCancelled={isAppointmentCancelled}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

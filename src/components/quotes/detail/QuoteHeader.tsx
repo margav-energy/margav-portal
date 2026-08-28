@@ -196,6 +196,7 @@ export function QuoteHeader({
   onChangeRep,
   onOpenHistory,
   noteCount,
+  appointmentCancelled,
 }: {
   quoteId: string;
   customerName: string;
@@ -214,6 +215,12 @@ export function QuoteHeader({
   onChangeRep: (repId: string, repName: string) => void;
   onOpenHistory: () => void;
   noteCount: number;
+  /** Set once the "Cancel App" action button (ActionButtonGrid.tsx) has
+   *  been clicked — see its doc comment in build-action-buttons.ts for why
+   *  this piggybacks on `install_status` instead of a real appointment
+   *  record. Otherwise the click had no visible effect anywhere on this
+   *  page, which read as "the button doesn't work". */
+  appointmentCancelled?: boolean;
 }) {
   const [, startTransition] = useTransition();
   const [isCommsOpen, setIsCommsOpen] = useState(false);
@@ -257,6 +264,7 @@ export function QuoteHeader({
           <Pill label={`V${version}`} className="bg-slate-100 text-slate-500" />
           <Pill label={statusLabel} className="bg-brand-green-mid/10 text-brand-green-mid" />
           <LeadStatusPill quoteId={quoteId} customerName={customerName} status={pipelineStatus} isAdmin={isAdmin} />
+          {appointmentCancelled && <Pill label="Appointment Cancelled" className="bg-red-50 text-red-600" />}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

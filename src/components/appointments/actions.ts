@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
+import { createAppointmentCalendarEvent } from "@/lib/google-calendar";
 import { formatUkPhone, formatUkPostcode, normalizeEmail, toTitleCase } from "@/lib/utils";
 import {
   acceptAppointment,
@@ -86,6 +87,22 @@ export async function createAppointmentAction(
       notes: input.notes,
       createdBy: user.id,
     }).catch((error) => console.error("createQuoteForAppointment failed", error)),
+    // Puts name/address/contact/notes on Lucy's Google Calendar at a glance.
+    // Wrapped the same way — a Calendar API hiccup can never fail the
+    // appointment itself. No-ops (resolves to null) if unconfigured.
+    createAppointmentCalendarEvent({
+      customerName,
+      address: result.address,
+      postcode: input.postcode,
+      phone: input.phone,
+      email: input.email,
+      product: input.product,
+      notes: input.notes,
+      source: input.source,
+      medium: input.medium,
+      date: input.date,
+      startTime: input.time,
+    }).catch((error) => console.error("createAppointmentCalendarEvent failed", error)),
   ]);
 
   revalidateAppointmentPaths();

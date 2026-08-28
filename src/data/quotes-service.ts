@@ -33,7 +33,7 @@ import {
   type QuoteRow,
   type SolarArrayRow,
 } from "@/data/quotes-mappers";
-import type { Quote, QuotePipelineStatus, QuoteStage, UnassignedInstallJob } from "@/types/quote";
+import type { InstallStatus, Quote, QuotePipelineStatus, QuoteStage, UnassignedInstallJob } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
 
@@ -222,6 +222,7 @@ export async function getQuoteDetail(
     version: row.version,
     statusLabel: statusLabelFor(row),
     pipelineStatus: row.pipeline_status as QuotePipelineStatus,
+    installStatus: (row.install_status as InstallStatus | null) ?? undefined,
     assignedRep,
     assignedRepId,
     installerId,
@@ -261,6 +262,7 @@ export async function getQuoteDetail(
     const costBreakdown = boilerCostBreakdown(
       boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
       boilerCostSettings!,
+      extras,
     );
 
     const detail: BoilerQuoteDetail = {

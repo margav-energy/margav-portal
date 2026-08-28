@@ -7,7 +7,7 @@ import type {
   QuoteHistoryEntry,
   QuoteNote,
 } from "@/types/quote-detail-shared";
-import type { QuotePipelineStatus } from "@/types/quote";
+import type { InstallStatus, QuotePipelineStatus } from "@/types/quote";
 
 /**
  * Rich detail-view shape for a solar quote — the app's original (and still
@@ -63,6 +63,11 @@ export interface SolarQuoteDetail {
    *  (see `QUOTE_PIPELINE_STATUS_STYLES`, src/lib/status-colors.ts).
    *  Admin-editable via `updateQuotePipelineStatusAction`. */
   pipelineStatus: QuotePipelineStatus;
+  /** Set to "cancelled" by the "Cancel App" action button — surfaced as a
+   *  "Cancelled" pill in the header (see `QuoteHeader`). Otherwise unused
+   *  here; every other `InstallStatus` value only matters on the
+   *  Dashboard's "signed" quotes panel (`QuoteListRow.tsx`). */
+  installStatus?: InstallStatus;
   assignedRep: string;
   /** Absent when unassigned. */
   assignedRepId?: string;

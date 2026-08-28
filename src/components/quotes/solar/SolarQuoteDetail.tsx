@@ -85,6 +85,7 @@ export function SolarQuoteDetail({
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
 
   const totalCost = detail.pricingBreakdown.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -111,13 +112,25 @@ export function SolarQuoteDetail({
     if (note) setNotes((current) => [note, ...current]);
   }
 
+  /**
+   * Optimistic, same pattern as `handleToggleFavorite`/`handleToggleLocked`
+   * in QuoteHeader — without this, the click had no visible effect anywhere
+   * on this page (see the "Cancelled" pill this now drives), which read as
+   * "the button doesn't work".
+   */
+  async function handleCancelApp() {
+    setIsAppointmentCancelled(true);
+    const ok = await cancelQuoteAppointment(detail.quoteId, customer.name);
+    if (!ok) setIsAppointmentCancelled(false);
+  }
+
   const actionButtons = buildActionButtons({
     quoteId: detail.quoteId,
     customerName: customer.name,
     secondaryPortalLabel: "STAX Portal",
     onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => void logStaxPortalAction(detail.quoteId, customer.name),
-    onCancelApp: () => void cancelQuoteAppointment(detail.quoteId, customer.name),
+    onCancelApp: () => void handleCancelApp(),
     onSurvey: () => void logSurveyAction(detail.quoteId, customer.name),
     onSelectPitchOutcome: handleSelectPitchOutcome,
   });
@@ -142,6 +155,7 @@ export function SolarQuoteDetail({
         onChangeRep={(_repId, repName) => setAssignedRep(repName)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         noteCount={notes.length}
+        appointmentCancelled={isAppointmentCancelled}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

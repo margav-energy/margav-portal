@@ -18,11 +18,14 @@
  * or not a rep itemizes them as an Extras line on the quote — see
  * `flatInstallLineItems`), which is what makes margin shrink as the boiler
  * gets bigger against Margav's fixed `DEFAULT_BOILER_SELL_PRICE`. A quote's
- * "Extras" (Roof kit, Gas run per metre, ...) never factor in here at all —
- * they're priced individually on the Pricing card instead (their sell
- * price is revenue, not a cost to weigh against margin), and the Profit
- * card only ever shows these six rows: Cost price, Installer Cost, Rep
- * Comms, Sell price, Profit, Margin.
+ * "Extras" (Roof kit, Gas run per metre, ...) are still priced individually
+ * on the Pricing card (that's revenue, unchanged) — but whichever of them
+ * have a real supplier cost configured (`extraCostsByName`) now also factor
+ * in here as their own line item (see `extraCostLineItems`), so Profit/
+ * Margin reflect what they actually cost Margav, not just what's charged
+ * for them. An Extra with no configured cost adds nothing here — not every
+ * Extra needs a real cost behind it (e.g. the freebies already counted in
+ * `flatInstallLineItems`, or "Relocation").
  */
 
 /**
@@ -48,9 +51,11 @@ export interface BoilerCostSettings {
    * Real supplier cost for specific "Extras" catalog entries
    * (`src/lib/extras-catalog.ts`) — e.g. `{ "Roof kit": 87.36, "Gas run per
    * metre": 35.88, "Flue extension per metre": 35.88 }` — keyed by the
-   * catalog entry's exact `name`. Not currently read anywhere: Extras are
-   * priced on the Pricing card, not the Profit card (see this file's
-   * top-of-file doc comment) — kept here in case that changes.
+   * catalog entry's exact `name`. Read by `extraCostLineItems` below to
+   * fold each matching Extra into the cost breakdown (Profit/Margin), on
+   * top of its unrelated sell price on the Pricing card. An Extra whose
+   * name has no entry here (a freebie already counted in
+   * `flatInstallLineItems`, or anything not yet priced) costs £0.
    */
   extraCostsByName: Record<string, number>;
 }
@@ -76,11 +81,13 @@ export interface BoilerCostLineItem {
   /**
    * "materials" — the boiler unit itself, flue, Fernox Filter, Gateway —
    * sums to `materialsCost`, what the Profit card shows as "Cost price".
-   * "extra" — Installer Cost and Rep Comms — real costs too, but broken
-   * out as their own rows rather than folded into "Cost price", so the
-   * figure a rep can eyeball against "unit + flue + filter + gateway"
-   * always matches. Both categories count toward `total`, which is what
-   * Profit/Margin actually derive from (see ProfitCard.tsx).
+   * "extra" — Installer Cost, Rep Comms, and now any quote Extra with a
+   * configured real cost (`extraCostsByName`, via `extraCostLineItems`) —
+   * real costs too, but broken out as their own rows rather than folded
+   * into "Cost price", so the figure a rep can eyeball against "unit +
+   * flue + filter + gateway" always matches. Both categories count toward
+   * `total`, which is what Profit/Margin actually derive from (see
+   * ProfitCard.tsx).
    */
   category: "materials" | "extra";
 }
@@ -131,16 +138,36 @@ function flatInstallLineItems(unitCount: number, settings: BoilerCostSettings): 
 }
 
 /**
+ * One line item per quote Extra that has a real supplier cost configured
+ * (`settings.extraCostsByName`) — scaled by the Extra's own quantity
+ * (metres, count, ...), same as its sell price is. An Extra with no entry
+ * there is skipped entirely rather than added at £0, so it doesn't clutter
+ * the Profit card with a zero-amount row.
+ */
+function extraCostLineItems(
+  extras: { name: string; quantity: number }[],
+  settings: BoilerCostSettings,
+): BoilerCostLineItem[] {
+  return extras
+    .filter((extra) => settings.extraCostsByName[extra.name])
+    .map((extra) => ({
+      name: extra.name,
+      amount: settings.extraCostsByName[extra.name] * extra.quantity,
+      category: "extra",
+    }));
+}
+
+/**
  * The boiler quote's full cost breakdown — each boiler unit's own real
- * install cost (unit cost by kW) plus the flat per-install items. `total`
- * is what Profit/Margin derive from; `lineItems` is the same figure broken
- * out for display, in the same order. Deliberately takes no `extras` — a
- * quote's Extras are never costed here at all, see this file's top-of-file
- * doc comment.
+ * install cost (unit cost by kW), the flat per-install items, and whichever
+ * of the quote's Extras have a real supplier cost configured (see
+ * `extraCostLineItems`). `total` is what Profit/Margin derive from;
+ * `lineItems` is the same figure broken out for display, in the same order.
  */
 export function boilerCostBreakdown(
   units: { outputKw: number; make: string; model: string }[],
   settings: BoilerCostSettings,
+  extras: { name: string; quantity: number }[] = [],
 ): BoilerCostBreakdown {
   const unitLineItems: BoilerCostLineItem[] = units.map((unit) => ({
     name: unit.make && unit.model ? `${unit.make} ${unit.model}` : `${unit.outputKw}kW boiler unit`,
@@ -148,7 +175,11 @@ export function boilerCostBreakdown(
     category: "materials",
   }));
 
-  const lineItems = [...unitLineItems, ...flatInstallLineItems(units.length, settings)];
+  const lineItems = [
+    ...unitLineItems,
+    ...flatInstallLineItems(units.length, settings),
+    ...extraCostLineItems(extras, settings),
+  ];
 
   return {
     lineItems,
