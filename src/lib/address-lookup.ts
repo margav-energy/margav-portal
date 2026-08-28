@@ -122,9 +122,18 @@ export async function getAddressDetails(id: string): Promise<AddressDetails | nu
       return null;
     }
 
+    // A numbered house ("12 Elm Street") tags `street_number` + `route` —
+    // but a named property ("Tawny Place") has no `street_number` at all,
+    // Google tags the name itself as `premise` (and a flat/unit within it
+    // as `subpremise`) instead. Reading only street_number/route silently
+    // dropped the property name for every named-property address — this is
+    // what fixed that.
+    const subpremise = componentsByType(components, "subpremise")?.long_name ?? "";
+    const premise = componentsByType(components, "premise")?.long_name ?? "";
     const streetNumber = componentsByType(components, "street_number")?.long_name ?? "";
     const route = componentsByType(components, "route")?.long_name ?? "";
-    const line1 = [streetNumber, route].filter(Boolean).join(" ");
+    const streetLine = [streetNumber, route].filter(Boolean).join(" ");
+    const line1 = [subpremise, premise, streetLine].filter(Boolean).join(", ");
 
     return {
       postcode: componentsByType(components, "postal_code")?.long_name ?? "",

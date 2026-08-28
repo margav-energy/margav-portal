@@ -143,6 +143,8 @@ async function nextSortOrder(
 
 export interface CreateQuoteInput {
   customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
   postcode: string;
   address: string;
   productType: "solar" | "boiler";
@@ -171,6 +173,8 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   const customerName = toTitleCase(input.customerName.trim());
   if (!customerName) return { error: "Customer name is required." };
   const postcode = formatUkPostcode(input.postcode.trim());
+  const customerEmail = input.customerEmail?.trim() ? normalizeEmail(input.customerEmail) : null;
+  const customerPhone = input.customerPhone?.trim() ? formatUkPhone(input.customerPhone) : null;
 
   const supabase = await createClient();
 
@@ -178,6 +182,8 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
     .from("quotes")
     .insert({
       customer_name: customerName,
+      customer_email: customerEmail,
+      customer_phone: customerPhone,
       postcode,
       address: input.address.trim(),
       customer_address_lines: buildCustomerAddressLines(input.address, postcode),

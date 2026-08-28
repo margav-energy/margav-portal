@@ -48,7 +48,7 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-slate-950 px-3 py-5 transition-transform lg:static lg:translate-x-0 lg:transition-[width]",
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-slate-950 px-3 py-5 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:transition-[width]",
           isOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed && "lg:w-16",
         )}
@@ -58,6 +58,17 @@ export function Sidebar({
           <span className={cn("text-lg font-semibold tracking-tight text-white", isCollapsed && "lg:hidden")}>
             {APP_NAME}
           </span>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
+            className={cn(
+              "ml-auto hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white lg:flex",
+              isCollapsed && "lg:ml-0",
+            )}
+          >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden">
           {visibleItems.map((item) =>
@@ -73,19 +84,7 @@ export function Sidebar({
             ),
           )}
         </nav>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
-          className={cn(
-            "mt-2 hidden items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-400 hover:bg-white/5 hover:text-white lg:flex",
-            isCollapsed && "lg:justify-center",
-          )}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronLeft className="h-4 w-4 shrink-0" />}
-          <span className={cn(isCollapsed && "lg:hidden")}>Collapse</span>
-        </button>
-        <p className={cn("px-3 pt-2 text-xs text-slate-500", isCollapsed && "lg:hidden")}>v{APP_VERSION}</p>
+        <p className={cn("px-3 pt-4 text-xs text-slate-500", isCollapsed && "lg:hidden")}>v{APP_VERSION}</p>
       </aside>
     </>
   );
