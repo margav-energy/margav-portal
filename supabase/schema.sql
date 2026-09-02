@@ -225,7 +225,7 @@ create table if not exists public.appointments (
     lifecycle_stage in ('unallocated', 'allocated', 'ready_to_confirm', 'confirmed', 'completed', 'cancelled')
   ),
   calendar_stage text check (
-    calendar_stage in ('allocated', 'booked', 'confirmed', 'not_pitched', 'pitch_and_miss', 'sold')
+    calendar_stage in ('unallocated', 'allocated', 'booked', 'confirmed', 'not_pitched', 'pitch_and_miss', 'sold')
   ),
   acceptance_status text check (acceptance_status in ('pending', 'overdue', 'accepted', 'declined')),
   acceptance_response text,

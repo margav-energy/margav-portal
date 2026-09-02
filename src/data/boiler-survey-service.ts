@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { mapBoilerPropertyDetails } from "@/data/quotes-mappers";
 import { renderSurveySummaryPdf, type SurveyPdfPhoto } from "@/lib/boiler-survey/pdf";
 import {
   emptyBoilerSurveyAnswers,
@@ -430,6 +431,36 @@ export interface PublicBoilerSurvey {
 }
 
 /**
+ * Whoever quoted the job already captured some property details on the
+ * quote's own "Property details" card, before any survey exists — don't
+ * make the on-site surveyor re-enter what's already known. Mutates
+ * `answers` in place, and only ever fills a field that's still
+ * unanswered — never overwrites something the surveyor has actually typed
+ * (including on a part-filled, not-yet-submitted survey, since this runs on
+ * every load, not just the first).
+ */
+async function prefillFromPropertyDetails(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `loadSignedPhotos`'s note above.
+  supabase: SupabaseClient<any>,
+  quoteId: string,
+  answers: BoilerSurveyAnswers,
+): Promise<void> {
+  const { data: quoteRow } = await supabase.from("quotes").select("property_details").eq("id", quoteId).maybeSingle();
+  if (!quoteRow) return;
+
+  const property = mapBoilerPropertyDetails(quoteRow.property_details);
+
+  if (!answers.propertyType && property.propertyType) answers.propertyType = property.propertyType;
+  if (answers.bedrooms === null && property.bedrooms) answers.bedrooms = property.bedrooms;
+  if (answers.bathrooms === null && property.bathrooms) answers.bathrooms = property.bathrooms;
+  if (!answers.currentBoilerType && property.currentBoilerType) answers.currentBoilerType = property.currentBoilerType;
+  if (!answers.currentBoilerAge && property.currentBoilerAge) answers.currentBoilerAge = property.currentBoilerAge;
+  if (!answers.currentBoilerLocation && property.boilerLocation) answers.currentBoilerLocation = property.boilerLocation;
+  if (!answers.existingGasSupply && property.gasSupplyConfirmed) answers.existingGasSupply = property.gasSupplyConfirmed;
+  if (!answers.accessNotes && property.accessNotes) answers.accessNotes = property.accessNotes;
+}
+
+/**
  * Looks up a survey by its unguessable `access_token`. Returns `undefined`
  * for an unknown/expired token — the page renders a generic "link not
  * found" state, never a reason why.
@@ -459,19 +490,7 @@ export async function getPublicBoilerSurvey(token: string): Promise<PublicBoiler
   ]);
 
   const answers = mapAnswers(surveyRow);
-
-  // Whoever quoted the job already captured bedrooms on the property details
-  // card, before any survey exists — don't make the on-site surveyor re-enter
-  // it here too if it hasn't been separately answered on the survey yet.
-  if (answers.bedrooms === null) {
-    const { data: quoteRow } = await supabase
-      .from("quotes")
-      .select("property_details")
-      .eq("id", surveyRow.quote_id)
-      .maybeSingle();
-    const propertyBedrooms = (quoteRow?.property_details as { bedrooms?: unknown } | null)?.bedrooms;
-    if (typeof propertyBedrooms === "number") answers.bedrooms = propertyBedrooms;
-  }
+  await prefillFromPropertyDetails(supabase, surveyRow.quote_id, answers);
 
   return {
     surveyId: surveyRow.id,
