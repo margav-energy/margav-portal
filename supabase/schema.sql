@@ -25,6 +25,9 @@ create table if not exists public.profiles (
   -- Deactivate/reactivate on Settings → Team Members, see
   -- supabase/migrations/0021_teammate_active_status.sql.
   active boolean not null default true,
+  -- Manual per-rep calendar colour (Settings → Team Members) — null falls
+  -- back to the automatic name-hash colour, see 0031_profile_calendar_color.sql.
+  calendar_color text,
   created_at timestamptz not null default now()
 );
 
@@ -233,6 +236,10 @@ create table if not exists public.appointments (
   cancelled_at timestamptz,
   rta_due_date date,
   rebooked_from_id uuid references public.appointments (id),
+  -- Google Calendar event id (see 0032_appointment_calendar_event_id.sql) —
+  -- lets a rebook/delete remove the old calendar entry instead of leaving
+  -- it behind alongside the new one.
+  google_calendar_event_id text,
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

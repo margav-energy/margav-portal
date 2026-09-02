@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { ArrowUpDown, Trash2 } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
@@ -8,10 +8,9 @@ import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { formatDateTime } from "@/lib/format";
 import { getInitials, cn } from "@/lib/utils";
-import { deleteAppointmentAction } from "@/components/appointments/actions";
+import { DeleteAppointmentModal } from "@/components/appointments/DeleteAppointmentModal";
 import type { CancelledAppointment } from "@/types/cancelled-appointment";
 
 type SortKey = "customerName" | "representativeName" | "appointmentAt";
@@ -34,53 +33,6 @@ function rebookHref(appointment: CancelledAppointment): string {
     rebookFrom: appointment.id,
   });
   return `/appointments/create?${params.toString()}`;
-}
-
-function DeleteAppointmentModal({
-  appointment,
-  onClose,
-  onDeleted,
-}: {
-  appointment: CancelledAppointment;
-  onClose: () => void;
-  onDeleted: () => void;
-}) {
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function handleDelete() {
-    setError(null);
-    startTransition(async () => {
-      const result = await deleteAppointmentAction(appointment.id, appointment.customerName);
-      if (!result.ok) {
-        setError(result.error ?? "Could not delete the appointment. Please try again.");
-        return;
-      }
-      onDeleted();
-      onClose();
-    });
-  }
-
-  return (
-    <Modal title="Delete this appointment?" onClose={onClose}>
-      <div className="flex flex-col gap-4 p-5">
-        <p className="text-sm text-slate-600">
-          This permanently removes <span className="font-medium text-slate-900">{appointment.customerName}</span>&rsquo;s
-          cancelled appointment from {formatDateTime(appointment.appointmentAt)}. This can&rsquo;t be undone — any
-          quote linked to it is kept, not deleted.
-        </p>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button variant="danger" onClick={handleDelete} disabled={isPending}>
-            {isPending ? "Deleting…" : "Delete"}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  );
 }
 
 export function RecentlyCancelledTable({
@@ -215,9 +167,14 @@ export function RecentlyCancelledTable({
 
       {deleteTarget && (
         <DeleteAppointmentModal
-          appointment={deleteTarget}
+          appointmentId={deleteTarget.id}
+          customerName={deleteTarget.customerName}
+          dateTimeLabel={formatDateTime(deleteTarget.appointmentAt)}
           onClose={() => setDeleteTarget(null)}
-          onDeleted={() => setDeletedIds((current) => [...current, deleteTarget.id])}
+          onDeleted={() => {
+            setDeletedIds((current) => [...current, deleteTarget.id]);
+            setDeleteTarget(null);
+          }}
         />
       )}
     </div>

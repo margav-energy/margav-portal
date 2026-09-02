@@ -12,7 +12,7 @@ import { BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boil
 import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 const FUEL_TYPES: FuelType[] = ["Mains Gas", "LPG", "Oil"];
 const FLUE_TYPES: FlueType[] = ["Horizontal", "Vertical"];
@@ -108,8 +108,8 @@ function UnitFormModal({
   // clicked. Keyed by the unit being edited (or "new" while adding) so switching between
   // units never mixes up drafts.
   const draftKey = `boiler-unit-draft-${quoteId}-${initial?.id ?? "new"}`;
-  const [form, setForm] = useState<UnitForm>(() => loadDraft<UnitForm>(draftKey) ?? toForm(initial));
-  const [draftRestored] = useState(() => loadDraft<UnitForm>(draftKey) !== null);
+  const [form, setForm] = useState<UnitForm>(() => toForm(initial));
+  const draftRestored = useDraftRestore<UnitForm>(draftKey, setForm);
   const [errors, setErrors] = useState<UnitFormErrors>({});
 
   useAutosaveDraft(draftKey, form);

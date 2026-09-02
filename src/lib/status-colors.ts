@@ -119,6 +119,14 @@ export const APPOINTMENT_STAGE_STYLES: Record<
   AppointmentStage,
   { label: string; blockClassName: string }
 > = {
+  // Distinct from "allocated" below — this is "nobody assigned yet", styled
+  // deliberately muted/dashed so it reads as "not actioned" at a glance
+  // rather than looking the same as an appointment a rep has already been
+  // put on (which previously both showed as "Allocated").
+  unallocated: {
+    label: "Unallocated",
+    blockClassName: "bg-white text-slate-500 border-slate-300 border-dashed",
+  },
   allocated: {
     label: "Allocated",
     blockClassName: "bg-slate-100 text-slate-700 border-slate-300",

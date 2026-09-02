@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { createUserAction, type UserRole } from "@/app/settings/users/actions";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "rep", label: "Rep" },
@@ -25,12 +25,16 @@ type Feedback = { kind: "error"; message: string } | { kind: "success"; email: s
  *  instead of the old manual-SQL-insert-only path. The admin sets the
  *  password themselves rather than one being generated for them. */
 export function CreateUserForm() {
-  const [fullName, setFullName] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.fullName ?? "");
-  const [email, setEmail] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.email ?? "");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   // Password is never restored from a draft — re-entering it is required.
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.role ?? "rep");
-  const [draftRestored, setDraftRestored] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY) !== null);
+  const [role, setRole] = useState<UserRole>("rep");
+  const draftRestored = useDraftRestore<CreateUserDraft>(DRAFT_KEY, (draft) => {
+    setFullName(draft.fullName);
+    setEmail(draft.email);
+    setRole(draft.role);
+  });
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -55,14 +59,13 @@ export function CreateUserForm() {
       setEmail("");
       setPassword("");
       setRole("rep");
-      setDraftRestored(false);
       clearDraft(DRAFT_KEY);
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      {draftRestored && (
+      {draftRestored && feedback?.kind !== "success" && (
         <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Unsaved details from your last session were restored. Re-enter the password.
         </p>

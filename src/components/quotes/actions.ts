@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSiteOrigin } from "@/lib/site-origin";
 import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
+import { allocateAppointment } from "@/data/appointments-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
 import { fetchStreetViewPhotoForQuote } from "@/data/property-photo-service";
 import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest } from "@/data/signature-service";
@@ -340,6 +341,24 @@ export async function getQuoteIdForAppointment(appointmentId: string): Promise<s
   return data.id as string;
 }
 
+export interface QuoteSummaryForAppointment {
+  id: string;
+  reference: string;
+}
+
+/** Like `getQuoteIdForAppointment`, but also returns the quote's reference (e.g. "MarGav-1014") — needed to label a "Delete quote" confirmation without a whole quote-detail fetch. */
+export async function getQuoteSummaryForAppointment(appointmentId: string): Promise<QuoteSummaryForAppointment | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id, reference")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return { id: data.id as string, reference: (data.reference as string | null) ?? "this quote" };
+}
+
 /**
  * Re-points an existing quote at a newly created (rebooked) appointment,
  * instead of `createQuoteForAppointment` creating a fresh blank quote —
@@ -542,7 +561,12 @@ export async function assignQuoteRepresentative(
   if (!user || user.role !== "admin") return null;
   if (!rep) return null;
 
-  const { error } = await supabase.from("quotes").update({ representative_id: repId }).eq("id", quoteId);
+  const { data, error } = await supabase
+    .from("quotes")
+    .update({ representative_id: repId })
+    .eq("id", quoteId)
+    .select("appointment_id")
+    .single();
   if (error) {
     console.error("assignQuoteRepresentative failed", error);
     return null;
@@ -564,9 +588,82 @@ export async function assignQuoteRepresentative(
       title: "New quote assigned to you",
       body: `You've been assigned to ${customerName}'s quote. Log in to Margav Portal to view it.`,
     }),
+    // Keeps the underlying appointment's rep in sync — the calendar reads
+    // `appointments.rep_id` exclusively, not `quotes.representative_id`, so
+    // without this an appointment could sit "Unallocated" on the calendar
+    // forever even though its quote clearly has someone assigned.
+    data?.appointment_id
+      ? allocateAppointment(data.appointment_id as string, repId).catch((err) =>
+          console.error("assignQuoteRepresentative: syncing appointment rep failed", err),
+        )
+      : Promise.resolve(true),
   ]);
   revalidateQuote(quoteId);
+  if (data?.appointment_id) revalidatePath("/appointments/calendar");
   return { repId, repName: rep.fullName };
+}
+
+export interface SyncAppointmentRepsResult {
+  ok: boolean;
+  syncedCount: number;
+  error?: string;
+}
+
+/**
+ * Admin utility (Settings → Team Members) that backfills appointments whose
+ * linked quote has an assigned rep but whose own `appointments.rep_id` was
+ * never set — the gap that existed before `assignQuoteRepresentative` (above)
+ * started keeping the two in sync. Safe to re-run any time: it only fills
+ * appointments that are still genuinely unallocated (`rep_id is null`) —
+ * never overwrites one that already has a rep, even a different one.
+ */
+export async function syncUnallocatedAppointmentReps(): Promise<SyncAppointmentRepsResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, syncedCount: 0, error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { ok: false, syncedCount: 0, error: "Only admins can run this." };
+
+  const supabase = await createClient();
+
+  const { data: quotes, error: quotesError } = await supabase
+    .from("quotes")
+    .select("id, representative_id, appointment_id")
+    .not("representative_id", "is", null)
+    .not("appointment_id", "is", null);
+
+  if (quotesError) {
+    console.error("syncUnallocatedAppointmentReps: quotes lookup failed", quotesError);
+    return { ok: false, syncedCount: 0, error: "Could not look up quotes. Please try again." };
+  }
+  if (!quotes || quotes.length === 0) return { ok: true, syncedCount: 0 };
+
+  const appointmentIds = quotes.map((quote) => quote.appointment_id as string);
+  const { data: appointments, error: appointmentsError } = await supabase
+    .from("appointments")
+    .select("id, rep_id")
+    .in("id", appointmentIds);
+
+  if (appointmentsError) {
+    console.error("syncUnallocatedAppointmentReps: appointments lookup failed", appointmentsError);
+    return { ok: false, syncedCount: 0, error: "Could not look up appointments. Please try again." };
+  }
+
+  const appointmentRepById = new Map((appointments ?? []).map((row) => [row.id as string, row.rep_id as string | null]));
+
+  // Only appointments that exist (present in the map) and are still unallocated.
+  const toSync = quotes.filter((quote) => appointmentRepById.get(quote.appointment_id as string) === null);
+
+  let syncedCount = 0;
+  for (const quote of toSync) {
+    const ok = await allocateAppointment(quote.appointment_id as string, quote.representative_id as string);
+    if (ok) syncedCount++;
+  }
+
+  if (syncedCount > 0) {
+    revalidatePath("/appointments/calendar");
+    revalidatePath("/appointments/unallocated");
+  }
+
+  return { ok: true, syncedCount };
 }
 
 /**

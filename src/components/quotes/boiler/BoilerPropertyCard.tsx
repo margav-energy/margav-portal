@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { BoilerPropertyDetails } from "@/types/boiler-quote";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 /** Standard UK property archetypes — covers the vast majority of jobs. Not
  *  a strict enum on `BoilerPropertyDetails.propertyType` (still plain
@@ -47,8 +47,8 @@ function EditPropertyModal({
 }) {
   // Autosaved locally so an in-progress edit survives a crash/restart before Save is clicked.
   const draftKey = `boiler-property-draft-${quoteId}`;
-  const [form, setForm] = useState(() => loadDraft<BoilerPropertyDetails>(draftKey) ?? property);
-  const [draftRestored] = useState(() => loadDraft<BoilerPropertyDetails>(draftKey) !== null);
+  const [form, setForm] = useState(property);
+  const draftRestored = useDraftRestore<BoilerPropertyDetails>(draftKey, setForm);
 
   useAutosaveDraft(draftKey, form);
 

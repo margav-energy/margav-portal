@@ -6,7 +6,7 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { updateBoilerCostSettingsAction, type BoilerCostSettingsFormState } from "@/app/settings/boiler-costs/actions";
 import type { BoilerCostSettings } from "@/lib/boiler-install-cost";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 const initialState: BoilerCostSettingsFormState = {};
 
@@ -46,13 +46,12 @@ interface CostSettingsDraft {
 
 export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSettings }) {
   const [state, formAction, pending] = useActionState(updateBoilerCostSettingsAction, initialState);
-  const [rows, setRows] = useState<UnitCostRow[]>(
-    () => loadDraft<CostSettingsDraft>(draftKey)?.rows ?? toRows(settings.unitCostsByKw),
-  );
-  const [extraRows, setExtraRows] = useState<ExtraCostRow[]>(
-    () => loadDraft<CostSettingsDraft>(draftKey)?.extraRows ?? toExtraRows(settings.extraCostsByName),
-  );
-  const [draftRestored] = useState(() => loadDraft<CostSettingsDraft>(draftKey) !== null);
+  const [rows, setRows] = useState<UnitCostRow[]>(() => toRows(settings.unitCostsByKw));
+  const [extraRows, setExtraRows] = useState<ExtraCostRow[]>(() => toExtraRows(settings.extraCostsByName));
+  const draftRestored = useDraftRestore<CostSettingsDraft>(draftKey, (draft) => {
+    setRows(draft.rows);
+    setExtraRows(draft.extraRows);
+  });
 
   useAutosaveDraft(draftKey, { rows, extraRows });
 

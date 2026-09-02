@@ -1,5 +1,6 @@
 import { APPOINTMENT_STAGE_STYLES } from "@/lib/status-colors";
 import { getMonthGridDays, isSameDay, toISODate } from "@/lib/date-utils";
+import { repColorFor } from "@/lib/rep-colors";
 import { cn } from "@/lib/utils";
 import type { CalendarAppointment } from "@/types/calendar-appointment";
 
@@ -10,10 +11,15 @@ export function MonthGrid({
   monthDate,
   appointments,
   onSelectDay,
+  onSelectAppointment,
+  repColorsByName,
 }: {
   monthDate: Date;
   appointments: CalendarAppointment[];
   onSelectDay: (day: Date) => void;
+  onSelectAppointment: (appointment: CalendarAppointment) => void;
+  /** Rep full name → their manually-picked calendar colour, if any — see `repColorFor`. */
+  repColorsByName: Record<string, string | undefined>;
 }) {
   const days = getMonthGridDays(monthDate);
   const today = new Date();
@@ -61,17 +67,35 @@ export function MonthGrid({
                 {day.getDate()}
               </span>
               <div className="flex flex-col gap-0.5">
-                {visible.map((appointment) => (
-                  <span
-                    key={appointment.id}
-                    className={cn(
-                      "truncate rounded px-1.5 py-0.5 text-[11px] font-medium",
-                      APPOINTMENT_STAGE_STYLES[appointment.stage].blockClassName,
-                    )}
-                  >
-                    {appointment.customerName}
-                  </span>
-                ))}
+                {visible.map((appointment) => {
+                  const repColor = repColorFor(appointment.repName, repColorsByName[appointment.repName]);
+                  return (
+                    <span
+                      key={appointment.id}
+                      role="button"
+                      tabIndex={0}
+                      title={`${appointment.customerName} · ${appointment.repName}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectAppointment(appointment);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onSelectAppointment(appointment);
+                      }}
+                      style={repColor ? repColor.blockStyle : undefined}
+                      className={cn(
+                        "truncate rounded border px-1.5 py-0.5 text-[11px] font-medium hover:brightness-95",
+                        // Unallocated (no rep) keeps the neutral dashed stage style — nothing to colour it by.
+                        !repColor && APPOINTMENT_STAGE_STYLES[appointment.stage].blockClassName,
+                      )}
+                    >
+                      {appointment.customerName}
+                    </span>
+                  );
+                })}
                 {hiddenCount > 0 && (
                   <span className="text-[11px] text-slate-400">+{hiddenCount} more</span>
                 )}

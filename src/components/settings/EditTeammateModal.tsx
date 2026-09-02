@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { updateTeammateAction } from "@/app/settings/users/actions";
+import { RepColorPicker } from "@/components/settings/RepColorPicker";
 import type { TeammateProfile } from "@/data/profiles-service";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 type EditTeammateDraft = { fullName: string; email: string; phone: string };
 
@@ -16,17 +17,20 @@ type EditTeammateDraft = { fullName: string; email: string; phone: string };
 export function EditTeammateModal({ teammate, onClose }: { teammate: TeammateProfile; onClose: () => void }) {
   const router = useRouter();
   const draftKey = `edit-teammate-draft-${teammate.id}`;
-  const [fullName, setFullName] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.fullName ?? teammate.fullName);
-  const [email, setEmail] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.email ?? teammate.email);
-  const [phone, setPhone] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.phone ?? teammate.phone ?? "");
-  const [draftRestored, setDraftRestored] = useState(() => loadDraft<EditTeammateDraft>(draftKey) !== null);
+  const [fullName, setFullName] = useState(teammate.fullName);
+  const [email, setEmail] = useState(teammate.email);
+  const [phone, setPhone] = useState(teammate.phone ?? "");
+  const draftRestored = useDraftRestore<EditTeammateDraft>(draftKey, (draft) => {
+    setFullName(draft.fullName);
+    setEmail(draft.email);
+    setPhone(draft.phone);
+  });
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useAutosaveDraft(draftKey, { fullName, email, phone });
 
   function handleClose() {
-    setDraftRestored(false);
     clearDraft(draftKey);
     onClose();
   }
@@ -40,7 +44,6 @@ export function EditTeammateModal({ teammate, onClose }: { teammate: TeammatePro
         setError(result.error);
         return;
       }
-      setDraftRestored(false);
       clearDraft(draftKey);
       router.refresh();
       onClose();
@@ -89,6 +92,14 @@ export function EditTeammateModal({ teammate, onClose }: { teammate: TeammatePro
             className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </label>
+
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-slate-700">Calendar colour</span>
+          <RepColorPicker teammateId={teammate.id} currentColor={teammate.calendarColor} />
+          <span className="text-xs text-slate-400">
+            Saves immediately — used to colour their appointments on the calendar. &ldquo;A&rdquo; uses the automatic colour.
+          </span>
+        </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

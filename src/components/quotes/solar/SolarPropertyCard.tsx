@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { SolarPropertyDetails } from "@/types/solar-quote";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 // Electric unit rates carry more precision than `formatCurrency` shows
 // (which rounds to 2dp) — e.g. "£0.2467" rather than "£0.25".
@@ -37,8 +37,8 @@ function EditPropertyModal({
 }) {
   // Autosaved locally so an in-progress edit survives a crash/restart before Save is clicked.
   const draftKey = `solar-property-draft-${quoteId}`;
-  const [form, setForm] = useState(() => loadDraft<SolarPropertyDetails>(draftKey) ?? property);
-  const [draftRestored] = useState(() => loadDraft<SolarPropertyDetails>(draftKey) !== null);
+  const [form, setForm] = useState(property);
+  const draftRestored = useDraftRestore<SolarPropertyDetails>(draftKey, setForm);
 
   useAutosaveDraft(draftKey, form);
 

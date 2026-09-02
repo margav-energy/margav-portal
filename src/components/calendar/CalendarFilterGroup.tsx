@@ -1,6 +1,8 @@
 export interface FilterOption {
   value: string;
   label: string;
+  /** Hex colour for a small swatch dot (e.g. a rep's calendar colour) — omit for no swatch. */
+  dotColor?: string;
 }
 
 export function CalendarFilterGroup({
@@ -51,6 +53,9 @@ export function CalendarFilterGroup({
             onChange={() => toggleOne(option.value)}
             className="h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
           />
+          {option.dotColor && (
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: option.dotColor }} />
+          )}
           {option.label}
         </label>
       ))}

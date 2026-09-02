@@ -170,3 +170,40 @@ export async function createAppointmentCalendarEvent(
     return null;
   }
 }
+
+/**
+ * Removes a previously-created event — used when the appointment it
+ * represents is rebooked (superseded by a new one) or deleted outright, so
+ * Lucy's calendar doesn't keep showing an appointment that's no longer
+ * live. Same fail-soft convention as `createAppointmentCalendarEvent`:
+ * never throws. Treats "already gone" (404/410 — e.g. someone deleted it by
+ * hand on the calendar itself) as success, same as the rest of the
+ * appointment.
+ */
+export async function deleteAppointmentCalendarEvent(eventId: string): Promise<boolean> {
+  if (!isGoogleCalendarConfigured()) return true;
+
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return false;
+
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+
+    if (!response.ok && response.status !== 404 && response.status !== 410) {
+      console.error("Google Calendar event deletion failed", response.status, await response.text());
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("Google Calendar event deletion failed", error);
+    return false;
+  }
+}

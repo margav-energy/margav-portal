@@ -11,7 +11,7 @@ export default async function CalendarPage() {
     requireStaffUser(),
   ]);
 
-  const reps = profiles.map((profile) => profile.fullName);
+  const reps = profiles.map((profile) => ({ fullName: profile.fullName, calendarColor: profile.calendarColor }));
   const savedViews = await getSavedCalendarViews(user.id);
   const favourites = savedViews.map((view) => ({
     id: view.id,
@@ -20,5 +20,12 @@ export default async function CalendarPage() {
     reps: view.filters.reps ?? [],
   }));
 
-  return <CalendarView appointments={appointments} reps={reps} initialFavourites={favourites} />;
+  return (
+    <CalendarView
+      appointments={appointments}
+      reps={reps}
+      initialFavourites={favourites}
+      isAdmin={user.role === "admin"}
+    />
+  );
 }

@@ -13,7 +13,7 @@ import {
 } from "@/components/appointments/address-lookup-actions";
 import type { AddressSuggestion } from "@/lib/address-lookup";
 import { cn, formatUkPhone, formatUkPostcode, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 interface FormValues {
   firstName: string;
@@ -102,13 +102,15 @@ export function CreateAppointmentForm({
   // Keyed per rebook target so a draft from rebooking one customer never leaks into
   // rebooking a different one (or into a from-scratch "new appointment" draft).
   const DRAFT_KEY = rebookFrom ? `appointment-draft-rebook-${rebookFrom}` : "appointment-draft-new";
-  const [values, setValues] = useState<FormValues>(
-    () => loadDraft<FormValues>(DRAFT_KEY) ?? { ...EMPTY_FORM, ...initialValues },
-  );
-  const [draftRestored, setDraftRestored] = useState(() => loadDraft<FormValues>(DRAFT_KEY) !== null);
+  const [values, setValues] = useState<FormValues>({ ...EMPTY_FORM, ...initialValues });
+  const wasDraftRestored = useDraftRestore<FormValues>(DRAFT_KEY, setValues);
+  // This form stays mounted after Cancel (unlike every other autosaved form, which unmounts
+  // on cancel/close) — `wasDraftRestored` has no external reset, so track dismissal ourselves.
+  const [draftDismissed, setDraftDismissed] = useState(false);
+  const draftRestored = wasDraftRestored && !draftDismissed;
   // Distinct from draftRestored: this is "prefilled from the appointment being rebooked",
-  // not "recovered after a crash" — only shown the first time, before any draft exists.
-  const [rebookPrefilled] = useState(() => Boolean(rebookFrom) && !draftRestored && Boolean(initialValues));
+  // not "recovered after a crash" — only true once we know no draft superseded the prefill.
+  const rebookPrefilled = Boolean(rebookFrom) && !wasDraftRestored && Boolean(initialValues) && !draftDismissed;
   const [errors, setErrors] = useState<FormErrors>({});
   const [addressNoticeVisible, setAddressNoticeVisible] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
@@ -256,7 +258,7 @@ export function CreateAppointmentForm({
       setValues(EMPTY_FORM);
       setAddressNoticeVisible(false);
       setAddressSuggestions([]);
-      setDraftRestored(false);
+      setDraftDismissed(true);
       clearDraft(DRAFT_KEY);
     });
   }
@@ -268,7 +270,7 @@ export function CreateAppointmentForm({
     setAddressSuggestions([]);
     setIsSaved(false);
     setSaveError(null);
-    setDraftRestored(false);
+    setDraftDismissed(true);
     clearDraft(DRAFT_KEY);
   }
 

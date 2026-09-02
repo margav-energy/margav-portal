@@ -10,7 +10,7 @@ import { formatCurrency } from "@/lib/format";
 import { createSolarArray, deleteSolarArray, updateSolarArray } from "@/components/quotes/actions";
 import type { SolarArray } from "@/types/solar-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 let localIdCounter = 0;
 
@@ -52,8 +52,8 @@ function ArrayFormModal({
   // clicked. Keyed by the array being edited (or "new" while adding) so switching between
   // arrays never mixes up drafts.
   const draftKey = `solar-array-draft-${quoteId}-${initial?.id ?? "new"}`;
-  const [form, setForm] = useState<ArrayForm>(() => loadDraft<ArrayForm>(draftKey) ?? toForm(initial));
-  const [draftRestored] = useState(() => loadDraft<ArrayForm>(draftKey) !== null);
+  const [form, setForm] = useState<ArrayForm>(() => toForm(initial));
+  const draftRestored = useDraftRestore<ArrayForm>(draftKey, setForm);
 
   useAutosaveDraft(draftKey, form);
 

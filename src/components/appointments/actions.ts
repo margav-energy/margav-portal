@@ -9,16 +9,27 @@ import { formatUkPhone, formatUkPostcode, normalizeEmail, toTitleCase } from "@/
 import {
   acceptAppointment,
   allocateAppointment,
+  cancelAppointment,
   confirmAppointment,
   createAppointment,
   declineAppointment,
   declineConfirmation,
   deleteAppointment,
+  deriveCalendarStage,
+  getAppointmentById,
   getAppointmentSummary,
   logOutcome,
+  setAppointmentCalendarEventId,
   type CreateAppointmentInput,
 } from "@/data/appointments-service";
-import { createQuoteForAppointment, getQuoteIdForAppointment, relinkQuoteToRebookedAppointment } from "@/components/quotes/actions";
+import { getProfileById } from "@/data/profiles-service";
+import type { AppointmentStage } from "@/types/calendar-appointment";
+import {
+  createQuoteForAppointment,
+  getQuoteIdForAppointment,
+  getQuoteSummaryForAppointment,
+  relinkQuoteToRebookedAppointment,
+} from "@/components/quotes/actions";
 
 const APPOINTMENT_PATHS = [
   "/appointments/calendar",
@@ -113,11 +124,73 @@ export async function createAppointmentAction(
       medium: input.medium,
       date: input.date,
       startTime: input.time,
-    }).catch((error) => console.error("createAppointmentCalendarEvent failed", error)),
+    })
+      // Stashes the event id so a future rebook/delete can remove this exact event instead
+      // of leaving it on Lucy's calendar forever alongside whatever replaces it.
+      .then((event) => (event ? setAppointmentCalendarEventId(result.id, event.id) : undefined))
+      .catch((error) => console.error("createAppointmentCalendarEvent failed", error)),
+    // The appointment being rebooked from is superseded by this new one — cancel it so it
+    // drops off the calendar/pipeline lists instead of sitting there as a second, still-live
+    // appointment for the same customer (this is what made a rebooked customer appear twice
+    // on the calendar: the original was never actually closed out).
+    input.rebookedFromId
+      ? cancelAppointment(input.rebookedFromId, "Rebooked to a new date/time").catch((error) =>
+          console.error("cancelAppointment (superseded by rebook) failed", error),
+        )
+      : Promise.resolve(true),
   ]);
 
   revalidateAppointmentPaths();
   return { ok: true };
+}
+
+export interface AppointmentOverview {
+  id: string;
+  customerName: string;
+  phone: string;
+  email: string;
+  address: string;
+  postcode: string;
+  product: string;
+  notes: string;
+  repName: string;
+  /** Freshly derived, not whatever the calendar's list happened to show when the page last loaded. */
+  stage: AppointmentStage;
+  date: string;
+  startTime: string;
+  /** The quote this appointment backs, if any — lets the modal link straight to "View full quote". */
+  quoteId: string | null;
+  /** e.g. "MarGav-1014" — for labelling a "Delete quote" confirmation. Absent when `quoteId` is. */
+  quoteReference: string | null;
+}
+
+/** Backs the calendar's click-to-view overview popup — a live read, so it can't show a stage/rep
+ *  combination that's gone stale since the calendar's own page load (e.g. a rep (re)assigned after). */
+export async function getAppointmentOverviewAction(id: string): Promise<AppointmentOverview | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const [row, quote] = await Promise.all([getAppointmentById(id), getQuoteSummaryForAppointment(id)]);
+  if (!row) return null;
+
+  const rep = await getProfileById(row.rep_id);
+
+  return {
+    id: row.id,
+    customerName: `${row.first_name} ${row.last_name}`.trim(),
+    phone: row.phone,
+    email: row.email ?? "",
+    address: row.address,
+    postcode: row.postcode,
+    product: row.product ?? (row.product_type === "boiler" ? "Boiler" : "Solar"),
+    notes: row.notes ?? "",
+    repName: rep?.fullName ?? "Unallocated",
+    stage: deriveCalendarStage(row),
+    date: row.appointment_date,
+    startTime: row.start_time.slice(0, 5),
+    quoteId: quote?.id ?? null,
+    quoteReference: quote?.reference ?? null,
+  };
 }
 
 export async function allocateAppointmentAction(

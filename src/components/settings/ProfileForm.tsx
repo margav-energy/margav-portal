@@ -5,7 +5,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { updateProfileAction, type ProfileFormState } from "@/app/settings/actions";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 const initialState: ProfileFormState = {};
 const DRAFT_KEY = "profile-draft";
@@ -14,9 +14,12 @@ type ProfileDraft = { fullName: string; phone: string };
 
 export function ProfileForm({ fullName: initialFullName, email, phone: initialPhone }: { fullName: string; email: string; phone: string }) {
   const [state, formAction, pending] = useActionState(updateProfileAction, initialState);
-  const [fullName, setFullName] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY)?.fullName ?? initialFullName);
-  const [phone, setPhone] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY)?.phone ?? initialPhone);
-  const [draftRestored] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY) !== null);
+  const [fullName, setFullName] = useState(initialFullName);
+  const [phone, setPhone] = useState(initialPhone);
+  const draftRestored = useDraftRestore<ProfileDraft>(DRAFT_KEY, (draft) => {
+    setFullName(draft.fullName);
+    setPhone(draft.phone);
+  });
 
   useAutosaveDraft(DRAFT_KEY, { fullName, phone });
 

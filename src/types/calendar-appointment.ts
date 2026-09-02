@@ -1,4 +1,5 @@
 export type AppointmentStage =
+  | "unallocated"
   | "allocated"
   | "booked"
   | "confirmed"

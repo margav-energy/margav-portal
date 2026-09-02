@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { deleteAppointmentCalendarEvent } from "@/lib/google-calendar";
 import { getAllProfiles, type RepProfile } from "@/data/profiles-service";
 import type { AppointmentStage, CalendarAppointment } from "@/types/calendar-appointment";
 import type { AcceptanceStatus, AllocatedAppointment } from "@/types/allocated-appointment";
@@ -65,6 +66,8 @@ export interface AppointmentRow {
   cancelled_at: string | null;
   rta_due_date: string | null;
   rebooked_from_id: string | null;
+  /** Google Calendar event id for this appointment, if the integration is configured and creation succeeded — see `setAppointmentCalendarEventId`. */
+  google_calendar_event_id: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -120,6 +123,14 @@ async function fetchAppointmentRows(): Promise<AppointmentRow[]> {
   }
 
   return (data ?? []) as AppointmentRow[];
+}
+
+/** Full row for a single appointment — backs the calendar's click-to-view overview. */
+export async function getAppointmentById(id: string): Promise<AppointmentRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("appointments").select("*").eq("id", id).single();
+  if (error || !data) return null;
+  return data as AppointmentRow;
 }
 
 export async function getAppointmentSummary(
@@ -204,13 +215,20 @@ export async function getAppointmentForRebook(id: string): Promise<AppointmentRe
  * `outcome` once completed) so every appointment always renders on the
  * calendar with a sensible colour.
  */
-function deriveCalendarStage(row: AppointmentRow): AppointmentStage {
+export function deriveCalendarStage(row: AppointmentRow): AppointmentStage {
+  // Self-heals a stored "allocated" that no longer matches reality — e.g. a
+  // decline/unassign that ran before `calendar_stage` and `rep_id` were
+  // reliably kept in sync, leaving a row that still says "Allocated" with no
+  // rep on it. `calendar_stage` is a hand-maintained cache (see the comment
+  // below); `rep_id` is the actual source of truth for "is someone on this."
+  if (row.calendar_stage === "allocated" && !row.rep_id) return "unallocated";
   if (row.calendar_stage) return row.calendar_stage;
 
   switch (row.lifecycle_stage) {
     case "unallocated":
-      return "allocated";
+      return "unallocated";
     case "allocated":
+      return row.rep_id ? "allocated" : "unallocated";
     case "ready_to_confirm":
       return "booked";
     case "confirmed":
@@ -220,7 +238,7 @@ function deriveCalendarStage(row: AppointmentRow): AppointmentStage {
       if (row.outcome === "No Show" || row.outcome === "Sat - No Sale") return "pitch_and_miss";
       return "not_pitched";
     default:
-      return "allocated";
+      return "unallocated";
   }
 }
 
@@ -437,7 +455,7 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
       appointment_date: input.date,
       start_time: input.time,
       lifecycle_stage: "unallocated",
-      calendar_stage: "allocated",
+      calendar_stage: "unallocated",
       rta_due_date: computeRtaDueDate(input.date),
       rebooked_from_id: input.rebookedFromId ?? null,
       created_by: input.createdBy,
@@ -451,6 +469,13 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   }
 
   return { id: data.id as string, address, productType };
+}
+
+/** Stashes the Google Calendar event id created for this appointment (see `createAppointmentCalendarEvent`) so it can be deleted again later if the appointment is rebooked or removed. */
+export async function setAppointmentCalendarEventId(id: string, eventId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("appointments").update({ google_calendar_event_id: eventId }).eq("id", id);
+  if (error) console.error("setAppointmentCalendarEventId failed", error);
 }
 
 export async function allocateAppointment(id: string, repId: string): Promise<boolean> {
@@ -502,7 +527,7 @@ export async function declineAppointment(id: string): Promise<boolean> {
       rep_id: null,
       acceptance_status: null,
       lifecycle_stage: "unallocated",
-      calendar_stage: "allocated",
+      calendar_stage: "unallocated",
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -591,6 +616,12 @@ export async function logOutcome(id: string, outcome: string): Promise<boolean> 
 export async function deleteAppointment(id: string): Promise<boolean> {
   const supabase = await createClient();
 
+  const { data: row } = await supabase
+    .from("appointments")
+    .select("google_calendar_event_id")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error: unlinkError } = await supabase
     .from("appointments")
     .update({ rebooked_from_id: null })
@@ -605,11 +636,27 @@ export async function deleteAppointment(id: string): Promise<boolean> {
     console.error("deleteAppointment failed", error);
     return false;
   }
+
+  // Same reasoning as `cancelAppointment` — don't leave a phantom event on Lucy's calendar.
+  const eventId = row?.google_calendar_event_id as string | null | undefined;
+  if (eventId) {
+    deleteAppointmentCalendarEvent(eventId).catch((err) =>
+      console.error("deleteAppointment: removing calendar event failed", err),
+    );
+  }
+
   return true;
 }
 
 export async function cancelAppointment(id: string, reason: string): Promise<boolean> {
   const supabase = await createClient();
+
+  const { data: row } = await supabase
+    .from("appointments")
+    .select("google_calendar_event_id")
+    .eq("id", id)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("appointments")
     .update({
@@ -624,6 +671,18 @@ export async function cancelAppointment(id: string, reason: string): Promise<boo
     console.error("cancelAppointment failed", error);
     return false;
   }
+
+  // Removes it from Lucy's Google Calendar too — otherwise a rebooked (or
+  // otherwise cancelled) appointment kept showing there forever alongside
+  // whatever superseded it. Fire-and-forget: a calendar hiccup shouldn't
+  // fail the cancellation itself, same convention as creating the event.
+  const eventId = row?.google_calendar_event_id as string | null | undefined;
+  if (eventId) {
+    deleteAppointmentCalendarEvent(eventId).catch((err) =>
+      console.error("cancelAppointment: removing calendar event failed", err),
+    );
+  }
+
   return true;
 }
 

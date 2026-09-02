@@ -17,13 +17,17 @@ export interface RepProfile {
   /** Self-service, same as full_name — shown in "Get In Touch" on the
    *  quote document. Absent until the person sets one in Settings. */
   phone?: string;
+  /** Hex, e.g. "#8b5cf6" — manually picked on Settings → Team Members. Absent
+   *  means "use the automatic name-hash colour" (see `repColorFor` in
+   *  src/lib/rep-colors.ts), not "no colour at all". */
+  calendarColor?: string;
 }
 
 export async function getAllProfiles(): Promise<RepProfile[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, role, phone")
+    .select("id, full_name, initials, role, phone, calendar_color")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -37,6 +41,7 @@ export async function getAllProfiles(): Promise<RepProfile[]> {
     initials: row.initials || "?",
     role: (row.role as "admin" | "rep" | "installer") ?? "rep",
     phone: row.phone || undefined,
+    calendarColor: row.calendar_color || undefined,
   }));
 }
 
@@ -58,7 +63,7 @@ export async function getTeammatesForAdmin(): Promise<TeammateProfile[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, role, phone, active")
+    .select("id, full_name, initials, role, phone, active, calendar_color")
     .order("full_name", { ascending: true });
 
   if (error) {
@@ -89,6 +94,7 @@ export async function getTeammatesForAdmin(): Promise<TeammateProfile[]> {
     phone: row.phone || undefined,
     email: emailById.get(row.id) ?? "",
     active: row.active ?? true,
+    calendarColor: row.calendar_color || undefined,
   }));
 }
 
@@ -97,7 +103,7 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, initials, role, phone")
+    .select("id, full_name, initials, role, phone, calendar_color")
     .eq("id", id)
     .single();
 
@@ -109,5 +115,6 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
     initials: data.initials || "?",
     role: (data.role as "admin" | "rep" | "installer") ?? "rep",
     phone: data.phone || undefined,
+    calendarColor: data.calendar_color || undefined,
   };
 }

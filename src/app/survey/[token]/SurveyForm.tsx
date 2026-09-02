@@ -9,7 +9,7 @@ import { removeSurveyPhoto, submitBoilerSurvey, uploadSurveyPhoto } from "@/app/
 import { BOILER_SURVEY_SECTIONS, bathroomLocationOptions, type BoilerSurveyFieldConfig } from "@/lib/boiler-survey-fields";
 import { PHOTO_CHECKLIST_ITEMS, type BoilerSurveyAnswers, type BoilerSurveyPhoto, type PhotoChecklistItemKey } from "@/types/boiler-survey";
 import type { PublicBoilerSurvey } from "@/data/boiler-survey-service";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 function Field({
   field,
@@ -167,8 +167,8 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
   // everything typed since the last submit — this form is often filled in over a long
   // on-site session. Keyed by token so different survey links never collide.
   const draftKey = `survey-draft-${token}`;
-  const [answers, setAnswers] = useState<BoilerSurveyAnswers>(() => loadDraft<BoilerSurveyAnswers>(draftKey) ?? survey.answers);
-  const [draftRestored] = useState(() => loadDraft<BoilerSurveyAnswers>(draftKey) !== null);
+  const [answers, setAnswers] = useState<BoilerSurveyAnswers>(survey.answers);
+  const draftRestored = useDraftRestore<BoilerSurveyAnswers>(draftKey, setAnswers);
   const [photos, setPhotos] = useState<BoilerSurveyPhoto[]>(survey.photos);
   const [status, setStatus] = useState(survey.status);
   const [isPending, startTransition] = useTransition();

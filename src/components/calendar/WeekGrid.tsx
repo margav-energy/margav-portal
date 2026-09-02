@@ -15,9 +15,14 @@ const GRID_HEIGHT = CALENDAR_HOURS.length * CALENDAR_ROW_HEIGHT;
 export function WeekGrid({
   days,
   appointments,
+  onSelectAppointment,
+  repColorsByName,
 }: {
   days: Date[];
   appointments: CalendarAppointment[];
+  onSelectAppointment: (appointment: CalendarAppointment) => void;
+  /** Rep full name → their manually-picked calendar colour, if any — see `repColorFor`. */
+  repColorsByName: Record<string, string | undefined>;
 }) {
   const today = new Date();
 
@@ -80,7 +85,12 @@ export function WeekGrid({
                   <div key={hour} style={{ height: CALENDAR_ROW_HEIGHT }} className="border-b border-slate-50" />
                 ))}
                 {dayAppointments.map((appointment) => (
-                  <AppointmentBlock key={appointment.id} appointment={appointment} />
+                  <AppointmentBlock
+                    key={appointment.id}
+                    appointment={appointment}
+                    onSelect={onSelectAppointment}
+                    calendarColor={repColorsByName[appointment.repName]}
+                  />
                 ))}
                 {nowOffset !== null && (
                   <div style={{ top: nowOffset }} className="absolute right-0 left-0 z-20 flex items-center">

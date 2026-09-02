@@ -5,9 +5,11 @@ import { CalendarToolbar } from "@/components/calendar/CalendarToolbar";
 import { CalendarSidebarFilters } from "@/components/calendar/CalendarSidebarFilters";
 import { WeekGrid } from "@/components/calendar/WeekGrid";
 import { MonthGrid } from "@/components/calendar/MonthGrid";
+import { AppointmentOverviewModal } from "@/components/calendar/AppointmentOverviewModal";
 import type { FavouriteView } from "@/components/calendar/FavouritesPanel";
 import { deleteFavouriteViewAction, saveFavouriteViewAction } from "@/components/calendar/actions";
 import { APPOINTMENT_STAGE_STYLES } from "@/lib/status-colors";
+import { repColorFor } from "@/lib/rep-colors";
 import {
   addDays,
   formatDayLabel,
@@ -25,20 +27,39 @@ const STAGE_OPTIONS = (Object.keys(APPOINTMENT_STAGE_STYLES) as AppointmentStage
   (stage) => ({ value: stage, label: APPOINTMENT_STAGE_STYLES[stage].label }),
 );
 
+export interface CalendarRep {
+  fullName: string;
+  /** Manually picked on Settings → Team Members, if any — see `repColorFor`. */
+  calendarColor?: string;
+}
+
 export function CalendarView({
   appointments,
   reps,
   initialFavourites = [],
+  isAdmin,
 }: {
   appointments: CalendarAppointment[];
-  reps: string[];
+  reps: CalendarRep[];
   initialFavourites?: FavouriteView[];
+  isAdmin: boolean;
 }) {
   const repOptions = useMemo(
     () => [
       { value: "Unallocated", label: "Unallocated" },
-      ...reps.map((rep) => ({ value: rep, label: rep })),
+      ...reps.map((rep) => ({
+        value: rep.fullName,
+        label: rep.fullName,
+        dotColor: repColorFor(rep.fullName, rep.calendarColor)?.hex,
+      })),
     ],
+    [reps],
+  );
+
+  // Keyed by name (same key `CalendarAppointment.repName` uses) so blocks can look up a rep's
+  // manually-picked colour, if any, without needing a repId on every appointment.
+  const repColorsByName = useMemo(
+    () => Object.fromEntries(reps.map((rep) => [rep.fullName, rep.calendarColor])),
     [reps],
   );
 
@@ -54,6 +75,7 @@ export function CalendarView({
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [favourites, setFavourites] = useState<FavouriteView[]>(initialFavourites);
   const [, startFavouriteTransition] = useTransition();
+  const [selectedAppointment, setSelectedAppointment] = useState<CalendarAppointment | null>(null);
 
   const filteredAppointments = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -147,14 +169,35 @@ export function CalendarView({
               monthDate={anchorDate}
               appointments={filteredAppointments}
               onSelectDay={handleSelectMonthDay}
+              onSelectAppointment={setSelectedAppointment}
+              repColorsByName={repColorsByName}
             />
           ) : viewMode === "day" ? (
-            <WeekGrid days={[anchorDate]} appointments={filteredAppointments} />
+            <WeekGrid
+              days={[anchorDate]}
+              appointments={filteredAppointments}
+              onSelectAppointment={setSelectedAppointment}
+              repColorsByName={repColorsByName}
+            />
           ) : (
-            <WeekGrid days={weekDays} appointments={filteredAppointments} />
+            <WeekGrid
+              days={weekDays}
+              appointments={filteredAppointments}
+              onSelectAppointment={setSelectedAppointment}
+              repColorsByName={repColorsByName}
+            />
           )}
         </div>
       </div>
+
+      {selectedAppointment && (
+        <AppointmentOverviewModal
+          key={selectedAppointment.id}
+          appointment={selectedAppointment}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedAppointment(null)}
+        />
+      )}
     </div>
   );
 }

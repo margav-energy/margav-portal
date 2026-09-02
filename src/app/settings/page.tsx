@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { ProfileForm } from "@/components/settings/ProfileForm";
 import { PasswordForm } from "@/components/settings/PasswordForm";
 import { SignatureSettingsCard } from "@/components/settings/SignatureSettingsCard";
+import { SyncAppointmentRepsCard } from "@/components/settings/SyncAppointmentRepsCard";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
@@ -65,6 +66,8 @@ export default async function SettingsPage() {
           </Button>
         </Card>
       )}
+
+      {user.role === "admin" && <SyncAppointmentRepsCard />}
 
       {user.role === "admin" && (
         <Card className="flex items-center justify-between gap-4 p-5">

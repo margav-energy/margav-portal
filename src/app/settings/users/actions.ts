@@ -8,6 +8,7 @@ import { logActivity } from "@/lib/activity";
 import { getInitials } from "@/lib/utils";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { getSiteOrigin } from "@/lib/site-origin";
+import { REP_COLOR_PALETTE_HEX } from "@/lib/rep-colors";
 
 export type UserRole = "admin" | "rep" | "installer";
 
@@ -262,5 +263,37 @@ export async function setTeammateActiveAction(userId: string, active: boolean): 
   });
 
   revalidatePath("/settings/users");
+  return {};
+}
+
+export interface SetTeammateCalendarColorResult {
+  error?: string;
+}
+
+/**
+ * Manually pins a teammate's calendar colour (Settings → Team Members),
+ * overriding the automatic name-hash colour every rep gets by default (see
+ * `repColorFor` in src/lib/rep-colors.ts). `colorHex: null` clears the
+ * override and reverts them to the automatic colour.
+ */
+export async function setTeammateCalendarColorAction(
+  userId: string,
+  colorHex: string | null,
+): Promise<SetTeammateCalendarColorResult> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { error: "Only admins can set a teammate's calendar colour." };
+  if (colorHex && !REP_COLOR_PALETTE_HEX.includes(colorHex)) return { error: "Not a valid colour." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ calendar_color: colorHex }).eq("id", userId);
+
+  if (error) {
+    console.error("setTeammateCalendarColorAction failed", error);
+    return { error: "Could not update this teammate's colour. Please try again." };
+  }
+
+  revalidatePath("/settings/users");
+  revalidatePath("/appointments/calendar");
   return {};
 }

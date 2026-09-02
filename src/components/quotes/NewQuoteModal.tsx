@@ -13,7 +13,7 @@ import {
 } from "@/components/appointments/address-lookup-actions";
 import type { AddressSuggestion } from "@/lib/address-lookup";
 import { formatUkPhone, formatUkPostcode, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
-import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 
 const DRAFT_KEY = "quote-draft-new";
 
@@ -29,8 +29,8 @@ const EMPTY: CreateQuoteInput = {
 };
 
 export function NewQuoteModal({ onClose }: { onClose: () => void }) {
-  const [values, setValues] = useState<CreateQuoteInput>(() => loadDraft<CreateQuoteInput>(DRAFT_KEY) ?? EMPTY);
-  const [draftRestored] = useState(() => loadDraft<CreateQuoteInput>(DRAFT_KEY) !== null);
+  const [values, setValues] = useState<CreateQuoteInput>(EMPTY);
+  const draftRestored = useDraftRestore<CreateQuoteInput>(DRAFT_KEY, setValues);
   const [error, setError] = useState<string | undefined>();
   const [emailError, setEmailError] = useState<string | undefined>();
   const [phoneError, setPhoneError] = useState<string | undefined>();
