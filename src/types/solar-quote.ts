@@ -58,6 +58,11 @@ export interface SolarQuoteDetail {
   quoteId: string;
   /** The appointment that spawned this quote, if any (see `quotes.appointment_id`) — manually created quotes have none. Used to prefill the "Rebook App" flow. */
   appointmentId?: string;
+  /** The original sales appointment's date/time — not the install date (`installDate` below) or the boiler survey date. ISO date, e.g. "2026-09-12". Absent alongside `appointmentId`. */
+  appointmentDate?: string;
+  /** "HH:mm" (or "HH:mm:ss") */
+  appointmentStartTime?: string;
+  appointmentEndTime?: string;
   reference: string;
   version: number;
   statusLabel: string;

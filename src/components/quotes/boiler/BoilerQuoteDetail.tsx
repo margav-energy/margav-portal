@@ -242,6 +242,9 @@ export function BoilerQuoteDetail({
         onOpenHistory={() => setIsHistoryOpen(true)}
         noteCount={notes.length}
         appointmentCancelled={isAppointmentCancelled}
+        appointmentDate={detail.appointmentDate}
+        appointmentStartTime={detail.appointmentStartTime}
+        appointmentEndTime={detail.appointmentEndTime}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">

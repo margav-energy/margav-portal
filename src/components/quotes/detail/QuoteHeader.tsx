@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { LeadStatusPill } from "@/components/quotes/detail/LeadStatusPill";
 import { DeleteQuoteModal } from "@/components/quotes/detail/DeleteQuoteModal";
+import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   logCommunicationsOpened,
@@ -199,6 +200,9 @@ export function QuoteHeader({
   onOpenHistory,
   noteCount,
   appointmentCancelled,
+  appointmentDate,
+  appointmentStartTime,
+  appointmentEndTime,
 }: {
   quoteId: string;
   customerName: string;
@@ -223,6 +227,10 @@ export function QuoteHeader({
    *  record. Otherwise the click had no visible effect anywhere on this
    *  page, which read as "the button doesn't work". */
   appointmentCancelled?: boolean;
+  /** The original sales appointment this quote was spawned from — not the install date. Absent for manually-created quotes. */
+  appointmentDate?: string;
+  appointmentStartTime?: string;
+  appointmentEndTime?: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -269,6 +277,13 @@ export function QuoteHeader({
           <Pill label={statusLabel} className="bg-brand-green-mid/10 text-brand-green-mid" />
           <LeadStatusPill quoteId={quoteId} customerName={customerName} status={pipelineStatus} isAdmin={isAdmin} />
           {appointmentCancelled && <Pill label="Appointment Cancelled" className="bg-red-50 text-red-600" />}
+          {appointmentDate && (
+            <span className="text-xs text-slate-500">
+              Appointment: {formatDate(appointmentDate)}
+              {appointmentStartTime &&
+                ` · ${appointmentStartTime.slice(0, 5)}${appointmentEndTime ? `–${appointmentEndTime.slice(0, 5)}` : ""}`}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

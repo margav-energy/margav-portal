@@ -159,41 +159,48 @@ export async function getQuoteDetail(
   const row = quoteRow as QuoteRow;
   const isBoiler = row.product_type === "boiler";
 
-  const [unitsResult, lineItemsResult, notesResult, historyResult, boilerCostSettings] = await Promise.all([
-    isBoiler
-      ? supabase
-          .from("boiler_units")
-          .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, price, items, sort_order")
-          .eq("quote_id", id)
-          .order("sort_order", { ascending: true })
-      : supabase
-          .from("solar_arrays")
-          .select("id, label, shade_factor, orientation, pitch_degrees, items, sort_order")
-          .eq("quote_id", id)
-          .order("sort_order", { ascending: true }),
-    supabase
-      .from("quote_line_items")
-      .select("id, section, name, description, quantity, unit_price, sort_order")
-      .eq("quote_id", id)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("quote_notes")
-      .select("id, author_id, body, created_at")
-      .eq("quote_id", id)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("quote_history")
-      .select("id, actor_id, is_system, description, created_at")
-      .eq("quote_id", id)
-      .order("created_at", { ascending: false }),
-    // Only boiler quotes need this — skip the extra round trip for solar.
-    isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
-  ]);
+  const [unitsResult, lineItemsResult, notesResult, historyResult, boilerCostSettings, appointmentResult] =
+    await Promise.all([
+      isBoiler
+        ? supabase
+            .from("boiler_units")
+            .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, price, items, sort_order")
+            .eq("quote_id", id)
+            .order("sort_order", { ascending: true })
+        : supabase
+            .from("solar_arrays")
+            .select("id, label, shade_factor, orientation, pitch_degrees, items, sort_order")
+            .eq("quote_id", id)
+            .order("sort_order", { ascending: true }),
+      supabase
+        .from("quote_line_items")
+        .select("id, section, name, description, quantity, unit_price, sort_order")
+        .eq("quote_id", id)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("quote_notes")
+        .select("id, author_id, body, created_at")
+        .eq("quote_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("quote_history")
+        .select("id, actor_id, is_system, description, created_at")
+        .eq("quote_id", id)
+        .order("created_at", { ascending: false }),
+      // Only boiler quotes need this — skip the extra round trip for solar.
+      isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
+      // The original sales appointment this quote was spawned from, if any — shown at the
+      // top of the quote detail page, not otherwise fetched anywhere in this module.
+      row.appointment_id
+        ? supabase.from("appointments").select("appointment_date, start_time, end_time").eq("id", row.appointment_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
   if (unitsResult.error) console.error("getQuoteDetail units failed", unitsResult.error);
   if (lineItemsResult.error) console.error("getQuoteDetail line items failed", lineItemsResult.error);
   if (notesResult.error) console.error("getQuoteDetail notes failed", notesResult.error);
   if (historyResult.error) console.error("getQuoteDetail history failed", historyResult.error);
+  if (appointmentResult.error) console.error("getQuoteDetail appointment failed", appointmentResult.error);
 
   const lineItemRows = (lineItemsResult.data ?? []) as LineItemRow[];
   const extras = lineItemRows.filter((item) => item.section === "extra").map(mapLineItemRow);
@@ -217,8 +224,15 @@ export async function getQuoteDetail(
   const discountAmount = Number(row.discount_amount ?? 0);
   const depositAmount = Number(row.deposit_amount ?? 0);
 
+  const appointmentRow = appointmentResult.data as { appointment_date: string; start_time: string; end_time: string | null } | null;
+
   const shared = {
     appointmentId: row.appointment_id ?? undefined,
+    /** ISO date, e.g. "2026-09-12" — the original sales appointment, not the install date (`installDate` below) or the boiler survey date. */
+    appointmentDate: appointmentRow?.appointment_date ?? undefined,
+    /** "HH:mm" (or "HH:mm:ss") */
+    appointmentStartTime: appointmentRow?.start_time ?? undefined,
+    appointmentEndTime: appointmentRow?.end_time ?? undefined,
     reference: referenceFor(row),
     version: row.version,
     statusLabel: statusLabelFor(row),
