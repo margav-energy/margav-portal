@@ -12,34 +12,36 @@ import type { BoilerSurveyAnswers } from "@/types/boiler-survey";
 export type BoilerSurveyFieldConfig =
   | { key: keyof BoilerSurveyAnswers; label: string; type: "text" | "textarea" }
   | { key: keyof BoilerSurveyAnswers; label: string; type: "number" }
-  | { key: keyof BoilerSurveyAnswers; label: string; type: "select"; options: string[] }
-  /** Dropdown whose options are generated from the survey's `bathrooms` count (see `bathroomLocationOptions`), rather than a fixed list. */
-  | { key: keyof BoilerSurveyAnswers; label: string; type: "bathroom-select" };
+  | { key: keyof BoilerSurveyAnswers; label: string; type: "select"; options: string[] };
 
 export const YES_NO = ["Yes", "No"];
-
-/**
- * Boiler location is tracked as "which bathroom" rather than free text —
- * options are generated from however many bathrooms were entered elsewhere
- * on the survey. "Other" is always included as a fallback for the rare job
- * where the boiler sits outside a bathroom (airing cupboard, kitchen, etc.)
- * or before a bathroom count has been entered yet.
- */
-export function bathroomLocationOptions(bathrooms: number | null): string[] {
-  const count = Math.max(0, Math.floor(bathrooms ?? 0));
-  return [...Array.from({ length: count }, (_, i) => `Bathroom ${i + 1}`), "Other"];
-}
+export const CURRENT_BOILER_TYPE_OPTIONS = ["Combi", "System", "Regular"];
+export const FUEL_TYPE_OPTIONS = ["Gas", "LPG", "Oil", "Electric"];
+/** Standard UK property archetypes — covers the vast majority of jobs. Shared
+ *  with the boiler quote's property-details card (`BoilerPropertyCard.tsx`)
+ *  so the two never drift apart. Not a strict enum on the underlying answer
+ *  (still plain `string`): an older quote/survey may already have a
+ *  free-text value entered before this became a dropdown, and that value
+ *  shouldn't silently disappear or get overwritten just because it isn't on
+ *  this list — see the "preserve a pre-existing value" handling in
+ *  `SurveyForm.tsx`'s `Field` and `BoilerPropertyCard.tsx`'s dropdown. */
+export const PROPERTY_TYPE_OPTIONS = [
+  "Detached",
+  "Semi-Detached",
+  "Terraced",
+  "End Terrace",
+  "Bungalow",
+  "Flat / Apartment",
+  "Maisonette",
+  "Other",
+];
 
 export const BOILER_SURVEY_SECTIONS: { title: string; fields: BoilerSurveyFieldConfig[] }[] = [
   {
     title: "Property & Access",
     fields: [
-      { key: "propertyType", label: "Property type (house / flat / bungalow)", type: "text" },
+      { key: "propertyType", label: "Property type", type: "select", options: PROPERTY_TYPE_OPTIONS },
       { key: "propertyAge", label: "Approximate age of property", type: "text" },
-      // Captured here (ahead of the Current Heating System / New Installation
-      // sections) so the "which bathroom" boiler-location dropdowns below have
-      // options to offer by the time the surveyor reaches them.
-      { key: "bathrooms", label: "Number of bathrooms / showers", type: "number" },
       { key: "occupancy", label: "Owner-occupied or rented?", type: "select", options: ["Owner-occupied", "Rented"] },
       { key: "landlordPermissionConfirmed", label: "If rented, is landlord permission confirmed?", type: "select", options: [...YES_NO, "N/A"] },
       { key: "accessNotes", label: "Parking restrictions or access issues", type: "textarea" },
@@ -51,19 +53,20 @@ export const BOILER_SURVEY_SECTIONS: { title: string; fields: BoilerSurveyFieldC
     fields: [
       { key: "currentBoilerMakeModel", label: "Current boiler make & model", type: "text" },
       { key: "currentBoilerAge", label: "Approximate age of current boiler", type: "text" },
-      { key: "currentBoilerType", label: "Boiler type (combi / system / regular)", type: "text" },
-      { key: "currentFuelType", label: "Fuel type (gas / LPG / oil / electric)", type: "text" },
+      { key: "currentBoilerType", label: "Boiler type (combi / system / regular)", type: "select", options: CURRENT_BOILER_TYPE_OPTIONS },
+      { key: "currentFuelType", label: "Fuel type (gas / LPG / oil / electric)", type: "select", options: FUEL_TYPE_OPTIONS },
       { key: "knownFaults", label: "Known faults or issues", type: "textarea" },
-      { key: "currentBoilerLocation", label: "Current boiler location", type: "bathroom-select" },
+      { key: "currentBoilerLocation", label: "Current boiler location", type: "text" },
       { key: "currentBoilerWorking", label: "Is current boiler still working?", type: "select", options: YES_NO },
     ],
   },
   {
     title: "New Installation Requirements",
     fields: [
-      { key: "desiredBoilerLocation", label: "Desired new boiler location", type: "bathroom-select" },
+      { key: "desiredBoilerLocation", label: "Desired new boiler location", type: "text" },
       { key: "reasonForReplacement", label: "Reason for replacement", type: "textarea" },
       { key: "bedrooms", label: "Number of bedrooms", type: "number" },
+      { key: "bathrooms", label: "Number of bathrooms / showers", type: "number" },
       { key: "radiators", label: "Number of radiators", type: "number" },
       { key: "occupants", label: "Number of occupants", type: "number" },
       { key: "simultaneousHotWaterDemand", label: "Simultaneous hot water demand (e.g. power shower + bath)", type: "textarea" },

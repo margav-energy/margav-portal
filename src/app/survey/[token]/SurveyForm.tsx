@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
 import { removeSurveyPhoto, submitBoilerSurvey, uploadSurveyPhoto } from "@/app/survey/[token]/actions";
-import { BOILER_SURVEY_SECTIONS, bathroomLocationOptions, type BoilerSurveyFieldConfig } from "@/lib/boiler-survey-fields";
+import { BOILER_SURVEY_SECTIONS, type BoilerSurveyFieldConfig } from "@/lib/boiler-survey-fields";
 import { PHOTO_CHECKLIST_ITEMS, type BoilerSurveyAnswers, type BoilerSurveyPhoto, type PhotoChecklistItemKey } from "@/types/boiler-survey";
 import type { PublicBoilerSurvey } from "@/data/boiler-survey-service";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
@@ -14,26 +14,22 @@ import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosa
 function Field({
   field,
   value,
-  bathrooms,
   onChange,
 }: {
   field: BoilerSurveyFieldConfig;
   value: string | number | null;
-  /** Only read for `type: "bathroom-select"` — see `bathroomLocationOptions`. */
-  bathrooms: number | null;
   onChange: (value: string | number | null) => void;
 }) {
   const id = field.key;
 
-  if (field.type === "select" || field.type === "bathroom-select") {
-    const options = field.type === "select" ? field.options : bathroomLocationOptions(bathrooms);
+  if (field.type === "select") {
     return (
       <FormField label={field.label} htmlFor={id}>
         <select id={id} className={inputClassName} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
           <option value="">—</option>
           {/* Preserves a pre-existing free-text value entered before this became a dropdown, so it isn't silently wiped. */}
-          {value && !options.includes(value as string) && <option value={value as string}>{value as string}</option>}
-          {options.map((option) => (
+          {value && !field.options.includes(value as string) && <option value={value as string}>{value as string}</option>}
+          {field.options.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -238,7 +234,6 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
                   key={field.key}
                   field={field}
                   value={answers[field.key] as string | number | null}
-                  bathrooms={answers.bathrooms}
                   onChange={(value) => set(field.key, value as never)}
                 />
               ))}

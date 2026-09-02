@@ -6,24 +6,9 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
+import { PROPERTY_TYPE_OPTIONS } from "@/lib/boiler-survey-fields";
 import type { BoilerPropertyDetails } from "@/types/boiler-quote";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
-
-/** Standard UK property archetypes — covers the vast majority of jobs. Not
- *  a strict enum on `BoilerPropertyDetails.propertyType` (still plain
- *  `string`): older quotes may already have a free-text value entered
- *  before this became a dropdown, and that value shouldn't silently
- *  disappear or get overwritten just because it isn't on this list. */
-const PROPERTY_TYPE_OPTIONS = [
-  "Detached",
-  "Semi-Detached",
-  "Terraced",
-  "End Terrace",
-  "Bungalow",
-  "Flat / Apartment",
-  "Maisonette",
-  "Other",
-];
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (

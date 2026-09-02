@@ -458,10 +458,25 @@ export async function getPublicBoilerSurvey(token: string): Promise<PublicBoiler
     loadSignedPhotos(supabase, surveyRow.id),
   ]);
 
+  const answers = mapAnswers(surveyRow);
+
+  // Whoever quoted the job already captured bedrooms on the property details
+  // card, before any survey exists — don't make the on-site surveyor re-enter
+  // it here too if it hasn't been separately answered on the survey yet.
+  if (answers.bedrooms === null) {
+    const { data: quoteRow } = await supabase
+      .from("quotes")
+      .select("property_details")
+      .eq("id", surveyRow.quote_id)
+      .maybeSingle();
+    const propertyBedrooms = (quoteRow?.property_details as { bedrooms?: unknown } | null)?.bedrooms;
+    if (typeof propertyBedrooms === "number") answers.bedrooms = propertyBedrooms;
+  }
+
   return {
     surveyId: surveyRow.id,
     status: surveyRow.status,
-    answers: mapAnswers(surveyRow),
+    answers,
     photos,
     job,
   };
