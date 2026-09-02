@@ -44,6 +44,8 @@ function repName(map: ProfileMap, id: string | null | undefined): string | undef
 
 export interface QuoteRow {
   id: string;
+  /** The appointment that spawned this quote, if any — see `src/types/boiler-quote.ts`'s `BoilerQuoteDetail.appointmentId`. */
+  appointment_id: string | null;
   customer_name: string;
   customer_email: string | null;
   customer_phone: string | null;
@@ -188,7 +190,7 @@ export function mapBoilerPropertyDetails(raw: unknown): BoilerPropertyDetails {
   return {
     propertyType: obj.propertyType ?? "",
     bedrooms: Number(obj.bedrooms ?? 0),
-    radiators: Number(obj.radiators ?? 0),
+    bathrooms: Number(obj.bathrooms ?? 0),
     currentBoilerType: obj.currentBoilerType ?? "",
     currentBoilerAge: obj.currentBoilerAge ?? "",
     boilerLocation: obj.boilerLocation ?? "",

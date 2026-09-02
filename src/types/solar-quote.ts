@@ -56,6 +56,8 @@ export interface SolarKeyDetails {
 export interface SolarQuoteDetail {
   /** Matches the owning Quote's id. */
   quoteId: string;
+  /** The appointment that spawned this quote, if any (see `quotes.appointment_id`) — manually created quotes have none. Used to prefill the "Rebook App" flow. */
+  appointmentId?: string;
   reference: string;
   version: number;
   statusLabel: string;

@@ -199,6 +199,15 @@ create table if not exists public.appointments (
   email text,
   postcode text not null default '',
   address text not null default '',
+  -- Discrete address lines + the exact product selected, alongside the
+  -- flattened `address` string and `product_type` classification above —
+  -- see 0030_appointment_rebook_details.sql for why both forms are kept.
+  address_line1 text,
+  address_line2 text,
+  address_line3 text,
+  city text,
+  county text,
+  product text,
   occupancy text,
   source text,
   medium text,

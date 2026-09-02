@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Plus, Trash2 } from "lucide-react";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { updateBoilerCostSettingsAction, type BoilerCostSettingsFormState } from "@/app/settings/boiler-costs/actions";
 import type { BoilerCostSettings } from "@/lib/boiler-install-cost";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 const initialState: BoilerCostSettingsFormState = {};
 
@@ -35,10 +36,30 @@ function toExtraRows(extraCostsByName: Record<string, number>): ExtraCostRow[] {
     .map(([name, cost]) => ({ key: crypto.randomUUID(), name, cost: String(cost) }));
 }
 
+/** Single global settings form — autosaved locally so an in-progress edit survives a crash/restart before Save is clicked. */
+const draftKey = "boiler-cost-settings-draft";
+
+interface CostSettingsDraft {
+  rows: UnitCostRow[];
+  extraRows: ExtraCostRow[];
+}
+
 export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSettings }) {
   const [state, formAction, pending] = useActionState(updateBoilerCostSettingsAction, initialState);
-  const [rows, setRows] = useState<UnitCostRow[]>(() => toRows(settings.unitCostsByKw));
-  const [extraRows, setExtraRows] = useState<ExtraCostRow[]>(() => toExtraRows(settings.extraCostsByName));
+  const [rows, setRows] = useState<UnitCostRow[]>(
+    () => loadDraft<CostSettingsDraft>(draftKey)?.rows ?? toRows(settings.unitCostsByKw),
+  );
+  const [extraRows, setExtraRows] = useState<ExtraCostRow[]>(
+    () => loadDraft<CostSettingsDraft>(draftKey)?.extraRows ?? toExtraRows(settings.extraCostsByName),
+  );
+  const [draftRestored] = useState(() => loadDraft<CostSettingsDraft>(draftKey) !== null);
+
+  useAutosaveDraft(draftKey, { rows, extraRows });
+
+  // Clear the draft once the server action reports a successful save.
+  useEffect(() => {
+    if (state?.success) clearDraft(draftKey);
+  }, [state?.success]);
 
   function updateRow(key: string, field: "kw" | "cost", value: string) {
     setRows((current) => current.map((row) => (row.key === key ? { ...row, [field]: value } : row)));
@@ -66,6 +87,11 @@ export function BoilerCostSettingsForm({ settings }: { settings: BoilerCostSetti
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
+      {draftRestored && !state?.success && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:ml-[196px]">
+          Unsaved changes from your last session were restored.
+        </div>
+      )}
       <div className="flex flex-col gap-1.5 sm:grid sm:grid-cols-[180px_1fr] sm:gap-4">
         <span className="text-sm font-medium text-slate-600 sm:pt-2 sm:text-right">Boiler unit cost</span>
         <div className="flex flex-col gap-2">

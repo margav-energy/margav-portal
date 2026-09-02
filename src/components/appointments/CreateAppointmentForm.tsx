@@ -13,6 +13,7 @@ import {
 } from "@/components/appointments/address-lookup-actions";
 import type { AddressSuggestion } from "@/lib/address-lookup";
 import { cn, formatUkPhone, formatUkPostcode, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 interface FormValues {
   firstName: string;
@@ -91,19 +92,23 @@ const FIELD_LABELS: Record<keyof FormValues, string> = {
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 export function CreateAppointmentForm({
-  initialFirstName,
-  initialLastName,
+  initialValues,
   rebookFrom,
 }: {
-  initialFirstName?: string;
-  initialLastName?: string;
+  /** Prefill for everything except date/time — the whole point of a rebook is picking a new slot. See `getAppointmentForRebook`. */
+  initialValues?: Partial<FormValues>;
   rebookFrom?: string;
 } = {}) {
-  const [values, setValues] = useState<FormValues>(() => ({
-    ...EMPTY_FORM,
-    firstName: initialFirstName ?? "",
-    lastName: initialLastName ?? "",
-  }));
+  // Keyed per rebook target so a draft from rebooking one customer never leaks into
+  // rebooking a different one (or into a from-scratch "new appointment" draft).
+  const DRAFT_KEY = rebookFrom ? `appointment-draft-rebook-${rebookFrom}` : "appointment-draft-new";
+  const [values, setValues] = useState<FormValues>(
+    () => loadDraft<FormValues>(DRAFT_KEY) ?? { ...EMPTY_FORM, ...initialValues },
+  );
+  const [draftRestored, setDraftRestored] = useState(() => loadDraft<FormValues>(DRAFT_KEY) !== null);
+  // Distinct from draftRestored: this is "prefilled from the appointment being rebooked",
+  // not "recovered after a crash" — only shown the first time, before any draft exists.
+  const [rebookPrefilled] = useState(() => Boolean(rebookFrom) && !draftRestored && Boolean(initialValues));
   const [errors, setErrors] = useState<FormErrors>({});
   const [addressNoticeVisible, setAddressNoticeVisible] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
@@ -112,6 +117,8 @@ export function CreateAppointmentForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const addressSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useAutosaveDraft(DRAFT_KEY, values);
 
   function update<K extends keyof FormValues>(field: K, value: FormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -249,6 +256,8 @@ export function CreateAppointmentForm({
       setValues(EMPTY_FORM);
       setAddressNoticeVisible(false);
       setAddressSuggestions([]);
+      setDraftRestored(false);
+      clearDraft(DRAFT_KEY);
     });
   }
 
@@ -259,6 +268,8 @@ export function CreateAppointmentForm({
     setAddressSuggestions([]);
     setIsSaved(false);
     setSaveError(null);
+    setDraftRestored(false);
+    clearDraft(DRAFT_KEY);
   }
 
   return (
@@ -273,6 +284,16 @@ export function CreateAppointmentForm({
         <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
           <XCircle className="h-4 w-4 shrink-0" />
           {saveError}
+        </div>
+      )}
+      {draftRestored && !isSaved && (
+        <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Unsaved answers from your last session on this device were restored.
+        </div>
+      )}
+      {rebookPrefilled && !isSaved && (
+        <div className="rounded-lg border border-brand-blue/20 bg-brand-blue/5 px-4 py-3 text-sm text-brand-blue">
+          Details prefilled from the previous appointment — check them over and pick a new date and time.
         </div>
       )}
 

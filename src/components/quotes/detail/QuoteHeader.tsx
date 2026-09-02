@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info, CheckCircle2, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info, CheckCircle2, XCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
@@ -10,6 +11,7 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { LeadStatusPill } from "@/components/quotes/detail/LeadStatusPill";
 import { cn } from "@/lib/utils";
 import {
+  deleteQuoteAction,
   logCommunicationsOpened,
   sendCommunicationEmail,
   setQuoteLocked,
@@ -172,6 +174,55 @@ function CommunicationsModal({
   );
 }
 
+function DeleteQuoteModal({
+  quoteId,
+  customerName,
+  reference,
+  onClose,
+}: {
+  quoteId: string;
+  customerName: string;
+  reference: string;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteQuoteAction(quoteId, customerName);
+      if (!result.ok) {
+        setError(result.error ?? "Could not delete the quote. Please try again.");
+        return;
+      }
+      router.push("/quotes");
+    });
+  }
+
+  return (
+    <Modal title={`Delete ${reference}?`} onClose={onClose}>
+      <div className="flex flex-col gap-4 p-5">
+        <p className="text-sm text-slate-600">
+          This permanently deletes <span className="font-medium text-slate-900">{customerName}</span>&rsquo;s quote —
+          property details, units, line items, notes, history, documents and signature requests all go with it. This
+          can&rsquo;t be undone. Any linked appointment is kept, not deleted.
+        </p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDelete} disabled={isPending}>
+            {isPending ? "Deleting…" : "Delete quote"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 /**
  * Reference/status/lock/rep header used by every product vertical's quote
  * detail page. The action-button grid lives separately in the right
@@ -224,6 +275,7 @@ export function QuoteHeader({
 }) {
   const [, startTransition] = useTransition();
   const [isCommsOpen, setIsCommsOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 
   function handleToggleFavorite() {
     const next = !favorite;
@@ -326,6 +378,17 @@ export function QuoteHeader({
               {assignedRepName}
             </div>
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsDeleteOpen(true)}
+              aria-label="Delete quote"
+              title="Delete quote"
+              className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -342,6 +405,14 @@ export function QuoteHeader({
           customerName={customerName}
           customerEmail={customerEmail}
           onClose={() => setIsCommsOpen(false)}
+        />
+      )}
+      {isDeleteOpen && (
+        <DeleteQuoteModal
+          quoteId={quoteId}
+          customerName={customerName}
+          reference={reference}
+          onClose={() => setIsDeleteOpen(false)}
         />
       )}
     </div>

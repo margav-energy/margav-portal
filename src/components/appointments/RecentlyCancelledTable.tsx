@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ArrowUpDown } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { ArrowUpDown, Trash2 } from "lucide-react";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageSizeSelect } from "@/components/ui/PageSizeSelect";
 import { TableSearchInput } from "@/components/ui/TableSearchInput";
 import { MultiSelectFilter } from "@/components/ui/MultiSelectFilter";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { formatDateTime } from "@/lib/format";
 import { getInitials, cn } from "@/lib/utils";
+import { deleteAppointmentAction } from "@/components/appointments/actions";
 import type { CancelledAppointment } from "@/types/cancelled-appointment";
 
 type SortKey = "customerName" | "representativeName" | "appointmentAt";
@@ -34,18 +36,69 @@ function rebookHref(appointment: CancelledAppointment): string {
   return `/appointments/create?${params.toString()}`;
 }
 
+function DeleteAppointmentModal({
+  appointment,
+  onClose,
+  onDeleted,
+}: {
+  appointment: CancelledAppointment;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleDelete() {
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteAppointmentAction(appointment.id, appointment.customerName);
+      if (!result.ok) {
+        setError(result.error ?? "Could not delete the appointment. Please try again.");
+        return;
+      }
+      onDeleted();
+      onClose();
+    });
+  }
+
+  return (
+    <Modal title="Delete this appointment?" onClose={onClose}>
+      <div className="flex flex-col gap-4 p-5">
+        <p className="text-sm text-slate-600">
+          This permanently removes <span className="font-medium text-slate-900">{appointment.customerName}</span>&rsquo;s
+          cancelled appointment from {formatDateTime(appointment.appointmentAt)}. This can&rsquo;t be undone — any
+          quote linked to it is kept, not deleted.
+        </p>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDelete} disabled={isPending}>
+            {isPending ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function RecentlyCancelledTable({
   appointments,
   reps,
+  isAdmin,
 }: {
   appointments: CancelledAppointment[];
   reps: string[];
+  isAdmin: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [selectedReps, setSelectedReps] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey | null>("appointmentAt");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [deleteTarget, setDeleteTarget] = useState<CancelledAppointment | null>(null);
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
 
   function handleSort(key: SortKey) {
     if (sortKey !== key) {
@@ -64,6 +117,7 @@ export function RecentlyCancelledTable({
     const query = search.trim().toLowerCase();
 
     const filtered = appointments.filter((appointment) => {
+      if (deletedIds.includes(appointment.id)) return false;
       if (selectedReps.length > 0 && !selectedReps.includes(appointment.representativeName)) return false;
       if (query && !appointment.customerName.toLowerCase().includes(query)) return false;
       return true;
@@ -75,7 +129,7 @@ export function RecentlyCancelledTable({
       const comparison = a[sortKey].localeCompare(b[sortKey], undefined, { numeric: true });
       return sortDirection === "asc" ? comparison : -comparison;
     });
-  }, [appointments, search, selectedReps, sortKey, sortDirection]);
+  }, [appointments, search, selectedReps, sortKey, sortDirection, deletedIds]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -136,10 +190,21 @@ export function RecentlyCancelledTable({
               <p className="text-sm text-slate-600">{appointment.representativeName}</p>
               <p className="text-sm text-slate-600">{formatDateTime(appointment.appointmentAt)}</p>
               <p className="text-sm text-slate-600">{appointment.reason}</p>
-              <div className="sm:justify-self-end">
+              <div className="flex items-center gap-2 sm:justify-self-end">
                 <Button href={rebookHref(appointment)} className="px-3 py-1.5 text-xs">
                   Rebook
                 </Button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(appointment)}
+                    aria-label={`Delete ${appointment.customerName}'s appointment`}
+                    title="Delete appointment"
+                    className="rounded-lg border border-slate-200 bg-white p-2 text-slate-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -147,6 +212,14 @@ export function RecentlyCancelledTable({
           emptyMessage="Nothing to show!"
         />
       </div>
+
+      {deleteTarget && (
+        <DeleteAppointmentModal
+          appointment={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={() => setDeletedIds((current) => [...current, deleteTarget.id])}
+        />
+      )}
     </div>
   );
 }

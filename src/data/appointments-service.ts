@@ -34,6 +34,16 @@ export interface AppointmentRow {
   email: string | null;
   postcode: string;
   address: string;
+  /** Discrete counterparts to `address` (which is a flattened, comma-joined
+   *  display string) — null on appointments created before this column
+   *  existed. See `getAppointmentForRebook`. */
+  address_line1: string | null;
+  address_line2: string | null;
+  address_line3: string | null;
+  city: string | null;
+  county: string | null;
+  /** The exact product the rep selected (e.g. "Solar & Battery", "EV Charger") — `product_type` below only keeps the coarse solar/boiler split. Null on older rows. */
+  product: string | null;
   occupancy: string | null;
   source: string | null;
   medium: string | null;
@@ -127,6 +137,62 @@ export async function getAppointmentSummary(
     id: data.id as string,
     customerName: fullName(data.first_name, data.last_name),
     repId: data.rep_id as string | null,
+  };
+}
+
+/** Everything the "Create a Calendar Appointment" form can prefill from a
+ *  prior appointment when rebooking — deliberately excludes date/time,
+ *  since the whole point of a rebook is picking a new slot. */
+export interface AppointmentRebookDetails {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  postcode: string;
+  addressLine1: string;
+  addressLine2: string;
+  addressLine3: string;
+  city: string;
+  county: string;
+  source: string;
+  medium: string;
+  term: string;
+  notes: string;
+  product: string;
+}
+
+/**
+ * Best-effort by design: appointments created before `address_line1..county`
+ * and `product` existed only have the flattened `address` string and the
+ * coarse `product_type`, neither of which can be split back apart reliably.
+ * For those, the whole address goes into `addressLine1` (better than losing
+ * it) and `product` falls back to a same-category guess — still far ahead of
+ * the blank form this replaces.
+ */
+export async function getAppointmentForRebook(id: string): Promise<AppointmentRebookDetails | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("appointments").select("*").eq("id", id).single();
+
+  if (error || !data) return null;
+  const row = data as AppointmentRow;
+  const hasDiscreteAddress = Boolean(row.address_line1);
+
+  return {
+    firstName: row.first_name,
+    lastName: row.last_name,
+    phone: row.phone,
+    email: row.email ?? "",
+    postcode: row.postcode,
+    addressLine1: hasDiscreteAddress ? (row.address_line1 as string) : row.address,
+    addressLine2: hasDiscreteAddress ? (row.address_line2 ?? "") : "",
+    addressLine3: hasDiscreteAddress ? (row.address_line3 ?? "") : "",
+    city: row.city ?? "",
+    county: row.county ?? "",
+    source: row.source ?? "",
+    medium: row.medium ?? "",
+    term: row.term ?? "",
+    notes: row.notes ?? "",
+    product: row.product ?? (row.product_type === "boiler" ? "Boiler" : "Solar Only"),
   };
 }
 
@@ -357,6 +423,12 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
       email: input.email || null,
       postcode: input.postcode,
       address,
+      address_line1: input.addressLine1 || null,
+      address_line2: input.addressLine2 || null,
+      address_line3: input.addressLine3 || null,
+      city: input.city || null,
+      county: input.county || null,
+      product: input.product || null,
       source: input.source || null,
       medium: input.medium || null,
       term: input.term || null,
@@ -502,6 +574,35 @@ export async function logOutcome(id: string, outcome: string): Promise<boolean> 
 
   if (error) {
     console.error("logOutcome failed", error);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Permanently deletes an appointment. Any quote linked via `appointment_id`
+ * is left alone — that FK is `on delete set null`, so the DB nulls the
+ * quote's pointer automatically and the quote itself is never touched.
+ * `rebooked_from_id` is self-referencing with no cascade, so if this
+ * appointment was itself rebooked into a later one, that later appointment's
+ * pointer back to this one is cleared first — otherwise Postgres would
+ * reject the delete with a foreign-key violation.
+ */
+export async function deleteAppointment(id: string): Promise<boolean> {
+  const supabase = await createClient();
+
+  const { error: unlinkError } = await supabase
+    .from("appointments")
+    .update({ rebooked_from_id: null })
+    .eq("rebooked_from_id", id);
+  if (unlinkError) {
+    console.error("deleteAppointment: clearing rebooked_from_id failed", unlinkError);
+    return false;
+  }
+
+  const { error } = await supabase.from("appointments").delete().eq("id", id);
+  if (error) {
+    console.error("deleteAppointment failed", error);
     return false;
   }
   return true;

@@ -44,7 +44,7 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  */
 
 const QUOTE_COLUMNS =
-  "id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, deposit_amount, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
+  "id, appointment_id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, deposit_amount, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
 
 const ARCHIVE_AFTER_YEARS = 5;
 
@@ -218,6 +218,7 @@ export async function getQuoteDetail(
   const depositAmount = Number(row.deposit_amount ?? 0);
 
   const shared = {
+    appointmentId: row.appointment_id ?? undefined,
     reference: referenceFor(row),
     version: row.version,
     statusLabel: statusLabelFor(row),

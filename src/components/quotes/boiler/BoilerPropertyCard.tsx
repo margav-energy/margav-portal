@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { BoilerPropertyDetails } from "@/types/boiler-quote";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 /** Standard UK property archetypes — covers the vast majority of jobs. Not
  *  a strict enum on `BoilerPropertyDetails.propertyType` (still plain
@@ -34,28 +35,46 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function EditPropertyModal({
+  quoteId,
   property,
   onClose,
   onSave,
 }: {
+  quoteId: string;
   property: BoilerPropertyDetails;
   onClose: () => void;
   onSave: (property: BoilerPropertyDetails) => void;
 }) {
-  const [form, setForm] = useState(property);
+  // Autosaved locally so an in-progress edit survives a crash/restart before Save is clicked.
+  const draftKey = `boiler-property-draft-${quoteId}`;
+  const [form, setForm] = useState(() => loadDraft<BoilerPropertyDetails>(draftKey) ?? property);
+  const [draftRestored] = useState(() => loadDraft<BoilerPropertyDetails>(draftKey) !== null);
+
+  useAutosaveDraft(draftKey, form);
 
   function set<K extends keyof BoilerPropertyDetails>(key: K, value: BoilerPropertyDetails[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function handleClose() {
+    clearDraft(draftKey);
+    onClose();
+  }
+
   function handleSave() {
     onSave(form);
+    clearDraft(draftKey);
     onClose();
   }
 
   return (
-    <Modal title="Edit property details" onClose={onClose}>
+    <Modal title="Edit property details" onClose={handleClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
+        {draftRestored && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Unsaved changes from your last session were restored.
+          </div>
+        )}
         <FormField label="Property Type" htmlFor="propertyType">
           <select
             id="propertyType"
@@ -85,13 +104,13 @@ function EditPropertyModal({
             onChange={(event) => set("bedrooms", Number(event.target.value))}
           />
         </FormField>
-        <FormField label="Radiators" htmlFor="radiators">
+        <FormField label="Bathrooms" htmlFor="bathrooms">
           <input
-            id="radiators"
+            id="bathrooms"
             type="number"
             className={inputClassName}
-            value={form.radiators}
-            onChange={(event) => set("radiators", Number(event.target.value))}
+            value={form.bathrooms}
+            onChange={(event) => set("bathrooms", Number(event.target.value))}
           />
         </FormField>
         <FormField label="Current Boiler Type" htmlFor="currentBoilerType">
@@ -148,7 +167,7 @@ function EditPropertyModal({
         </FormField>
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleSave}>
@@ -188,7 +207,7 @@ export function BoilerPropertyCard({
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
         <Field label="Property Type" value={property.propertyType} />
         <Field label="Bedrooms" value={property.bedrooms} />
-        <Field label="Radiators" value={property.radiators} />
+        <Field label="Bathrooms" value={property.bathrooms} />
         <Field label="Current Boiler Type" value={property.currentBoilerType} />
         <Field label="Current Boiler Age" value={property.currentBoilerAge} />
         <Field label="Boiler Location" value={property.boilerLocation} />
@@ -198,7 +217,7 @@ export function BoilerPropertyCard({
       </div>
 
       {isEditing && (
-        <EditPropertyModal property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />
+        <EditPropertyModal quoteId={quoteId} property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />
       )}
     </Card>
   );

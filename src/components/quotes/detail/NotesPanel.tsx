@@ -8,6 +8,7 @@ import { inputClassName } from "@/components/ui/FormField";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { addQuoteNote } from "@/components/quotes/actions";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 import type { QuoteNote } from "@/types/quote-detail-shared";
 
 export function NotesPanel({
@@ -21,9 +22,13 @@ export function NotesPanel({
   notes: QuoteNote[];
   onNoteAdded: (note: QuoteNote) => void;
 }) {
-  const [isComposing, setIsComposing] = useState(false);
-  const [draft, setDraft] = useState("");
+  const draftKey = `quote-note-draft-${quoteId}`;
+  const [draft, setDraft] = useState(() => loadDraft<string>(draftKey) ?? "");
+  // A restored draft with something in it should reopen the composer instead of hiding the recovered text.
+  const [isComposing, setIsComposing] = useState(() => loadDraft<string>(draftKey) !== null);
   const [isSaving, setIsSaving] = useState(false);
+
+  useAutosaveDraft(draftKey, draft, isComposing);
 
   async function handleSave() {
     if (!draft.trim()) return;
@@ -34,6 +39,7 @@ export function NotesPanel({
       onNoteAdded(note);
       setDraft("");
       setIsComposing(false);
+      clearDraft(draftKey);
     }
   }
 
@@ -70,6 +76,7 @@ export function NotesPanel({
               onClick={() => {
                 setIsComposing(false);
                 setDraft("");
+                clearDraft(draftKey);
               }}
             >
               Cancel

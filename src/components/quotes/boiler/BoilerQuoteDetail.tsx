@@ -207,6 +207,7 @@ export function BoilerQuoteDetail({
   const actionButtons = buildActionButtons({
     quoteId: detail.quoteId,
     customerName: customer.name,
+    appointmentId: detail.appointmentId,
     secondaryPortalLabel: "Warranty Registration",
     onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => {

@@ -1,18 +1,36 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { Button } from "@/components/ui/Button";
 import { updateProfileAction, type ProfileFormState } from "@/app/settings/actions";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 const initialState: ProfileFormState = {};
+const DRAFT_KEY = "profile-draft";
 
-export function ProfileForm({ fullName, email, phone }: { fullName: string; email: string; phone: string }) {
+type ProfileDraft = { fullName: string; phone: string };
+
+export function ProfileForm({ fullName: initialFullName, email, phone: initialPhone }: { fullName: string; email: string; phone: string }) {
   const [state, formAction, pending] = useActionState(updateProfileAction, initialState);
+  const [fullName, setFullName] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY)?.fullName ?? initialFullName);
+  const [phone, setPhone] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY)?.phone ?? initialPhone);
+  const [draftRestored] = useState(() => loadDraft<ProfileDraft>(DRAFT_KEY) !== null);
+
+  useAutosaveDraft(DRAFT_KEY, { fullName, phone });
+
+  useEffect(() => {
+    if (state?.success) clearDraft(DRAFT_KEY);
+  }, [state?.success]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
+      {draftRestored && !state?.success && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-800 sm:ml-[196px]">
+          Unsaved changes from your last session were restored.
+        </div>
+      )}
       <FormField label="Email" htmlFor="email">
         <input
           id="email"
@@ -28,7 +46,8 @@ export function ProfileForm({ fullName, email, phone }: { fullName: string; emai
           name="fullName"
           type="text"
           required
-          defaultValue={fullName}
+          value={fullName}
+          onChange={(event) => setFullName(event.target.value)}
           className={inputClassName}
         />
       </FormField>
@@ -37,7 +56,8 @@ export function ProfileForm({ fullName, email, phone }: { fullName: string; emai
           id="phone"
           name="phone"
           type="tel"
-          defaultValue={phone}
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
           placeholder="e.g. 07565 443579"
           className={inputClassName}
         />

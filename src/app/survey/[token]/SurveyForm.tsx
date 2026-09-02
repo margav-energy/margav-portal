@@ -6,27 +6,34 @@ import { Button } from "@/components/ui/Button";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
 import { removeSurveyPhoto, submitBoilerSurvey, uploadSurveyPhoto } from "@/app/survey/[token]/actions";
-import { BOILER_SURVEY_SECTIONS, type BoilerSurveyFieldConfig } from "@/lib/boiler-survey-fields";
+import { BOILER_SURVEY_SECTIONS, bathroomLocationOptions, type BoilerSurveyFieldConfig } from "@/lib/boiler-survey-fields";
 import { PHOTO_CHECKLIST_ITEMS, type BoilerSurveyAnswers, type BoilerSurveyPhoto, type PhotoChecklistItemKey } from "@/types/boiler-survey";
 import type { PublicBoilerSurvey } from "@/data/boiler-survey-service";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 function Field({
   field,
   value,
+  bathrooms,
   onChange,
 }: {
   field: BoilerSurveyFieldConfig;
   value: string | number | null;
+  /** Only read for `type: "bathroom-select"` — see `bathroomLocationOptions`. */
+  bathrooms: number | null;
   onChange: (value: string | number | null) => void;
 }) {
   const id = field.key;
 
-  if (field.type === "select") {
+  if (field.type === "select" || field.type === "bathroom-select") {
+    const options = field.type === "select" ? field.options : bathroomLocationOptions(bathrooms);
     return (
       <FormField label={field.label} htmlFor={id}>
         <select id={id} className={inputClassName} value={(value as string) ?? ""} onChange={(e) => onChange(e.target.value)}>
           <option value="">—</option>
-          {field.options.map((option) => (
+          {/* Preserves a pre-existing free-text value entered before this became a dropdown, so it isn't silently wiped. */}
+          {value && !options.includes(value as string) && <option value={value as string}>{value as string}</option>}
+          {options.map((option) => (
             <option key={option} value={option}>
               {option}
             </option>
@@ -156,11 +163,18 @@ function PhotoItem({
 }
 
 export function SurveyForm({ token, survey }: { token: string; survey: PublicBoilerSurvey }) {
-  const [answers, setAnswers] = useState<BoilerSurveyAnswers>(survey.answers);
+  // Autosaved locally so a crashed/restarted device or a closed tab doesn't wipe out
+  // everything typed since the last submit — this form is often filled in over a long
+  // on-site session. Keyed by token so different survey links never collide.
+  const draftKey = `survey-draft-${token}`;
+  const [answers, setAnswers] = useState<BoilerSurveyAnswers>(() => loadDraft<BoilerSurveyAnswers>(draftKey) ?? survey.answers);
+  const [draftRestored] = useState(() => loadDraft<BoilerSurveyAnswers>(draftKey) !== null);
   const [photos, setPhotos] = useState<BoilerSurveyPhoto[]>(survey.photos);
   const [status, setStatus] = useState(survey.status);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  useAutosaveDraft(draftKey, answers);
 
   function set<K extends keyof BoilerSurveyAnswers>(key: K, value: BoilerSurveyAnswers[K]) {
     setAnswers((current) => ({ ...current, [key]: value }));
@@ -181,6 +195,7 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
         setError(result.error ?? "Something went wrong — please try again.");
         return;
       }
+      clearDraft(draftKey);
       setStatus("submitted");
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
@@ -205,6 +220,12 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
         </div>
       )}
 
+      {draftRestored && status !== "submitted" && (
+        <div className="mx-4 mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Unsaved answers from your last session on this device were restored.
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 px-4 py-4">
         {BOILER_SURVEY_SECTIONS.map((section) => (
           <div key={section.title} className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -213,7 +234,13 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
             </div>
             <div className="flex flex-col gap-3 p-4">
               {section.fields.map((field) => (
-                <Field key={field.key} field={field} value={answers[field.key] as string | number | null} onChange={(value) => set(field.key, value as never)} />
+                <Field
+                  key={field.key}
+                  field={field}
+                  value={answers[field.key] as string | number | null}
+                  bathrooms={answers.bathrooms}
+                  onChange={(value) => set(field.key, value as never)}
+                />
               ))}
             </div>
           </div>

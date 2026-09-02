@@ -127,6 +127,7 @@ export function SolarQuoteDetail({
   const actionButtons = buildActionButtons({
     quoteId: detail.quoteId,
     customerName: customer.name,
+    appointmentId: detail.appointmentId,
     secondaryPortalLabel: "STAX Portal",
     onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => void logStaxPortalAction(detail.quoteId, customer.name),

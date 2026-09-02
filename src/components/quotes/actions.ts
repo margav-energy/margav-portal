@@ -321,6 +321,106 @@ export async function createQuoteForAppointment(
   return { id: data.id as string };
 }
 
+/**
+ * Looks up the quote already linked to an appointment (`quotes.appointment_id`
+ * is unique per appointment — see `0006_quotes_appointment_link.sql`), so a
+ * rebook can carry the existing quote forward instead of spawning a second,
+ * blank one for the same customer. Returns null if that appointment never
+ * got a linked quote (e.g. `createQuoteForAppointment` failed at the time).
+ */
+export async function getQuoteIdForAppointment(appointmentId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("id")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data.id as string;
+}
+
+/**
+ * Re-points an existing quote at a newly created (rebooked) appointment,
+ * instead of `createQuoteForAppointment` creating a fresh blank quote —
+ * this is what keeps a rebook from burying the customer's already-quoted
+ * property details, boiler/solar units, line items, notes and history under
+ * a brand-new "new_lead" quote that looks like everything was erased.
+ */
+export async function relinkQuoteToRebookedAppointment(
+  quoteId: string,
+  newAppointmentId: string,
+  customerName: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("quotes")
+    .update({ appointment_id: newAppointmentId })
+    .eq("id", quoteId);
+
+  if (error) {
+    console.error("relinkQuoteToRebookedAppointment failed", error);
+    return false;
+  }
+
+  await insertQuoteHistory({
+    quoteId,
+    isSystem: true,
+    description: "Appointment rebooked — same quote carried forward",
+  });
+  await logActivity({
+    customerName,
+    description: `Rebooked appointment for ${customerName} — existing quote kept`,
+    status: "unallocated",
+    entityType: "quote",
+    entityId: quoteId,
+    isSystem: true,
+  });
+
+  revalidatePath("/quotes");
+  revalidatePath(`/quotes/${quoteId}`);
+  return true;
+}
+
+/**
+ * Permanently deletes a quote — admin-only, and irreversible. Every
+ * quote-owned child table (`boiler_units`, `solar_arrays`, `quote_line_items`,
+ * `quote_notes`, `quote_history`, `quote_documents`, `boiler_surveys` and its
+ * photos, `signature_requests`) is `on delete cascade` in the schema, so a
+ * plain delete here cleans all of it up automatically. Any appointment
+ * linked via `appointment_id` is left alone (`on delete set null` runs the
+ * other way — deleting the *appointment* nulls the quote's pointer, not the
+ * reverse) — deleting a quote never deletes its appointment.
+ */
+export async function deleteQuoteAction(
+  quoteId: string,
+  customerName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { ok: false, error: "Only admins can delete quotes." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("quotes").delete().eq("id", quoteId);
+
+  if (error) {
+    console.error("deleteQuoteAction failed", error);
+    return { ok: false, error: "Could not delete the quote. Please try again." };
+  }
+
+  await logActivity({
+    actorId: user.id,
+    customerName,
+    description: `${user.firstName} deleted a quote for ${customerName}`,
+    status: "unallocated",
+    entityType: "quote",
+    entityId: quoteId,
+  });
+
+  revalidatePath("/quotes");
+  return { ok: true };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Header actions: favourite, lock, assign rep, communications
 // ─────────────────────────────────────────────────────────────────────────

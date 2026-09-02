@@ -13,6 +13,9 @@ import {
 } from "@/components/appointments/address-lookup-actions";
 import type { AddressSuggestion } from "@/lib/address-lookup";
 import { formatUkPhone, formatUkPostcode, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+
+const DRAFT_KEY = "quote-draft-new";
 
 const EMPTY: CreateQuoteInput = {
   customerName: "",
@@ -26,7 +29,8 @@ const EMPTY: CreateQuoteInput = {
 };
 
 export function NewQuoteModal({ onClose }: { onClose: () => void }) {
-  const [values, setValues] = useState<CreateQuoteInput>(EMPTY);
+  const [values, setValues] = useState<CreateQuoteInput>(() => loadDraft<CreateQuoteInput>(DRAFT_KEY) ?? EMPTY);
+  const [draftRestored] = useState(() => loadDraft<CreateQuoteInput>(DRAFT_KEY) !== null);
   const [error, setError] = useState<string | undefined>();
   const [emailError, setEmailError] = useState<string | undefined>();
   const [phoneError, setPhoneError] = useState<string | undefined>();
@@ -36,6 +40,13 @@ export function NewQuoteModal({ onClose }: { onClose: () => void }) {
   const [isLookingUpAddress, setIsLookingUpAddress] = useState(false);
   const router = useRouter();
   const addressSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useAutosaveDraft(DRAFT_KEY, values);
+
+  function handleClose() {
+    clearDraft(DRAFT_KEY);
+    onClose();
+  }
 
   function update<K extends keyof CreateQuoteInput>(field: K, value: CreateQuoteInput[K]) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -118,13 +129,19 @@ export function NewQuoteModal({ onClose }: { onClose: () => void }) {
       return;
     }
 
+    clearDraft(DRAFT_KEY);
     onClose();
     router.push(`/quotes/${result.id}`);
   }
 
   return (
-    <Modal title="New quote" onClose={onClose}>
+    <Modal title="New quote" onClose={handleClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
+        {draftRestored && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Unsaved answers from your last session on this device were restored.
+          </div>
+        )}
         <FormField label="Customer name" required htmlFor="customerName">
           <input
             id="customerName"
@@ -237,7 +254,7 @@ export function NewQuoteModal({ onClose }: { onClose: () => void }) {
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="mt-2 flex justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={handleClose}>
             Cancel
           </Button>
           <Button type="submit" variant="success" disabled={isSaving}>

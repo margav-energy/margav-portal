@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/format";
 import { createSolarArray, deleteSolarArray, updateSolarArray } from "@/components/quotes/actions";
 import type { SolarArray } from "@/types/solar-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 let localIdCounter = 0;
 
@@ -35,20 +36,34 @@ function toForm(array?: SolarArray): ArrayForm {
 }
 
 function ArrayFormModal({
+  quoteId,
   title,
   initial,
   onClose,
   onSave,
 }: {
+  quoteId: string;
   title: string;
   initial?: SolarArray;
   onClose: () => void;
   onSave: (array: Omit<SolarArray, "id">) => void;
 }) {
-  const [form, setForm] = useState<ArrayForm>(() => toForm(initial));
+  // Autosaved locally so an in-progress add/edit survives a crash/restart before Save is
+  // clicked. Keyed by the array being edited (or "new" while adding) so switching between
+  // arrays never mixes up drafts.
+  const draftKey = `solar-array-draft-${quoteId}-${initial?.id ?? "new"}`;
+  const [form, setForm] = useState<ArrayForm>(() => loadDraft<ArrayForm>(draftKey) ?? toForm(initial));
+  const [draftRestored] = useState(() => loadDraft<ArrayForm>(draftKey) !== null);
+
+  useAutosaveDraft(draftKey, form);
 
   function set<K extends keyof ArrayForm>(key: K, value: ArrayForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function handleClose() {
+    clearDraft(draftKey);
+    onClose();
   }
 
   function addItem() {
@@ -78,12 +93,18 @@ function ArrayFormModal({
       pitchDegrees: Number(form.pitchDegrees) || 0,
       items: form.items.filter((item) => item.name.trim().length > 0),
     });
+    clearDraft(draftKey);
     onClose();
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={handleClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
+        {draftRestored && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Unsaved changes from your last session were restored.
+          </div>
+        )}
         <FormField label="Label" htmlFor="array-label" required>
           <input
             id="array-label"
@@ -163,7 +184,7 @@ function ArrayFormModal({
         </FormField>
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleSave}>
@@ -247,9 +268,12 @@ export function SolarArraySection({
         Add solar array
       </Button>
 
-      {isAdding && <ArrayFormModal title="Add solar array" onClose={() => setIsAdding(false)} onSave={handleAdd} />}
+      {isAdding && (
+        <ArrayFormModal quoteId={quoteId} title="Add solar array" onClose={() => setIsAdding(false)} onSave={handleAdd} />
+      )}
       {editingArray && (
         <ArrayFormModal
+          quoteId={quoteId}
           title="Edit solar array"
           initial={editingArray}
           onClose={() => setEditingArray(null)}

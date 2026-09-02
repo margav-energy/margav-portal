@@ -6,17 +6,30 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { updateTeammateAction } from "@/app/settings/users/actions";
 import type { TeammateProfile } from "@/data/profiles-service";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
+
+type EditTeammateDraft = { fullName: string; email: string; phone: string };
 
 /** Opened from the pencil icon on Settings → Team Members — edits name,
  *  login email, and phone for an existing teammate. Role has its own
  *  dropdown right in the row (see UserRoleManager) and stays there. */
 export function EditTeammateModal({ teammate, onClose }: { teammate: TeammateProfile; onClose: () => void }) {
   const router = useRouter();
-  const [fullName, setFullName] = useState(teammate.fullName);
-  const [email, setEmail] = useState(teammate.email);
-  const [phone, setPhone] = useState(teammate.phone ?? "");
+  const draftKey = `edit-teammate-draft-${teammate.id}`;
+  const [fullName, setFullName] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.fullName ?? teammate.fullName);
+  const [email, setEmail] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.email ?? teammate.email);
+  const [phone, setPhone] = useState(() => loadDraft<EditTeammateDraft>(draftKey)?.phone ?? teammate.phone ?? "");
+  const [draftRestored, setDraftRestored] = useState(() => loadDraft<EditTeammateDraft>(draftKey) !== null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useAutosaveDraft(draftKey, { fullName, email, phone });
+
+  function handleClose() {
+    setDraftRestored(false);
+    clearDraft(draftKey);
+    onClose();
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,14 +40,21 @@ export function EditTeammateModal({ teammate, onClose }: { teammate: TeammatePro
         setError(result.error);
         return;
       }
+      setDraftRestored(false);
+      clearDraft(draftKey);
       router.refresh();
       onClose();
     });
   }
 
   return (
-    <Modal title={`Edit ${teammate.fullName}`} onClose={onClose}>
+    <Modal title={`Edit ${teammate.fullName}`} onClose={handleClose}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
+        {draftRestored && (
+          <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Unsaved changes from your last session were restored.
+          </p>
+        )}
         <label className="flex flex-col gap-1 text-sm">
           <span className="font-medium text-slate-700">Full name</span>
           <input
@@ -73,7 +93,7 @@ export function EditTeammateModal({ teammate, onClose }: { teammate: TeammatePro
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose} disabled={isPending} type="button">
+          <Button variant="secondary" onClick={handleClose} disabled={isPending} type="button">
             Cancel
           </Button>
           <Button type="submit" disabled={isPending}>

@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { SolarPropertyDetails } from "@/types/solar-quote";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 // Electric unit rates carry more precision than `formatCurrency` shows
 // (which rounds to 2dp) — e.g. "£0.2467" rather than "£0.25".
@@ -24,28 +25,46 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function EditPropertyModal({
+  quoteId,
   property,
   onClose,
   onSave,
 }: {
+  quoteId: string;
   property: SolarPropertyDetails;
   onClose: () => void;
   onSave: (property: SolarPropertyDetails) => void;
 }) {
-  const [form, setForm] = useState(property);
+  // Autosaved locally so an in-progress edit survives a crash/restart before Save is clicked.
+  const draftKey = `solar-property-draft-${quoteId}`;
+  const [form, setForm] = useState(() => loadDraft<SolarPropertyDetails>(draftKey) ?? property);
+  const [draftRestored] = useState(() => loadDraft<SolarPropertyDetails>(draftKey) !== null);
+
+  useAutosaveDraft(draftKey, form);
 
   function set<K extends keyof SolarPropertyDetails>(key: K, value: SolarPropertyDetails[K]) {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function handleClose() {
+    clearDraft(draftKey);
+    onClose();
+  }
+
   function handleSave() {
     onSave(form);
+    clearDraft(draftKey);
     onClose();
   }
 
   return (
-    <Modal title="Edit property details" onClose={onClose}>
+    <Modal title="Edit property details" onClose={handleClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
+        {draftRestored && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Unsaved changes from your last session were restored.
+          </div>
+        )}
         <FormField label="Occupancy Archetype" htmlFor="occupancyArchetype">
           <input
             id="occupancyArchetype"
@@ -113,7 +132,7 @@ function EditPropertyModal({
         </FormField>
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleSave}>
@@ -161,7 +180,7 @@ export function SolarPropertyCard({
       </div>
 
       {isEditing && (
-        <EditPropertyModal property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />
+        <EditPropertyModal quoteId={quoteId} property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />
       )}
     </Card>
   );

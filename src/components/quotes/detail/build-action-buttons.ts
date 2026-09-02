@@ -9,16 +9,22 @@ import type { HeaderActionButton } from "@/components/quotes/detail/ActionButton
 
 export const PITCH_OUTCOME_OPTIONS = ["Sat - Sold", "Sat - No Sale", "No Show", "Rescheduled"];
 
-/** Matches the query-param pattern used by `RecentlyCancelledTable.tsx`'s "Rebook" button. */
-export function rebookAppointmentHref(customerName: string): string {
+/** Matches the query-param pattern used by `RecentlyCancelledTable.tsx`'s "Rebook" button.
+ *  `appointmentId` (the quote's originating appointment, if any — see
+ *  `BoilerQuoteDetail.appointmentId`) is passed as `rebookFrom` so the create-appointment
+ *  page can prefill everything but the date/time from it, not just the name. */
+export function rebookAppointmentHref(customerName: string, appointmentId?: string): string {
   const [firstName, ...rest] = customerName.split(" ");
   const params = new URLSearchParams({ firstName, lastName: rest.join(" ") });
+  if (appointmentId) params.set("rebookFrom", appointmentId);
   return `/appointments/create?${params.toString()}`;
 }
 
 export function buildActionButtons(params: {
   quoteId: string;
   customerName: string;
+  /** The quote's originating appointment, if any — see `rebookAppointmentHref`. */
+  appointmentId?: string;
   secondaryPortalLabel: string;
   onSendQuote: () => void;
   onSecondaryPortalAction: () => void;
@@ -42,7 +48,7 @@ export function buildActionButtons(params: {
       popoverOptions: PITCH_OUTCOME_OPTIONS,
       onSelectOption: params.onSelectPitchOutcome,
     },
-    { label: "Rebook App", variant: "primary", href: rebookAppointmentHref(params.customerName) },
+    { label: "Rebook App", variant: "primary", href: rebookAppointmentHref(params.customerName, params.appointmentId) },
     { label: "Survey", variant: "primary", onClick: params.onSurvey },
     ...(params.onInstallationAgreement
       ? [{ label: "Installation Agreement", variant: "primary" as const, onClick: params.onInstallationAgreement }]

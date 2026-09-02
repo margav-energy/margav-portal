@@ -12,6 +12,7 @@ import { BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boil
 import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 const FUEL_TYPES: FuelType[] = ["Mains Gas", "LPG", "Oil"];
 const FLUE_TYPES: FlueType[] = ["Horizontal", "Vertical"];
@@ -91,18 +92,27 @@ function toForm(unit?: BoilerUnit): UnitForm {
 }
 
 function UnitFormModal({
+  quoteId,
   title,
   initial,
   onClose,
   onSave,
 }: {
+  quoteId: string;
   title: string;
   initial?: BoilerUnit;
   onClose: () => void;
   onSave: (unit: Omit<BoilerUnit, "id">) => void;
 }) {
-  const [form, setForm] = useState<UnitForm>(() => toForm(initial));
+  // Autosaved locally so an in-progress add/edit survives a crash/restart before Save is
+  // clicked. Keyed by the unit being edited (or "new" while adding) so switching between
+  // units never mixes up drafts.
+  const draftKey = `boiler-unit-draft-${quoteId}-${initial?.id ?? "new"}`;
+  const [form, setForm] = useState<UnitForm>(() => loadDraft<UnitForm>(draftKey) ?? toForm(initial));
+  const [draftRestored] = useState(() => loadDraft<UnitForm>(draftKey) !== null);
   const [errors, setErrors] = useState<UnitFormErrors>({});
+
+  useAutosaveDraft(draftKey, form);
 
   function set<K extends keyof UnitForm>(key: K, value: UnitForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -168,6 +178,11 @@ function UnitFormModal({
     );
   }
 
+  function handleClose() {
+    clearDraft(draftKey);
+    onClose();
+  }
+
   function handleSave() {
     const nextErrors: UnitFormErrors = {};
     if (!form.make.trim()) nextErrors.make = "Select a make";
@@ -190,12 +205,18 @@ function UnitFormModal({
       price: Number(form.price) || 0,
       items: form.items.filter((item) => item.name.trim().length > 0),
     });
+    clearDraft(draftKey);
     onClose();
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={handleClose}>
       <div className="flex flex-col gap-4 px-5 py-5">
+        {draftRestored && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Unsaved changes from your last session were restored.
+          </div>
+        )}
         <FormField label="Make" htmlFor="unit-make" required error={errors.make}>
           <select
             id="unit-make"
@@ -365,7 +386,7 @@ function UnitFormModal({
         </FormField>
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleSave}>
@@ -455,10 +476,11 @@ export function BoilerUnitsSection({
       </Button>
 
       {isAdding && (
-        <UnitFormModal title="Add boiler" onClose={() => setIsAdding(false)} onSave={handleAdd} />
+        <UnitFormModal quoteId={quoteId} title="Add boiler" onClose={() => setIsAdding(false)} onSave={handleAdd} />
       )}
       {editingUnit && (
         <UnitFormModal
+          quoteId={quoteId}
           title="Edit boiler"
           initial={editingUnit}
           onClose={() => setEditingUnit(null)}

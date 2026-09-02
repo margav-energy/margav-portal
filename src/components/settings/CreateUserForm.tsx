@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { createUserAction, type UserRole } from "@/app/settings/users/actions";
+import { clearDraft, loadDraft, useAutosaveDraft } from "@/hooks/useAutosaveDraft";
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "rep", label: "Rep" },
@@ -12,6 +13,10 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 ];
 
 const MIN_PASSWORD_LENGTH = 8;
+const DRAFT_KEY = "create-user-draft";
+
+/** Never includes `password` — localStorage is unencrypted and persists past the session. */
+type CreateUserDraft = { fullName: string; email: string; role: UserRole };
 
 type Feedback = { kind: "error"; message: string } | { kind: "success"; email: string; emailSent: boolean };
 
@@ -20,12 +25,17 @@ type Feedback = { kind: "error"; message: string } | { kind: "success"; email: s
  *  instead of the old manual-SQL-insert-only path. The admin sets the
  *  password themselves rather than one being generated for them. */
 export function CreateUserForm() {
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.fullName ?? "");
+  const [email, setEmail] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.email ?? "");
+  // Password is never restored from a draft — re-entering it is required.
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("rep");
+  const [role, setRole] = useState<UserRole>(() => loadDraft<CreateUserDraft>(DRAFT_KEY)?.role ?? "rep");
+  const [draftRestored, setDraftRestored] = useState(() => loadDraft<CreateUserDraft>(DRAFT_KEY) !== null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Password is intentionally never persisted — see `CreateUserDraft`.
+  useAutosaveDraft(DRAFT_KEY, { fullName, email, role });
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,11 +55,18 @@ export function CreateUserForm() {
       setEmail("");
       setPassword("");
       setRole("rep");
+      setDraftRestored(false);
+      clearDraft(DRAFT_KEY);
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      {draftRestored && (
+        <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Unsaved details from your last session were restored. Re-enter the password.
+        </p>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input
           type="text"

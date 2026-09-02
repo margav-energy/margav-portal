@@ -13,11 +13,12 @@ import {
   createAppointment,
   declineAppointment,
   declineConfirmation,
+  deleteAppointment,
   getAppointmentSummary,
   logOutcome,
   type CreateAppointmentInput,
 } from "@/data/appointments-service";
-import { createQuoteForAppointment } from "@/components/quotes/actions";
+import { createQuoteForAppointment, getQuoteIdForAppointment, relinkQuoteToRebookedAppointment } from "@/components/quotes/actions";
 
 const APPOINTMENT_PATHS = [
   "/appointments/calendar",
@@ -62,6 +63,12 @@ export async function createAppointmentAction(
 
   const customerName = `${input.firstName} ${input.lastName}`.trim();
 
+  // A rebook should carry the customer's existing quote forward — its property
+  // details, boiler/solar units, line items, notes and history — rather than
+  // spawning a second, blank "new_lead" quote that buries all of that and
+  // looks to whoever opens it like the original was erased.
+  const existingQuoteId = input.rebookedFromId ? await getQuoteIdForAppointment(input.rebookedFromId) : null;
+
   await Promise.all([
     logActivity({
       actorId: user.id,
@@ -73,20 +80,24 @@ export async function createAppointmentAction(
       entityType: "appointment",
       entityId: result.id,
     }),
-    // Keeps the Quotes section in sync — every new appointment gets a
-    // matching "new_lead" quote a rep can pick up once they pitch it.
-    // Wrapped so a failure here can never fail the appointment itself.
-    createQuoteForAppointment({
-      appointmentId: result.id,
-      customerName,
-      customerEmail: input.email,
-      customerPhone: input.phone,
-      postcode: input.postcode,
-      address: result.address,
-      productType: result.productType,
-      notes: input.notes,
-      createdBy: user.id,
-    }).catch((error) => console.error("createQuoteForAppointment failed", error)),
+    existingQuoteId
+      ? relinkQuoteToRebookedAppointment(existingQuoteId, result.id, customerName).catch((error) =>
+          console.error("relinkQuoteToRebookedAppointment failed", error),
+        )
+      : // Keeps the Quotes section in sync — every genuinely new appointment gets a
+        // matching "new_lead" quote a rep can pick up once they pitch it.
+        // Wrapped so a failure here can never fail the appointment itself.
+        createQuoteForAppointment({
+          appointmentId: result.id,
+          customerName,
+          customerEmail: input.email,
+          customerPhone: input.phone,
+          postcode: input.postcode,
+          address: result.address,
+          productType: result.productType,
+          notes: input.notes,
+          createdBy: user.id,
+        }).catch((error) => console.error("createQuoteForAppointment failed", error)),
     // Puts name/address/contact/notes on Lucy's Google Calendar at a glance.
     // Wrapped the same way — a Calendar API hiccup can never fail the
     // appointment itself. No-ops (resolves to null) if unconfigured.
@@ -227,6 +238,31 @@ export async function declineConfirmationAction(id: string): Promise<{ ok: boole
         })
       : Promise.resolve(),
   ]);
+
+  revalidateAppointmentPaths();
+  return { ok: true };
+}
+
+/** Admin-only, irreversible — see `deleteAppointment`'s doc comment in `appointments-service.ts` for the FK handling. */
+export async function deleteAppointmentAction(
+  id: string,
+  customerName: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { ok: false, error: "Only admins can delete appointments." };
+
+  const ok = await deleteAppointment(id);
+  if (!ok) return { ok: false, error: "Could not delete the appointment. Please try again." };
+
+  await logActivity({
+    actorId: user.id,
+    customerName,
+    description: `${user.firstName} deleted an appointment for ${customerName}`,
+    status: "unallocated",
+    entityType: "appointment",
+    entityId: id,
+  });
 
   revalidateAppointmentPaths();
   return { ok: true };
