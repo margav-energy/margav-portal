@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Camera, Check, Loader2, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { Camera, Check, Clock, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,16 @@ import { BOILER_SURVEY_SECTIONS, type BoilerSurveyFieldConfig } from "@/lib/boil
 import { PHOTO_CHECKLIST_ITEMS, type BoilerSurveyAnswers, type BoilerSurveyPhoto, type PhotoChecklistItemKey } from "@/types/boiler-survey";
 import type { PublicBoilerSurvey } from "@/data/boiler-survey-service";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { compressPhoto } from "@/lib/compress-image";
+import {
+  clearPendingSubmit,
+  getPendingSubmit,
+  listPendingPhotos,
+  queuePendingPhoto,
+  queuePendingSubmit,
+  removePendingPhoto,
+} from "@/lib/survey-offline-queue";
 
 function Field({
   field,
@@ -76,48 +86,37 @@ function Field({
   );
 }
 
+/**
+ * Presentational only — upload/queue/retry logic lives in `SurveyForm`
+ * (`handlePhotoFile`/`tryUploadPhoto`) since it has to be reachable from the
+ * offline-queue flush too, not just this item's own file input. `queuedPreviewUrl`
+ * set (with `photo` undefined) means the photo is sitting in the local IndexedDB
+ * queue, not yet uploaded — see `src/lib/survey-offline-queue.ts`.
+ */
 function PhotoItem({
-  token,
-  itemKey,
   label,
   photo,
-  onChange,
+  queuedPreviewUrl,
+  isBusy,
+  error,
+  onFile,
+  onRemove,
 }: {
-  token: string;
-  itemKey: PhotoChecklistItemKey;
   label: string;
   photo: BoilerSurveyPhoto | undefined;
-  onChange: (photo: BoilerSurveyPhoto | undefined) => void;
+  queuedPreviewUrl: string | undefined;
+  isBusy: boolean;
+  error: string | null;
+  onFile: (file: File) => void;
+  onRemove: () => void;
 }) {
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleFile(file: File) {
-    setIsBusy(true);
-    setError(null);
-    const formData = new FormData();
-    formData.set("file", file);
-    const result = await uploadSurveyPhoto(token, itemKey, formData);
-    setIsBusy(false);
-    if (!result.ok || !result.url) {
-      setError(result.error ?? "Upload failed.");
-      return;
-    }
-    onChange({ itemKey, url: result.url, uploadedAt: new Date().toISOString() });
-  }
-
-  async function handleRemove() {
-    setIsBusy(true);
-    await removeSurveyPhoto(token, itemKey);
-    setIsBusy(false);
-    onChange(undefined);
-  }
+  const previewUrl = photo?.url ?? queuedPreviewUrl;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
-      {photo ? (
-        // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, not a static asset next/image can optimize.
-        <img src={photo.url} alt={label} className="h-14 w-14 shrink-0 rounded-md object-cover" />
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL or a local blob: preview, not a static asset next/image can optimize.
+        <img src={previewUrl} alt={label} className="h-14 w-14 shrink-0 rounded-md object-cover" />
       ) : (
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-300">
           <Camera className="h-6 w-6" />
@@ -125,6 +124,7 @@ function PhotoItem({
       )}
       <div className="min-w-0 flex-1">
         <p className="text-sm text-slate-700">{label}</p>
+        {queuedPreviewUrl && !photo && <p className="mt-0.5 text-xs text-amber-600">Queued — will upload when you&apos;re back online.</p>}
         {error && <p className="mt-0.5 text-xs text-red-600">{error}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -133,25 +133,28 @@ function PhotoItem({
         ) : photo ? (
           <>
             <Check className="h-4 w-4 text-brand-green-mid" />
-            <button type="button" onClick={handleRemove} aria-label={`Remove photo for ${label}`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600">
+            <button type="button" onClick={onRemove} aria-label={`Remove photo for ${label}`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600">
               <Trash2 className="h-4 w-4" />
             </button>
           </>
         ) : (
-          <label className="cursor-pointer rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">
-            Add photo
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
+          <>
+            {queuedPreviewUrl && <Clock className="h-4 w-4 shrink-0 text-amber-500" />}
+            <label className="cursor-pointer rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200">
+              {queuedPreviewUrl ? "Retake" : "Add photo"}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onFile(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </>
         )}
       </div>
     </div>
@@ -169,6 +172,19 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
   const [status, setStatus] = useState(survey.status);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const isOnline = useOnlineStatus();
+
+  // Photos that couldn't be uploaded (no signal) and are sitting in the local
+  // IndexedDB queue instead — see src/lib/survey-offline-queue.ts. Keyed by
+  // itemKey; `previewUrl` is a local `blob:` URL (`URL.createObjectURL`) so the
+  // rep still sees a thumbnail before it's ever reached the server.
+  const [queuedPhotos, setQueuedPhotos] = useState<Record<string, { file: File; previewUrl: string }>>({});
+  const [photoBusy, setPhotoBusy] = useState<Record<string, boolean>>({});
+  const [photoErrors, setPhotoErrors] = useState<Record<string, string | null>>({});
+  // Whether the last "Submit survey" attempt failed to reach the server and was queued for retry.
+  const [submitQueued, setSubmitQueued] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const hasQueuedItems = Object.keys(queuedPhotos).length > 0 || submitQueued;
 
   useAutosaveDraft(draftKey, answers);
 
@@ -176,23 +192,164 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
     setAnswers((current) => ({ ...current, [key]: value }));
   }
 
-  function handlePhotoChange(itemKey: PhotoChecklistItemKey, photo: BoilerSurveyPhoto | undefined) {
-    setPhotos((current) => {
-      const withoutItem = current.filter((p) => p.itemKey !== itemKey);
-      return photo ? [...withoutItem, photo] : withoutItem;
+  function forgetQueuedPhoto(itemKey: PhotoChecklistItemKey) {
+    setQueuedPhotos((current) => {
+      const entry = current[itemKey];
+      if (entry) URL.revokeObjectURL(entry.previewUrl);
+      const next = { ...current };
+      delete next[itemKey];
+      return next;
     });
+  }
+
+  /**
+   * Tries to upload one photo; on a network failure (no signal) it queues the
+   * file locally instead of surfacing an error, so the rep can keep going.
+   * A real server-side rejection (bad file, invalid token) is NOT queued —
+   * retrying it later wouldn't help.
+   */
+  const tryUploadPhoto = useCallback(
+    async (itemKey: PhotoChecklistItemKey, file: File): Promise<"uploaded" | "rejected" | "offline"> => {
+      const formData = new FormData();
+      formData.set("file", file);
+      try {
+        const result = await uploadSurveyPhoto(token, itemKey, formData);
+        if (!result.ok || !result.url) {
+          setPhotoErrors((current) => ({ ...current, [itemKey]: result.error ?? "Upload failed." }));
+          await removePendingPhoto(token, itemKey);
+          forgetQueuedPhoto(itemKey);
+          return "rejected";
+        }
+        await removePendingPhoto(token, itemKey);
+        forgetQueuedPhoto(itemKey);
+        setPhotos((current) => [...current.filter((p) => p.itemKey !== itemKey), { itemKey, url: result.url!, uploadedAt: new Date().toISOString() }]);
+        setPhotoErrors((current) => ({ ...current, [itemKey]: null }));
+        return "uploaded";
+      } catch {
+        await queuePendingPhoto(token, itemKey, file);
+        setQueuedPhotos((current) => (current[itemKey] ? current : { ...current, [itemKey]: { file, previewUrl: URL.createObjectURL(file) } }));
+        return "offline";
+      }
+    },
+    [token],
+  );
+
+  const trySubmit = useCallback(
+    async (answersToSubmit: BoilerSurveyAnswers): Promise<boolean> => {
+      try {
+        const result = await submitBoilerSurvey(token, answersToSubmit);
+        if (!result.ok) {
+          setError(result.error ?? "Something went wrong — please try again.");
+          return false;
+        }
+        await clearPendingSubmit(token);
+        setSubmitQueued(false);
+        clearDraft(draftKey);
+        setStatus("submitted");
+        setError(null);
+        return true;
+      } catch {
+        await queuePendingSubmit(token, answersToSubmit);
+        setSubmitQueued(true);
+        return false;
+      }
+    },
+    [token, draftKey],
+  );
+
+  // Retries everything queued on this device — photos first (the final submit's
+  // PDF regen needs them all in place), then a queued submit once every photo
+  // is through. Called on mount (in case the page was reopened after being
+  // closed offline) and on the browser's `online` event.
+  //
+  // `force` skips the `navigator.onLine` short-circuit — used by the manual
+  // "Sync now" button, since `navigator.onLine`/the `online` event are known
+  // to be unreliable on mobile (especially a backgrounded tab), so there
+  // needs to be a way to just try regardless of what the browser claims.
+  const flushQueue = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!options?.force && typeof navigator !== "undefined" && !navigator.onLine) return;
+      setIsSyncing(true);
+      try {
+        const queued = await listPendingPhotos(token);
+        let allSynced = true;
+        for (const { itemKey, file } of queued) {
+          setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
+          const result = await tryUploadPhoto(itemKey, file);
+          setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
+          if (result === "offline") {
+            allSynced = false;
+            break; // connectivity dropped again mid-sync — stop, the rest stay queued for next time
+          }
+        }
+        if (allSynced) {
+          const queuedAnswers = await getPendingSubmit(token);
+          if (queuedAnswers) await trySubmit(queuedAnswers);
+        }
+      } finally {
+        setIsSyncing(false);
+      }
+    },
+    [token, tryUploadPhoto, trySubmit],
+  );
+
+  // Hydrate from anything already queued on this device (e.g. the rep closed
+  // the tab while offline and reopened the link later), then try to sync
+  // straight away in case signal is already back.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [queued, queuedAnswers] = await Promise.all([listPendingPhotos(token), getPendingSubmit(token)]);
+      if (cancelled) return;
+      if (queued.length > 0) {
+        setQueuedPhotos((current) => {
+          const next = { ...current };
+          for (const { itemKey, file } of queued) next[itemKey] = { file, previewUrl: URL.createObjectURL(file) };
+          return next;
+        });
+      }
+      if (queuedAnswers) setSubmitQueued(true);
+      if (queued.length > 0 || queuedAnswers) void flushQueue();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per token on mount to hydrate + attempt an initial sync
+  }, [token]);
+
+  useEffect(() => {
+    function handleOnline() {
+      void flushQueue();
+    }
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [flushQueue]);
+
+  async function handlePhotoFile(itemKey: PhotoChecklistItemKey, file: File) {
+    setPhotoErrors((current) => ({ ...current, [itemKey]: null }));
+    setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
+    // Downscaled before it ever reaches an upload attempt or the offline queue —
+    // see compress-image.ts's doc comment for why (upload size + IndexedDB footprint).
+    const compressed = await compressPhoto(file);
+    await tryUploadPhoto(itemKey, compressed);
+    setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
+  }
+
+  async function handleRemovePhoto(itemKey: PhotoChecklistItemKey) {
+    setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
+    try {
+      await removeSurveyPhoto(token, itemKey);
+      setPhotos((current) => current.filter((p) => p.itemKey !== itemKey));
+    } catch {
+      setPhotoErrors((current) => ({ ...current, [itemKey]: "Couldn't remove while offline — try again once you're back online." }));
+    }
+    setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
   }
 
   function handleSubmit() {
     setError(null);
     startTransition(async () => {
-      const result = await submitBoilerSurvey(token, answers);
-      if (!result.ok) {
-        setError(result.error ?? "Something went wrong — please try again.");
-        return;
-      }
-      clearDraft(draftKey);
-      setStatus("submitted");
+      await trySubmit(answers);
       window.scrollTo({ top: 0, behavior: "smooth" });
     });
   }
@@ -213,6 +370,33 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
         <div className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-brand-green-mid/30 bg-brand-green-mid/10 px-4 py-3 text-sm text-brand-green-mid">
           <Check className="h-4 w-4 shrink-0" />
           This survey has been submitted. You can still make changes and resubmit.
+        </div>
+      )}
+
+      {!isOnline && (
+        <div className="mx-4 mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>You&apos;re offline. Keep going — answers and photos are saved on this device and will upload automatically once you&apos;re back online.</p>
+          {hasQueuedItems && (
+            <button type="button" onClick={() => void flushQueue({ force: true })} className="mt-2 font-medium underline underline-offset-2">
+              Already have signal? Try syncing now
+            </button>
+          )}
+        </div>
+      )}
+
+      {isOnline && isSyncing && (
+        <div className="mx-4 mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+          Syncing saved photos and answers…
+        </div>
+      )}
+
+      {isOnline && !isSyncing && hasQueuedItems && (
+        <div className="mx-4 mt-4 rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>Waiting to finish syncing saved photos/answers — this device will keep retrying automatically.</p>
+          <button type="button" onClick={() => void flushQueue({ force: true })} className="mt-2 font-medium underline underline-offset-2">
+            Sync now
+          </button>
         </div>
       )}
 
@@ -250,11 +434,13 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
             {PHOTO_CHECKLIST_ITEMS.map((item) => (
               <PhotoItem
                 key={item.key}
-                token={token}
-                itemKey={item.key}
                 label={item.label}
                 photo={photos.find((p) => p.itemKey === item.key)}
-                onChange={(photo) => handlePhotoChange(item.key, photo)}
+                queuedPreviewUrl={queuedPhotos[item.key]?.previewUrl}
+                isBusy={photoBusy[item.key] ?? false}
+                error={photoErrors[item.key] ?? null}
+                onFile={(file) => void handlePhotoFile(item.key, file)}
+                onRemove={() => void handleRemovePhoto(item.key)}
               />
             ))}
           </div>
@@ -277,13 +463,24 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
 
       <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white px-4 py-3">
         {error && <p className="mb-2 text-center text-sm text-red-600">{error}</p>}
+        {submitQueued && !error && status !== "submitted" && (
+          <p className="mb-2 text-center text-sm text-amber-700">Saved on this device — will submit automatically once you&apos;re back online.</p>
+        )}
         <Button
           variant="success"
           className={cn("w-full justify-center py-3 text-sm")}
           onClick={handleSubmit}
           disabled={isPending || !answers.surveyorName.trim()}
         >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : status === "submitted" ? "Save changes" : "Submit survey"}
+          {isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : status === "submitted" ? (
+            "Save changes"
+          ) : submitQueued ? (
+            "Retry submit"
+          ) : (
+            "Submit survey"
+          )}
         </Button>
       </div>
     </div>
