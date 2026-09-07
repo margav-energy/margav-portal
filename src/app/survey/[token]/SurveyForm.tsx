@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { Camera, Check, Clock, Loader2, Trash2 } from "lucide-react";
+import { Camera, Check, Clock, Loader2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import {
   queuePendingPhoto,
   queuePendingSubmit,
   removePendingPhoto,
+  type PendingPhoto,
 } from "@/lib/survey-offline-queue";
 
 function Field({
@@ -86,77 +87,151 @@ function Field({
   );
 }
 
-/**
- * Presentational only — upload/queue/retry logic lives in `SurveyForm`
- * (`handlePhotoFile`/`tryUploadPhoto`) since it has to be reachable from the
- * offline-queue flush too, not just this item's own file input. `queuedPreviewUrl`
- * set (with `photo` undefined) means the photo is sitting in the local IndexedDB
- * queue, not yet uploaded — see `src/lib/survey-offline-queue.ts`.
- */
-function PhotoItem({
+/** A photo picked/queued on this device that hasn't been confirmed uploaded yet. */
+interface LocalPhoto {
+  /** Generated up front (`crypto.randomUUID()`) — becomes `boiler_survey_photos.id` once it uploads, so a retry never creates a duplicate. */
+  id: string;
+  itemKey: PhotoChecklistItemKey;
+  file: File;
+  /** Local `blob:` URL (`URL.createObjectURL`) — shown before this has ever reached the server. */
+  previewUrl: string;
+  status: "uploading" | "queued" | "error";
+  error?: string;
+}
+
+function PhotoThumbnail({
   label,
-  photo,
-  queuedPreviewUrl,
-  isBusy,
+  previewUrl,
+  status,
   error,
-  onFile,
   onRemove,
+  onRetry,
 }: {
   label: string;
-  photo: BoilerSurveyPhoto | undefined;
-  queuedPreviewUrl: string | undefined;
-  isBusy: boolean;
-  error: string | null;
-  onFile: (file: File) => void;
+  previewUrl: string;
+  status: "uploaded" | "uploading" | "queued" | "error";
+  error?: string;
   onRemove: () => void;
+  onRetry?: () => void;
 }) {
-  const previewUrl = photo?.url ?? queuedPreviewUrl;
-
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-3">
-      {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL or a local blob: preview, not a static asset next/image can optimize.
-        <img src={previewUrl} alt={label} className="h-14 w-14 shrink-0 rounded-md object-cover" />
-      ) : (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-300">
-          <Camera className="h-6 w-6" />
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-slate-200">
+      {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL or a local blob: preview, not a static asset next/image can optimize. */}
+      <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+      {status === "uploading" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <Loader2 className="h-4 w-4 animate-spin text-white" />
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-700">{label}</p>
-        {queuedPreviewUrl && !photo && <p className="mt-0.5 text-xs text-amber-600">Queued — will upload when you&apos;re back online.</p>}
-        {error && <p className="mt-0.5 text-xs text-red-600">{error}</p>}
+      {status === "queued" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40" title="Queued — will upload when you're back online.">
+          <Clock className="h-4 w-4 text-amber-300" />
+        </div>
+      )}
+      {status === "error" && (
+        <button
+          type="button"
+          onClick={onRetry}
+          aria-label={`Retry uploading photo for ${label}`}
+          title={error ?? "Upload failed — tap to retry"}
+          className="absolute inset-0 flex items-center justify-center bg-red-600/70 text-white"
+        >
+          <RefreshCw className="h-4 w-4" />
+        </button>
+      )}
+      {status !== "uploading" && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={`Remove photo for ${label}`}
+          className="absolute top-0.5 right-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One checklist item, now able to hold any number of photos rather than
+ * exactly one — "Add another" stays available even once photos exist.
+ * Upload/queue/retry logic lives in `SurveyForm` (`handlePhotoFile`/
+ * `tryUploadPhoto`) since it has to be reachable from the offline-queue
+ * flush too, not just this item's own file input.
+ */
+function PhotoItemGroup({
+  label,
+  confirmedPhotos,
+  localPhotos,
+  removingIds,
+  error,
+  onAddFile,
+  onRemoveConfirmed,
+  onRemoveLocal,
+  onRetryLocal,
+}: {
+  label: string;
+  confirmedPhotos: BoilerSurveyPhoto[];
+  localPhotos: LocalPhoto[];
+  removingIds: Record<string, boolean>;
+  error: string | null;
+  onAddFile: (file: File) => void;
+  onRemoveConfirmed: (photo: BoilerSurveyPhoto) => void;
+  onRemoveLocal: (id: string) => void;
+  onRetryLocal: (id: string) => void;
+}) {
+  const totalCount = confirmedPhotos.length + localPhotos.length;
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-slate-700">{label}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{totalCount === 0 ? "No photos yet" : `${totalCount} photo${totalCount === 1 ? "" : "s"}`}</p>
+          {error && <p className="mt-0.5 text-xs text-red-600">{error}</p>}
+        </div>
+        <label className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200">
+          <Camera className="h-3.5 w-3.5" />
+          {totalCount > 0 ? "Add another" : "Add photo"}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onAddFile(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {isBusy ? (
-          <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
-        ) : photo ? (
-          <>
-            <Check className="h-4 w-4 text-brand-green-mid" />
-            <button type="button" onClick={onRemove} aria-label={`Remove photo for ${label}`} className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600">
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </>
-        ) : (
-          <>
-            {queuedPreviewUrl && <Clock className="h-4 w-4 shrink-0 text-amber-500" />}
-            <label className="cursor-pointer rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium whitespace-nowrap text-slate-700 hover:bg-slate-200">
-              {queuedPreviewUrl ? "Retake" : "Add photo"}
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) onFile(file);
-                  e.target.value = "";
-                }}
-              />
-            </label>
-          </>
-        )}
-      </div>
+
+      {totalCount > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {confirmedPhotos.map((photo) => (
+            <PhotoThumbnail
+              key={photo.id}
+              label={label}
+              previewUrl={photo.url}
+              status={removingIds[photo.id] ? "uploading" : "uploaded"}
+              onRemove={() => onRemoveConfirmed(photo)}
+            />
+          ))}
+          {localPhotos.map((photo) => (
+            <PhotoThumbnail
+              key={photo.id}
+              label={label}
+              previewUrl={photo.previewUrl}
+              status={photo.status}
+              error={photo.error}
+              onRemove={() => onRemoveLocal(photo.id)}
+              onRetry={() => onRetryLocal(photo.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -174,17 +249,17 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
   const [error, setError] = useState<string | null>(null);
   const isOnline = useOnlineStatus();
 
-  // Photos that couldn't be uploaded (no signal) and are sitting in the local
-  // IndexedDB queue instead — see src/lib/survey-offline-queue.ts. Keyed by
-  // itemKey; `previewUrl` is a local `blob:` URL (`URL.createObjectURL`) so the
-  // rep still sees a thumbnail before it's ever reached the server.
-  const [queuedPhotos, setQueuedPhotos] = useState<Record<string, { file: File; previewUrl: string }>>({});
-  const [photoBusy, setPhotoBusy] = useState<Record<string, boolean>>({});
-  const [photoErrors, setPhotoErrors] = useState<Record<string, string | null>>({});
+  // Photos picked on this device that aren't confirmed-uploaded yet — mid-upload,
+  // queued offline, or failed. See `LocalPhoto`'s doc comment.
+  const [localPhotos, setLocalPhotos] = useState<LocalPhoto[]>([]);
+  // Confirmed (server-saved) photos currently being deleted, keyed by photo id.
+  const [removingIds, setRemovingIds] = useState<Record<string, boolean>>({});
+  // A transient error message per checklist item (e.g. "couldn't remove while offline").
+  const [itemErrors, setItemErrors] = useState<Record<string, string | null>>({});
   // Whether the last "Submit survey" attempt failed to reach the server and was queued for retry.
   const [submitQueued, setSubmitQueued] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const hasQueuedItems = Object.keys(queuedPhotos).length > 0 || submitQueued;
+  const hasQueuedItems = localPhotos.some((p) => p.status === "queued") || submitQueued;
 
   useAutosaveDraft(draftKey, answers);
 
@@ -192,46 +267,47 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
     setAnswers((current) => ({ ...current, [key]: value }));
   }
 
-  function forgetQueuedPhoto(itemKey: PhotoChecklistItemKey) {
-    setQueuedPhotos((current) => {
-      const entry = current[itemKey];
+  const updateLocalPhoto = useCallback((id: string, patch: Partial<LocalPhoto>) => {
+    setLocalPhotos((current) => current.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
+
+  const removeLocalPhoto = useCallback((id: string) => {
+    setLocalPhotos((current) => {
+      const entry = current.find((p) => p.id === id);
       if (entry) URL.revokeObjectURL(entry.previewUrl);
-      const next = { ...current };
-      delete next[itemKey];
-      return next;
+      return current.filter((p) => p.id !== id);
     });
-  }
+  }, []);
 
   /**
    * Tries to upload one photo; on a network failure (no signal) it queues the
    * file locally instead of surfacing an error, so the rep can keep going.
    * A real server-side rejection (bad file, invalid token) is NOT queued —
-   * retrying it later wouldn't help.
+   * retrying it later wouldn't help, so it's left as a dismissible/retryable
+   * error tile instead.
    */
   const tryUploadPhoto = useCallback(
-    async (itemKey: PhotoChecklistItemKey, file: File): Promise<"uploaded" | "rejected" | "offline"> => {
+    async (photo: { id: string; itemKey: PhotoChecklistItemKey; file: File }): Promise<"uploaded" | "rejected" | "offline"> => {
       const formData = new FormData();
-      formData.set("file", file);
+      formData.set("file", photo.file);
       try {
-        const result = await uploadSurveyPhoto(token, itemKey, formData);
-        if (!result.ok || !result.url) {
-          setPhotoErrors((current) => ({ ...current, [itemKey]: result.error ?? "Upload failed." }));
-          await removePendingPhoto(token, itemKey);
-          forgetQueuedPhoto(itemKey);
+        const result = await uploadSurveyPhoto(token, photo.itemKey, photo.id, formData);
+        if (!result.ok || !result.photo) {
+          await removePendingPhoto(photo.id);
+          updateLocalPhoto(photo.id, { status: "error", error: result.error ?? "Upload failed." });
           return "rejected";
         }
-        await removePendingPhoto(token, itemKey);
-        forgetQueuedPhoto(itemKey);
-        setPhotos((current) => [...current.filter((p) => p.itemKey !== itemKey), { itemKey, url: result.url!, uploadedAt: new Date().toISOString() }]);
-        setPhotoErrors((current) => ({ ...current, [itemKey]: null }));
+        await removePendingPhoto(photo.id);
+        removeLocalPhoto(photo.id);
+        setPhotos((current) => [...current, { id: result.photo!.id, itemKey: photo.itemKey, url: result.photo!.url, uploadedAt: result.photo!.uploadedAt }]);
         return "uploaded";
       } catch {
-        await queuePendingPhoto(token, itemKey, file);
-        setQueuedPhotos((current) => (current[itemKey] ? current : { ...current, [itemKey]: { file, previewUrl: URL.createObjectURL(file) } }));
+        await queuePendingPhoto(token, photo.id, photo.itemKey, photo.file);
+        updateLocalPhoto(photo.id, { status: "queued", error: undefined });
         return "offline";
       }
     },
-    [token],
+    [token, updateLocalPhoto, removeLocalPhoto],
   );
 
   const trySubmit = useCallback(
@@ -273,10 +349,9 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
       try {
         const queued = await listPendingPhotos(token);
         let allSynced = true;
-        for (const { itemKey, file } of queued) {
-          setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
-          const result = await tryUploadPhoto(itemKey, file);
-          setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
+        for (const pending of queued) {
+          updateLocalPhoto(pending.id, { status: "uploading" });
+          const result = await tryUploadPhoto(pending);
           if (result === "offline") {
             allSynced = false;
             break; // connectivity dropped again mid-sync — stop, the rest stay queued for next time
@@ -290,7 +365,7 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
         setIsSyncing(false);
       }
     },
-    [token, tryUploadPhoto, trySubmit],
+    [token, tryUploadPhoto, trySubmit, updateLocalPhoto],
   );
 
   // Hydrate from anything already queued on this device (e.g. the rep closed
@@ -302,10 +377,12 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
       const [queued, queuedAnswers] = await Promise.all([listPendingPhotos(token), getPendingSubmit(token)]);
       if (cancelled) return;
       if (queued.length > 0) {
-        setQueuedPhotos((current) => {
-          const next = { ...current };
-          for (const { itemKey, file } of queued) next[itemKey] = { file, previewUrl: URL.createObjectURL(file) };
-          return next;
+        setLocalPhotos((current) => {
+          const existingIds = new Set(current.map((p) => p.id));
+          const additions: LocalPhoto[] = queued
+            .filter((q: PendingPhoto) => !existingIds.has(q.id))
+            .map((q: PendingPhoto) => ({ id: q.id, itemKey: q.itemKey, file: q.file, previewUrl: URL.createObjectURL(q.file), status: "queued" as const }));
+          return [...current, ...additions];
         });
       }
       if (queuedAnswers) setSubmitQueued(true);
@@ -325,25 +402,42 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
     return () => window.removeEventListener("online", handleOnline);
   }, [flushQueue]);
 
-  async function handlePhotoFile(itemKey: PhotoChecklistItemKey, file: File) {
-    setPhotoErrors((current) => ({ ...current, [itemKey]: null }));
-    setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
+  async function handlePhotoFile(itemKey: PhotoChecklistItemKey, rawFile: File) {
+    setItemErrors((current) => ({ ...current, [itemKey]: null }));
     // Downscaled before it ever reaches an upload attempt or the offline queue —
     // see compress-image.ts's doc comment for why (upload size + IndexedDB footprint).
-    const compressed = await compressPhoto(file);
-    await tryUploadPhoto(itemKey, compressed);
-    setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
+    const file = await compressPhoto(rawFile);
+    const id = crypto.randomUUID();
+    const previewUrl = URL.createObjectURL(file);
+    setLocalPhotos((current) => [...current, { id, itemKey, file, previewUrl, status: "uploading" }]);
+    await tryUploadPhoto({ id, itemKey, file });
   }
 
-  async function handleRemovePhoto(itemKey: PhotoChecklistItemKey) {
-    setPhotoBusy((current) => ({ ...current, [itemKey]: true }));
+  function handleRetryLocalPhoto(id: string) {
+    const local = localPhotos.find((p) => p.id === id);
+    if (!local) return;
+    updateLocalPhoto(id, { status: "uploading", error: undefined });
+    void tryUploadPhoto({ id: local.id, itemKey: local.itemKey, file: local.file });
+  }
+
+  async function handleRemoveLocalPhoto(id: string) {
+    await removePendingPhoto(id);
+    removeLocalPhoto(id);
+  }
+
+  async function handleRemoveConfirmedPhoto(photo: BoilerSurveyPhoto) {
+    setRemovingIds((current) => ({ ...current, [photo.id]: true }));
     try {
-      await removeSurveyPhoto(token, itemKey);
-      setPhotos((current) => current.filter((p) => p.itemKey !== itemKey));
+      await removeSurveyPhoto(token, photo.id);
+      setPhotos((current) => current.filter((p) => p.id !== photo.id));
     } catch {
-      setPhotoErrors((current) => ({ ...current, [itemKey]: "Couldn't remove while offline — try again once you're back online." }));
+      setItemErrors((current) => ({ ...current, [photo.itemKey]: "Couldn't remove while offline — try again once you're back online." }));
     }
-    setPhotoBusy((current) => ({ ...current, [itemKey]: false }));
+    setRemovingIds((current) => {
+      const next = { ...current };
+      delete next[photo.id];
+      return next;
+    });
   }
 
   function handleSubmit() {
@@ -428,19 +522,21 @@ export function SurveyForm({ token, survey }: { token: string; survey: PublicBoi
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="border-b border-slate-100 bg-slate-50 px-4 py-2.5">
             <h2 className="text-sm font-semibold text-slate-900">Photo Checklist</h2>
-            <p className="text-xs text-slate-500">Take a photo for each item — attach all photos to the job file.</p>
+            <p className="text-xs text-slate-500">Take at least one photo for each item — add as many extra angles/close-ups as you need.</p>
           </div>
           <div className="flex flex-col gap-2 p-4">
             {PHOTO_CHECKLIST_ITEMS.map((item) => (
-              <PhotoItem
+              <PhotoItemGroup
                 key={item.key}
                 label={item.label}
-                photo={photos.find((p) => p.itemKey === item.key)}
-                queuedPreviewUrl={queuedPhotos[item.key]?.previewUrl}
-                isBusy={photoBusy[item.key] ?? false}
-                error={photoErrors[item.key] ?? null}
-                onFile={(file) => void handlePhotoFile(item.key, file)}
-                onRemove={() => void handleRemovePhoto(item.key)}
+                confirmedPhotos={photos.filter((p) => p.itemKey === item.key)}
+                localPhotos={localPhotos.filter((p) => p.itemKey === item.key)}
+                removingIds={removingIds}
+                error={itemErrors[item.key] ?? null}
+                onAddFile={(file) => void handlePhotoFile(item.key, file)}
+                onRemoveConfirmed={(photo) => void handleRemoveConfirmedPhoto(photo)}
+                onRemoveLocal={(id) => void handleRemoveLocalPhoto(id)}
+                onRetryLocal={handleRetryLocalPhoto}
               />
             ))}
           </div>

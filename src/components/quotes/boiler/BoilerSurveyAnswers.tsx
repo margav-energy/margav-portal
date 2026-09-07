@@ -32,22 +32,25 @@ export function BoilerSurveyAnswers({ answers, photos }: { answers: Answers; pho
 
       <div>
         <h4 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-          Photos ({photos.length}/{PHOTO_CHECKLIST_ITEMS.length})
+          Photos ({new Set(photos.map((p) => p.itemKey)).size}/{PHOTO_CHECKLIST_ITEMS.length} items · {photos.length} photo
+          {photos.length === 1 ? "" : "s"})
         </h4>
         {photos.length === 0 ? (
           <p className="mt-2 text-sm text-slate-400">No photos uploaded yet.</p>
         ) : (
           <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {PHOTO_CHECKLIST_ITEMS.map((item) => {
-              const photo = photos.find((p) => p.itemKey === item.key);
-              if (!photo) return null;
-              return (
-                <a key={item.key} href={photo.url} target="_blank" rel="noopener noreferrer" title={item.label}>
+            {PHOTO_CHECKLIST_ITEMS.flatMap((item) => {
+              const itemPhotos = photos.filter((p) => p.itemKey === item.key);
+              return itemPhotos.map((photo, index) => (
+                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer" title={item.label}>
                   {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, refreshed on every server read rather than a static asset. */}
                   <img src={photo.url} alt={item.label} className="aspect-square w-full rounded-md object-cover" />
-                  <p className="mt-1 text-xs text-slate-500">{item.label}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {item.label}
+                    {itemPhotos.length > 1 ? ` (${index + 1}/${itemPhotos.length})` : ""}
+                  </p>
                 </a>
-              );
+              ));
             })}
           </div>
         )}

@@ -80,11 +80,21 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   "image/heif": "heif",
 };
 
+/**
+ * `photoId` is generated client-side (`crypto.randomUUID()` in `SurveyForm.tsx`)
+ * rather than left to the database default — the client needs to know the id
+ * up front so it can track this exact photo's upload/queue/error state (and,
+ * if it queues for offline retry, so retrying it later reuses the same id
+ * instead of creating a duplicate). A checklist item can now hold more than
+ * one photo (see 0035_boiler_survey_multiple_photos.sql), so this is a plain
+ * insert, not the single-row-per-item upsert this used to be.
+ */
 export async function uploadSurveyPhoto(
   token: string,
   itemKey: PhotoChecklistItemKey,
+  photoId: string,
   formData: FormData,
-): Promise<{ ok: boolean; url?: string; error?: string }> {
+): Promise<{ ok: boolean; photo?: { id: string; url: string; uploadedAt: string }; error?: string }> {
   const survey = await findSurveyByToken(token);
   if (!survey) return { ok: false, error: "This survey link is no longer valid." };
 
@@ -94,7 +104,7 @@ export async function uploadSurveyPhoto(
 
   const supabase = createServiceRoleClient();
   const extension = EXTENSION_BY_MIME[file.type] ?? "jpg";
-  const storagePath = `${survey.id}/${itemKey}.${extension}`;
+  const storagePath = `${survey.id}/${itemKey}/${photoId}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(SURVEY_PHOTOS_BUCKET)
@@ -105,15 +115,16 @@ export async function uploadSurveyPhoto(
     return { ok: false, error: "Could not upload the photo. Please try again." };
   }
 
-  const { error: upsertError } = await supabase
+  const uploadedAt = new Date().toISOString();
+  const { error: insertError } = await supabase
     .from("boiler_survey_photos")
     .upsert(
-      { survey_id: survey.id, item_key: itemKey, storage_path: storagePath, uploaded_at: new Date().toISOString() },
-      { onConflict: "survey_id,item_key" },
+      { id: photoId, survey_id: survey.id, item_key: itemKey, storage_path: storagePath, uploaded_at: uploadedAt },
+      { onConflict: "id" },
     );
 
-  if (upsertError) {
-    console.error("uploadSurveyPhoto upsert failed", upsertError);
+  if (insertError) {
+    console.error("uploadSurveyPhoto insert failed", insertError);
     return { ok: false, error: "Could not save the photo. Please try again." };
   }
 
@@ -127,13 +138,10 @@ export async function uploadSurveyPhoto(
   }
 
   revalidatePath(`/quotes/${survey.quote_id}`);
-  return { ok: true, url: signed.signedUrl };
+  return { ok: true, photo: { id: photoId, url: signed.signedUrl, uploadedAt } };
 }
 
-export async function removeSurveyPhoto(
-  token: string,
-  itemKey: PhotoChecklistItemKey,
-): Promise<{ ok: boolean; error?: string }> {
+export async function removeSurveyPhoto(token: string, photoId: string): Promise<{ ok: boolean; error?: string }> {
   const survey = await findSurveyByToken(token);
   if (!survey) return { ok: false, error: "This survey link is no longer valid." };
 
@@ -141,14 +149,14 @@ export async function removeSurveyPhoto(
   const { data: photo } = await supabase
     .from("boiler_survey_photos")
     .select("storage_path")
+    .eq("id", photoId)
     .eq("survey_id", survey.id)
-    .eq("item_key", itemKey)
     .maybeSingle();
 
   if (photo?.storage_path) {
     await supabase.storage.from(SURVEY_PHOTOS_BUCKET).remove([photo.storage_path]);
   }
-  await supabase.from("boiler_survey_photos").delete().eq("survey_id", survey.id).eq("item_key", itemKey);
+  await supabase.from("boiler_survey_photos").delete().eq("id", photoId).eq("survey_id", survey.id);
 
   revalidatePath(`/quotes/${survey.quote_id}`);
   return { ok: true };

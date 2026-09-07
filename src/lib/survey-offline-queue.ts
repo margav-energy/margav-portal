@@ -28,13 +28,14 @@ const PHOTOS_STORE = "pending-photos";
 const SUBMITS_STORE = "pending-submits";
 
 export interface PendingPhoto {
+  /** The same id `SurveyForm.tsx` generated for this photo up front (`crypto.randomUUID()`) — a checklist item can hold more than one photo now, so this (not `itemKey`) is what's unique. Reused as `boiler_survey_photos.id` once it actually uploads. */
+  id: string;
   itemKey: PhotoChecklistItemKey;
   file: File;
   queuedAt: string;
 }
 
 interface PendingPhotoRecord extends PendingPhoto {
-  id: string;
   token: string;
 }
 
@@ -61,10 +62,6 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-function photoId(token: string, itemKey: string): string {
-  return `${token}::${itemKey}`;
-}
-
 function withStore<T>(storeName: string, mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return openDb().then(
     (db) =>
@@ -78,10 +75,10 @@ function withStore<T>(storeName: string, mode: IDBTransactionMode, fn: (store: I
   );
 }
 
-/** Queues a photo that failed to upload (offline/network error) for retry later. */
-export async function queuePendingPhoto(token: string, itemKey: PhotoChecklistItemKey, file: File): Promise<boolean> {
+/** Queues a photo that failed to upload (offline/network error) for retry later. `id` is the photo's own id (see `PendingPhoto`'s doc comment) — putting the same id again (a retry) just overwrites, it never duplicates. */
+export async function queuePendingPhoto(token: string, id: string, itemKey: PhotoChecklistItemKey, file: File): Promise<boolean> {
   try {
-    const record: PendingPhotoRecord = { id: photoId(token, itemKey), token, itemKey, file, queuedAt: new Date().toISOString() };
+    const record: PendingPhotoRecord = { id, token, itemKey, file, queuedAt: new Date().toISOString() };
     await withStore<IDBValidKey>(PHOTOS_STORE, "readwrite", (store) => store.put(record));
     return true;
   } catch {
@@ -96,15 +93,16 @@ export async function listPendingPhotos(token: string): Promise<PendingPhoto[]> 
     return all
       .filter((record) => record.token === token)
       .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt))
-      .map(({ itemKey, file, queuedAt }) => ({ itemKey, file, queuedAt }));
+      .map(({ id, itemKey, file, queuedAt }) => ({ id, itemKey, file, queuedAt }));
   } catch {
     return [];
   }
 }
 
-export async function removePendingPhoto(token: string, itemKey: PhotoChecklistItemKey): Promise<void> {
+/** `id` is the photo's own id — globally unique, so no need for `token`/`itemKey` to look it up. */
+export async function removePendingPhoto(id: string): Promise<void> {
   try {
-    await withStore<undefined>(PHOTOS_STORE, "readwrite", (store) => store.delete(photoId(token, itemKey)) as unknown as IDBRequest<undefined>);
+    await withStore<undefined>(PHOTOS_STORE, "readwrite", (store) => store.delete(id) as unknown as IDBRequest<undefined>);
   } catch {
     // ignore — nothing queued, or storage unavailable
   }

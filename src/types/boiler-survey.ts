@@ -27,6 +27,8 @@ export const PHOTO_CHECKLIST_ITEMS = [
 export type PhotoChecklistItemKey = (typeof PHOTO_CHECKLIST_ITEMS)[number]["key"];
 
 export interface BoilerSurveyPhoto {
+  /** `boiler_survey_photos.id` — a checklist item can now have more than one photo, so this (not `itemKey`) is what identifies a specific photo for removal. */
+  id: string;
   itemKey: PhotoChecklistItemKey;
   /** Signed, short-lived — regenerate on every read, never persist it. */
   url: string;

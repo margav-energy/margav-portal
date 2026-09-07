@@ -279,15 +279,16 @@ async function loadSignedPhotos(
 ): Promise<BoilerSurveyPhoto[]> {
   const { data: photoRows, error } = await supabase
     .from("boiler_survey_photos")
-    .select("item_key, storage_path, uploaded_at")
-    .eq("survey_id", surveyId);
+    .select("id, item_key, storage_path, uploaded_at")
+    .eq("survey_id", surveyId)
+    .order("uploaded_at", { ascending: true });
 
   if (error) {
     console.error("loadSignedPhotos failed", error);
     return [];
   }
 
-  const rows = (photoRows ?? []) as { item_key: PhotoChecklistItemKey; storage_path: string; uploaded_at: string }[];
+  const rows = (photoRows ?? []) as { id: string; item_key: PhotoChecklistItemKey; storage_path: string; uploaded_at: string }[];
 
   const photos = await Promise.all(
     rows.map(async (row) => {
@@ -298,7 +299,7 @@ async function loadSignedPhotos(
         console.error("createSignedUrl failed", row.storage_path, signError);
         return null;
       }
-      return { itemKey: row.item_key, url: signed.signedUrl, uploadedAt: row.uploaded_at };
+      return { id: row.id, itemKey: row.item_key, url: signed.signedUrl, uploadedAt: row.uploaded_at };
     }),
   );
 
@@ -344,15 +345,16 @@ async function loadPhotosForPdf(
 ): Promise<SurveyPdfPhoto[]> {
   const { data: photoRows, error } = await supabase
     .from("boiler_survey_photos")
-    .select("item_key, storage_path")
-    .eq("survey_id", surveyId);
+    .select("id, item_key, storage_path")
+    .eq("survey_id", surveyId)
+    .order("uploaded_at", { ascending: true });
 
   if (error) {
     console.error("loadPhotosForPdf failed", error);
     return [];
   }
 
-  const rows = (photoRows ?? []) as { item_key: PhotoChecklistItemKey; storage_path: string }[];
+  const rows = (photoRows ?? []) as { id: string; item_key: PhotoChecklistItemKey; storage_path: string }[];
 
   const photos = await Promise.all(
     rows.map(async (row): Promise<SurveyPdfPhoto | null> => {
@@ -363,6 +365,7 @@ async function loadPhotosForPdf(
       }
       const extension = row.storage_path.split(".").pop()?.toLowerCase() ?? "";
       return {
+        id: row.id,
         itemKey: row.item_key,
         bytes: Buffer.from(await data.arrayBuffer()),
         embeddable: PDF_EMBEDDABLE_EXTENSIONS.has(extension),

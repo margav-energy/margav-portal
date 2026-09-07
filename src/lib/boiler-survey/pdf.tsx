@@ -59,6 +59,7 @@ function displayValue(value: string | number | null): string {
 }
 
 export interface SurveyPdfPhoto {
+  id: string;
   itemKey: PhotoChecklistItemKey;
   bytes: Buffer;
   /** react-pdf's `<Image>` only reliably decodes JPEG/PNG — other formats (e.g. HEIC straight off an iPhone camera) are listed by label but not embedded, see `embeddable` below. */
@@ -72,7 +73,16 @@ export async function renderSurveySummaryPdf(params: {
   submittedAtLabel: string;
 }): Promise<Buffer> {
   const { job, answers, photos, submittedAtLabel } = params;
-  const photoByKey = new Map(photos.map((photo) => [photo.itemKey, photo]));
+  // A checklist item can now hold more than one photo (see
+  // 0035_boiler_survey_multiple_photos.sql), so this groups into arrays
+  // rather than the old one-photo-per-item Map.
+  const photosByKey = new Map<PhotoChecklistItemKey, typeof photos>();
+  for (const photo of photos) {
+    const list = photosByKey.get(photo.itemKey) ?? [];
+    list.push(photo);
+    photosByKey.set(photo.itemKey, list);
+  }
+  const itemsCovered = photosByKey.size;
 
   const doc = (
     <Document>
@@ -101,26 +111,37 @@ export async function renderSurveySummaryPdf(params: {
         ))}
 
         <Text style={styles.sectionTitle}>
-          Photos ({photos.length}/{PHOTO_CHECKLIST_ITEMS.length})
+          Photos ({itemsCovered}/{PHOTO_CHECKLIST_ITEMS.length} items · {photos.length} photo{photos.length === 1 ? "" : "s"})
         </Text>
         <View style={styles.photoGrid}>
-          {PHOTO_CHECKLIST_ITEMS.map((item) => {
-            const photo = photoByKey.get(item.key);
-            return (
-              <View key={item.key} style={styles.photoTile} wrap={false}>
-                {photo?.embeddable ? (
+          {PHOTO_CHECKLIST_ITEMS.flatMap((item) => {
+            const itemPhotos = photosByKey.get(item.key) ?? [];
+            if (itemPhotos.length === 0) {
+              return [
+                <View key={item.key} style={styles.photoTile} wrap={false}>
+                  <View style={styles.photoPlaceholder}>
+                    <Text style={styles.photoPlaceholderText}>Not photographed</Text>
+                  </View>
+                  <Text style={styles.photoLabel}>{item.label}</Text>
+                </View>,
+              ];
+            }
+            return itemPhotos.map((photo, index) => (
+              <View key={photo.id} style={styles.photoTile} wrap={false}>
+                {photo.embeddable ? (
                   // eslint-disable-next-line jsx-a11y/alt-text -- this is @react-pdf/renderer's PDF-drawing <Image>, not an HTML <img>; it has no alt prop.
                   <Image src={photo.bytes} style={styles.photoImage} />
                 ) : (
                   <View style={styles.photoPlaceholder}>
-                    <Text style={styles.photoPlaceholderText}>
-                      {photo ? "Photo attached — view in portal" : "Not photographed"}
-                    </Text>
+                    <Text style={styles.photoPlaceholderText}>Photo attached — view in portal</Text>
                   </View>
                 )}
-                <Text style={styles.photoLabel}>{item.label}</Text>
+                <Text style={styles.photoLabel}>
+                  {item.label}
+                  {itemPhotos.length > 1 ? ` (${index + 1}/${itemPhotos.length})` : ""}
+                </Text>
               </View>
-            );
+            ));
           })}
         </View>
       </Page>
