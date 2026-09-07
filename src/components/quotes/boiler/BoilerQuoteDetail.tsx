@@ -163,12 +163,12 @@ export function BoilerQuoteDetail({
     boilerCostSettings,
     extras,
   );
-  const profitAmount = totalCost - costBreakdown.total;
+  const profitAmount = totalAfterDiscount - costBreakdown.total;
   const profit: ProfitBreakdown = {
     costPrice: costBreakdown.total,
-    sellPrice: totalCost,
+    sellPrice: totalAfterDiscount,
     profit: profitAmount,
-    marginPercent: totalCost > 0 ? Math.round((profitAmount / totalCost) * 1000) / 10 : 0,
+    marginPercent: totalAfterDiscount > 0 ? Math.round((profitAmount / totalAfterDiscount) * 1000) / 10 : 0,
     costLineItems: costBreakdown.lineItems,
     materialsCost: costBreakdown.materialsCost,
   };

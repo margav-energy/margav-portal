@@ -132,8 +132,9 @@ export function monthlyPlanTermYearsFor(row: QuoteRow): number | undefined {
 
 /**
  * `sellPrice` always mirrors the Pricing card's total (boiler/solar +
- * install, extras, standard additionals, free-text extras) rather than
- * being stored. `profit`/`marginPercent` derive from `costPrice` + `sellPrice`.
+ * install, extras, standard additionals, free-text extras) minus any
+ * discount, rather than being stored. `profit`/`marginPercent` derive from
+ * `costPrice` + `sellPrice`.
  *
  * `costPrice` itself comes from different places depending on product —
  * boiler quotes pass Margav's calculated install cost (see

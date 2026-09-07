@@ -272,7 +272,7 @@ export async function getQuoteDetail(
     const unitsTotal =
       boilerUnits.reduce((sum, unit) => sum + unit.price, 0) +
       sumLineItems(boilerUnits.flatMap((unit) => unit.items));
-    const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
+    const sellPrice = unitsTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal - discountAmount;
     // boilerCostSettings is always populated here — fetched above whenever isBoiler is true.
     const costBreakdown = boilerCostBreakdown(
       boilerUnits.map((unit) => ({ outputKw: unit.outputKw, make: unit.make, model: unit.model })),
@@ -306,7 +306,7 @@ export async function getQuoteDetail(
   const arrayRows = (unitsResult.data ?? []) as SolarArrayRow[];
   const solarArrays = arrayRows.map(mapSolarArrayRow);
   const arraysTotal = sumLineItems(solarArrays.flatMap((array) => array.items));
-  const sellPrice = arraysTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal;
+  const sellPrice = arraysTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal - discountAmount;
 
   const detail: SolarQuoteDetail = {
     quoteId: row.id,

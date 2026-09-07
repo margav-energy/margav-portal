@@ -77,7 +77,12 @@ export function SolarQuoteDetail({
     detail.monthlyPlanTermYears,
   );
   const [notes, setNotes] = useState<QuoteNote[]>(detail.notes);
-  const [profit, setProfit] = useState<ProfitBreakdown>(detail.profitBreakdown);
+  // Only `costPrice` is ever independently set (via the Profit card's edit
+  // modal, a rep-entered manual figure — solar has no cost model yet).
+  // `sellPrice`/`profit`/`marginPercent` are derived below from
+  // `totalAfterDiscount` on every render instead of being stored, so they
+  // stay in sync the moment a discount is applied.
+  const [costPrice, setCostPrice] = useState<number>(detail.profitBreakdown.costPrice);
   const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
     vatAmount: detail.vatAmount,
     discountAmount: detail.discountAmount,
@@ -94,6 +99,14 @@ export function SolarQuoteDetail({
   // src/lib/esignature/document.ts) — the Payment Method card's own preview
   // needs to match that, not the pre-discount subtotal above.
   const totalAfterDiscount = totalCost - pricingAdjustments.discountAmount;
+
+  const profitAmount = totalAfterDiscount - costPrice;
+  const profit: ProfitBreakdown = {
+    costPrice,
+    sellPrice: totalAfterDiscount,
+    profit: profitAmount,
+    marginPercent: totalAfterDiscount > 0 ? Math.round((profitAmount / totalAfterDiscount) * 1000) / 10 : 0,
+  };
 
   function handleSelectPaymentMethod(method: PaymentMethodOption) {
     setSelectedPaymentMethod(method);
@@ -226,7 +239,7 @@ export function SolarQuoteDetail({
             quoteId={detail.quoteId}
             customerName={customer.name}
             profit={profit}
-            onUpdated={setProfit}
+            onUpdated={(nextProfit) => setCostPrice(nextProfit.costPrice)}
           />
           <InstallerAssignmentCard
             quoteId={detail.quoteId}
