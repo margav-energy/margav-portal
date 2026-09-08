@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { createBoilerUnit, deleteBoilerUnit, updateBoilerUnit } from "@/components/quotes/actions";
-import { BOILER_MAKE_OPTIONS, modelsForMake, withLegacyOption } from "@/lib/boiler-catalog";
+import { BOILER_MAKE_OPTIONS, INTERGAS_MAKE, modelsForMake, withLegacyOption } from "@/lib/boiler-catalog";
 import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
@@ -24,6 +24,10 @@ const CYLINDER_LITRE_OPTIONS = [120, 150, 180, 210, 250, 300];
 /** Sentinel shown as the last Make/Model option — picking it swaps the
  *  dropdown for a free-text input, for a boiler outside the preset catalog. */
 const OTHER_OPTION = "Other";
+/** Every Intergas boiler carries this warranty — selecting the make
+ *  auto-fills Warranty so reps don't have to look it up/type it every time.
+ *  Still a plain editable field for the rare exception. */
+const INTERGAS_WARRANTY_YEARS = 12;
 
 /**
  * Starting suggestion for a System/Open Vent unit's cylinder, keyed off
@@ -135,11 +139,17 @@ function UnitFormModal({
    *  clears whatever model was previously selected — a model valid for one
    *  make isn't guaranteed to exist for another. Choosing "Other" swaps
    *  both Make and Model over to free text, since a make outside the
-   *  catalog has no known model list to offer either. */
+   *  catalog has no known model list to offer either. Choosing Intergas
+   *  also auto-fills Warranty to its standard 12 years. */
   function handleMakeChange(value: string) {
     setIsCustomMake(value === OTHER_OPTION);
     setIsCustomModel(false);
-    setForm((current) => ({ ...current, make: value === OTHER_OPTION ? "" : value, model: "" }));
+    setForm((current) => ({
+      ...current,
+      make: value === OTHER_OPTION ? "" : value,
+      model: "",
+      warrantyYears: value === INTERGAS_MAKE ? String(INTERGAS_WARRANTY_YEARS) : current.warrantyYears,
+    }));
     setErrors((current) => ({ ...current, make: undefined, model: undefined }));
   }
 

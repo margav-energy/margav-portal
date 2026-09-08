@@ -72,6 +72,7 @@ export const DEFAULT_BOILER_COST_SETTINGS: BoilerCostSettings = {
     "Roof kit": 87.36,
     "Gas run per metre": 35.88,
     "Flue extension per metre": 35.88,
+    Radiators: 140,
   },
 };
 

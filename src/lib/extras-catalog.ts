@@ -26,6 +26,10 @@ export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
   { name: "Flue extension per metre", defaultUnitPrice: 100 },
   /** £500 one-off — quantity stays 1. Independent of the two "Extra ... installation" entries below — a quote can carry any combination of these three. */
   { name: "Relocation", defaultUnitPrice: 500 },
+  /** £200 each (quantity = number of radiators) — includes thermostatic TRVs
+   *  as part of the package, so those aren't itemized separately. Costs
+   *  Margav £140 each (see `extraCostsByName` in boiler-install-cost.ts). */
+  { name: "Radiators", defaultUnitPrice: 200 },
   { name: "Extra half-day installation", defaultUnitPrice: 0 },
   { name: "Extra full-day installation", defaultUnitPrice: 0 },
 ];
