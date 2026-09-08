@@ -21,6 +21,9 @@ const INSTALL_TYPES: BoilerInstallType[] = ["Combi", "System", "Open Vent"];
 const OUTPUT_KW_OPTIONS = [24, 30, 36];
 /** Common cylinder sizes — combi boilers leave this unset instead. */
 const CYLINDER_LITRE_OPTIONS = [120, 150, 180, 210, 250, 300];
+/** Sentinel shown as the last Make/Model option — picking it swaps the
+ *  dropdown for a free-text input, for a boiler outside the preset catalog. */
+const OTHER_OPTION = "Other";
 
 /**
  * Starting suggestion for a System/Open Vent unit's cylinder, keyed off
@@ -111,6 +114,13 @@ function UnitFormModal({
   const [form, setForm] = useState<UnitForm>(() => toForm(initial));
   const draftRestored = useDraftRestore<UnitForm>(draftKey, setForm);
   const [errors, setErrors] = useState<UnitFormErrors>({});
+  // Whether Make/Model are currently showing a free-text "Other" input
+  // instead of their preset dropdown. Always starts false — an existing
+  // legacy make/model that predates the catalog still shows via
+  // `withLegacyOption` as a normal (already-selected) dropdown option, so
+  // only *choosing* "Other" fresh needs to switch into text-entry mode.
+  const [isCustomMake, setIsCustomMake] = useState(false);
+  const [isCustomModel, setIsCustomModel] = useState(false);
 
   useAutosaveDraft(draftKey, form);
 
@@ -123,18 +133,24 @@ function UnitFormModal({
 
   /** Model choices depend on the selected make, so switching make always
    *  clears whatever model was previously selected — a model valid for one
-   *  make isn't guaranteed to exist for another. */
+   *  make isn't guaranteed to exist for another. Choosing "Other" swaps
+   *  both Make and Model over to free text, since a make outside the
+   *  catalog has no known model list to offer either. */
   function handleMakeChange(value: string) {
-    setForm((current) => ({ ...current, make: value, model: "" }));
+    setIsCustomMake(value === OTHER_OPTION);
+    setIsCustomModel(false);
+    setForm((current) => ({ ...current, make: value === OTHER_OPTION ? "" : value, model: "" }));
     setErrors((current) => ({ ...current, make: undefined, model: undefined }));
   }
 
   /** Intergas model names embed the kW output ("Xclusive 24") — selecting a
    *  model auto-syncs Output so the two can't end up mismatched. Output
    *  stays visible/editable for the rare case a model's trailing number
-   *  isn't its kW. */
+   *  isn't its kW. Choosing "Other" swaps the dropdown for free text instead
+   *  (e.g. an Intergas model not yet in the preset list). */
   function handleModelChange(value: string) {
-    set("model", value);
+    setIsCustomModel(value === OTHER_OPTION);
+    set("model", value === OTHER_OPTION ? "" : value);
     const outputMatch = value.match(/(\d+)\s*$/);
     if (outputMatch) handleOutputKwChange(outputMatch[1]);
   }
@@ -185,8 +201,8 @@ function UnitFormModal({
 
   function handleSave() {
     const nextErrors: UnitFormErrors = {};
-    if (!form.make.trim()) nextErrors.make = "Select a make";
-    if (!form.model.trim()) nextErrors.model = "Select a model";
+    if (!form.make.trim()) nextErrors.make = isCustomMake ? "Enter a make" : "Select a make";
+    if (!form.model.trim()) nextErrors.model = isCustomModel ? "Enter a model" : "Select a model";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
@@ -221,7 +237,7 @@ function UnitFormModal({
           <select
             id="unit-make"
             className={inputClassName}
-            value={form.make}
+            value={isCustomMake ? OTHER_OPTION : form.make}
             onChange={(event) => handleMakeChange(event.target.value)}
           >
             <option value="">Select make</option>
@@ -230,24 +246,58 @@ function UnitFormModal({
                 {make}
               </option>
             ))}
+            <option value={OTHER_OPTION}>Other</option>
           </select>
+          {isCustomMake && (
+            <input
+              id="unit-make-other"
+              className={inputClassName}
+              placeholder="Enter make"
+              value={form.make}
+              onChange={(event) => set("make", event.target.value)}
+            />
+          )}
         </FormField>
         <FormField label="Model" htmlFor="unit-model" required error={errors.model}>
-          <select
-            id="unit-model"
-            className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
-            value={form.model}
-            disabled={!form.make}
-            aria-disabled={!form.make}
-            onChange={(event) => handleModelChange(event.target.value)}
-          >
-            <option value="">Select model</option>
-            {withLegacyOption(modelsForMake(form.make), form.model).map((model) => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            ))}
-          </select>
+          {isCustomMake ? (
+            // A make outside the catalog has no known model list — go
+            // straight to free text instead of a dropdown with nothing in it.
+            <input
+              id="unit-model"
+              className={inputClassName}
+              placeholder="Enter model"
+              value={form.model}
+              onChange={(event) => set("model", event.target.value)}
+            />
+          ) : (
+            <>
+              <select
+                id="unit-model"
+                className={`${inputClassName} disabled:cursor-not-allowed disabled:opacity-50`}
+                value={isCustomModel ? OTHER_OPTION : form.model}
+                disabled={!form.make}
+                aria-disabled={!form.make}
+                onChange={(event) => handleModelChange(event.target.value)}
+              >
+                <option value="">Select model</option>
+                {withLegacyOption(modelsForMake(form.make), form.model).map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+                <option value={OTHER_OPTION}>Other</option>
+              </select>
+              {isCustomModel && (
+                <input
+                  id="unit-model-other"
+                  className={inputClassName}
+                  placeholder="Enter model"
+                  value={form.model}
+                  onChange={(event) => set("model", event.target.value)}
+                />
+              )}
+            </>
+          )}
           {!form.make && <p className="text-xs text-slate-400">Select a make first.</p>}
         </FormField>
         <FormField label="Output (kW)" htmlFor="unit-output">
@@ -402,18 +452,26 @@ export function BoilerUnitsSection({
   customerName,
   units,
   onUnitsChange,
+  onUnitSaved,
 }: {
   quoteId: string;
   customerName: string;
   units: BoilerUnit[];
   onUnitsChange: (units: BoilerUnit[]) => void;
+  /** Fired after a unit is added or edited, with the saved unit — lets the
+   *  parent react to what was picked (e.g. auto-adding the Intergas
+   *  "included" extras, see `BoilerQuoteDetail.handleBoilerUnitSaved`). */
+  onUnitSaved?: (unit: BoilerUnit) => void;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUnit, setEditingUnit] = useState<BoilerUnit | null>(null);
 
   async function handleAdd(unit: Omit<BoilerUnit, "id">) {
     const created = await createBoilerUnit(quoteId, unit, customerName);
-    if (created) onUnitsChange([...units, created]);
+    if (created) {
+      onUnitsChange([...units, created]);
+      onUnitSaved?.(created);
+    }
   }
 
   async function handleEdit(unit: Omit<BoilerUnit, "id">) {
@@ -421,6 +479,7 @@ export function BoilerUnitsSection({
     const updated: BoilerUnit = { ...unit, id: editingUnit.id };
     onUnitsChange(units.map((current) => (current.id === updated.id ? updated : current)));
     void updateBoilerUnit(quoteId, updated, customerName);
+    onUnitSaved?.(updated);
   }
 
   async function handleRemove(unit: BoilerUnit) {

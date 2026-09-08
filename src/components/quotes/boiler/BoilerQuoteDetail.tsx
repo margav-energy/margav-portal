@@ -25,9 +25,11 @@ import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusC
 import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
 import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
 import { EXTRAS_CATALOG } from "@/lib/extras-catalog";
+import { INTERGAS_MAKE } from "@/lib/boiler-catalog";
 import { boilerCostBreakdown } from "@/lib/boiler-install-cost";
 import {
   cancelQuoteAppointment,
+  createQuoteLineItem,
   logWarrantyRegistration,
   recordPitchOutcome,
   sendCoolingOffWaiver,
@@ -35,7 +37,7 @@ import {
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { BoilerCostSettings } from "@/lib/boiler-install-cost";
-import type { BoilerQuoteDetail as BoilerQuoteDetailData } from "@/types/boiler-quote";
+import type { BoilerQuoteDetail as BoilerQuoteDetailData, BoilerUnit } from "@/types/boiler-quote";
 import type { BoilerSurveyDetail } from "@/types/boiler-survey";
 import type { SignatureRequestSummary } from "@/data/signature-service";
 import type {
@@ -202,6 +204,29 @@ export function BoilerQuoteDetail({
     if (!ok) setIsAppointmentCancelled(false);
   }
 
+  /**
+   * Intergas boilers come with a set kit — Gateway with Smart Touch, Fernox
+   * Filter, Standard 60/100 Flue (the `lockedPrice`/"Included" entries in
+   * `EXTRAS_CATALOG`) — so picking one auto-adds those to the Extras section
+   * instead of the rep having to add each by hand. Additive and idempotent:
+   * only ever adds extras that aren't already there (so adding a second
+   * Intergas unit, or editing one, never creates duplicates), and never
+   * removes extras if the unit is later changed to another make.
+   */
+  async function handleBoilerUnitSaved(unit: BoilerUnit) {
+    if (unit.make !== INTERGAS_MAKE) return;
+    const included = EXTRAS_CATALOG.filter((entry) => entry.lockedPrice);
+    const missing = included.filter((entry) => !extras.some((item) => item.name === entry.name));
+    if (missing.length === 0) return;
+    const results = await Promise.all(
+      missing.map((entry) =>
+        createQuoteLineItem(detail.quoteId, "extra", { name: entry.name, quantity: 1, unitPrice: 0 }, customer.name),
+      ),
+    );
+    const newItems = results.filter((item): item is LineItem => item !== null);
+    if (newItems.length > 0) setExtras((current) => [...current, ...newItems]);
+  }
+
   const primaryUnit = boilerUnits[0];
 
   const actionButtons = buildActionButtons({
@@ -270,6 +295,7 @@ export function BoilerQuoteDetail({
             customerName={customer.name}
             units={boilerUnits}
             onUnitsChange={setBoilerUnits}
+            onUnitSaved={(unit) => void handleBoilerUnitSaved(unit)}
           />
 
           <LineItemsSection

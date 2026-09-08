@@ -15,6 +15,12 @@ export const BOILER_MAKES: BoilerMakeOption[] = [
   { make: "Intergas", models: ["Xclusive 24", "Xclusive 30", "Xclusive 36"] },
 ];
 
+/** Margav's sole boiler make today — picking a unit under this make
+ *  auto-adds the "included" extras (Gateway, Filter, Flue — see
+ *  `EXTRAS_CATALOG`'s `lockedPrice` entries) to the quote's Extras section.
+ *  See `BoilerQuoteDetail.handleBoilerUnitSaved`. */
+export const INTERGAS_MAKE = "Intergas";
+
 export const BOILER_MAKE_OPTIONS = BOILER_MAKES.map((option) => option.make);
 
 /** Models for a given make, or none if the make isn't in the catalog (e.g. not yet chosen). */
