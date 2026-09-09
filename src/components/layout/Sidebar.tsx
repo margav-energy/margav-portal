@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav-config";
 import { APP_NAME, APP_VERSION } from "@/lib/constants";
 import { SidebarNavItem } from "@/components/layout/SidebarNavItem";
 import { SidebarNavGroup } from "@/components/layout/SidebarNavGroup";
+import { FinanceCalculatorModal } from "@/components/layout/FinanceCalculatorModal";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/data/current-user";
 
@@ -25,6 +27,8 @@ export function Sidebar({
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
+  const [isFinanceCalculatorOpen, setIsFinanceCalculatorOpen] = useState(false);
+
   // Opt-in restrictive: an item (or group child) with no `roles` stays
   // visible to everyone, so existing nav items are unaffected by this
   // filter. Group children need their own pass — filtering only the group
@@ -71,21 +75,37 @@ export function Sidebar({
           </button>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden">
-          {visibleItems.map((item) =>
-            item.type === "link" ? (
-              <SidebarNavItem key={item.label} {...item} isCollapsed={isCollapsed} />
-            ) : (
+          {visibleItems.map((item) => {
+            if (item.type === "link") {
+              return <SidebarNavItem key={item.label} {...item} isCollapsed={isCollapsed} />;
+            }
+            if (item.type === "action") {
+              return (
+                <SidebarNavItem
+                  key={item.label}
+                  label={item.label}
+                  icon={item.icon}
+                  comingSoon={item.comingSoon}
+                  isCollapsed={isCollapsed}
+                  onClick={() => setIsFinanceCalculatorOpen(true)}
+                />
+              );
+            }
+            return (
               <SidebarNavGroup
                 key={item.label}
                 {...item}
                 isCollapsed={isCollapsed}
                 onExpandSidebar={isCollapsed ? onToggleCollapsed : undefined}
               />
-            ),
-          )}
+            );
+          })}
         </nav>
         <p className={cn("px-3 pt-4 text-xs text-slate-500", isCollapsed && "lg:hidden")}>v{APP_VERSION}</p>
       </aside>
+      {isFinanceCalculatorOpen && (
+        <FinanceCalculatorModal onClose={() => setIsFinanceCalculatorOpen(false)} />
+      )}
     </>
   );
 }

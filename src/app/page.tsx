@@ -7,6 +7,7 @@ import { GreetingRow } from "@/components/dashboard/GreetingRow";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { QuickLinksCard } from "@/components/dashboard/QuickLinksCard";
 import { QuotesPanel } from "@/components/dashboard/QuotesPanel";
+import { RevealSensitiveProvider } from "@/components/dashboard/RevealSensitiveContext";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -33,45 +34,47 @@ export default async function DashboardPage() {
   ]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <GreetingRow firstName={user.firstName} initials={user.initials} />
+    <RevealSensitiveProvider>
+      <div className="mx-auto flex max-w-6xl flex-col gap-6">
+        <GreetingRow firstName={user.firstName} initials={user.initials} />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard
-          label="Total Quotes"
-          value={summary.totalQuotes}
-          href="/quotes"
-          linkLabel="View all quotes"
-          icon={FileText}
-        />
-        <StatCard
-          label="Total Signed"
-          value={summary.totalSigned}
-          href="/quotes?stage=signed"
-          linkLabel="View all signed"
-          icon={CheckCircle2}
-          accent="green"
-        />
-        <QuickLinksCard items={QUICK_LINKS} />
-      </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <StatCard
+            label="Total Quotes"
+            value={summary.totalQuotes}
+            href="/quotes"
+            linkLabel="View all quotes"
+            icon={FileText}
+          />
+          <StatCard
+            label="Total Signed"
+            value={summary.totalSigned}
+            href="/quotes?stage=signed"
+            linkLabel="View all signed"
+            icon={CheckCircle2}
+            accent="green"
+          />
+          <QuickLinksCard items={QUICK_LINKS} />
+        </div>
 
-      <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
-        Quotes
-      </h2>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <QuotesPanel
-          title="Quotes sent to sign"
-          viewAllHref="/quotes?stage=sent_to_sign"
-          quotes={sentToSign}
-          variant="sent"
-        />
-        <QuotesPanel
-          title="Quotes signed"
-          viewAllHref="/quotes?stage=signed"
-          quotes={signed}
-          variant="signed"
-        />
+        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+          Quotes
+        </h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <QuotesPanel
+            title="Quotes sent to sign"
+            viewAllHref="/quotes?stage=sent_to_sign"
+            quotes={sentToSign}
+            variant="sent"
+          />
+          <QuotesPanel
+            title="Quotes signed"
+            viewAllHref="/quotes?stage=signed"
+            quotes={signed}
+            variant="signed"
+          />
+        </div>
       </div>
-    </div>
+    </RevealSensitiveProvider>
   );
 }

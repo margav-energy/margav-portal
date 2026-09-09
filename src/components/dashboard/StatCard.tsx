@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { IconTile } from "@/components/ui/IconTile";
+import { MaskedNumber } from "@/components/dashboard/MaskedNumber";
 
 export function StatCard({
   label,
@@ -26,7 +27,9 @@ export function StatCard({
         </p>
         <IconTile icon={icon} accent={accent} />
       </div>
-      <p className="text-4xl font-semibold text-slate-900">{value}</p>
+      <p className="text-4xl font-semibold text-slate-900">
+        <MaskedNumber value={value} />
+      </p>
       <Link
         href={href}
         className="text-sm font-medium text-brand-blue hover:underline"

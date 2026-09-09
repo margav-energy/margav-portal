@@ -1,12 +1,15 @@
 import {
   Activity,
   Briefcase,
+  Calculator,
   CalendarCheck,
   CalendarClock,
   CalendarDays,
   FileText,
+  HandCoins,
   LayoutDashboard,
   Link2,
+  PiggyBank,
   Plus,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +31,9 @@ export type NavItem =
       href: string;
       icon: LucideIcon;
       comingSoon?: boolean;
+      /** Opens `href` in a new tab via a plain `<a>` instead of a Next
+       *  `<Link>` — for off-site destinations (e.g. the finance partner). */
+      external?: boolean;
       /** Restricts visibility to these roles. Omit to show to everyone —
        *  this is opt-in restrictive, not opt-in permissive, so existing
        *  items without `roles` must keep showing for every role. */
@@ -38,6 +44,16 @@ export type NavItem =
       label: string;
       icon: LucideIcon;
       children: NavLeaf[];
+      comingSoon?: boolean;
+      roles?: CurrentUser["role"][];
+    }
+  | {
+      type: "action";
+      label: string;
+      icon: LucideIcon;
+      /** Identifies which in-app modal/handler this item triggers — kept
+       *  as data here so `Sidebar` owns the actual behaviour. */
+      action: "finance-calculator";
       comingSoon?: boolean;
       roles?: CurrentUser["role"][];
     };
@@ -61,6 +77,29 @@ export const NAV_ITEMS: NavItem[] = [
     roles: ["installer"],
   },
   { type: "link", label: "Quick Links", href: "/quick-links", icon: Link2, roles: ["admin", "rep"] },
+  {
+    type: "action",
+    label: "Finance Calculator",
+    icon: Calculator,
+    action: "finance-calculator",
+    roles: ["admin", "rep"],
+  },
+  {
+    type: "link",
+    label: "Apply for Finance",
+    href: "https://ideal4finance.com/retail-hi/apply/margav",
+    icon: HandCoins,
+    external: true,
+    roles: ["admin", "rep"],
+  },
+  {
+    type: "link",
+    label: "Personal Loan",
+    href: "https://ideal4finance.com/apply/margav/loan",
+    icon: PiggyBank,
+    external: true,
+    roles: ["admin", "rep"],
+  },
   {
     type: "link",
     label: "Create Appointment",

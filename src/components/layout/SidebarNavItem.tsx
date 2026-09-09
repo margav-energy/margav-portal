@@ -11,31 +11,38 @@ export function SidebarNavItem({
   icon: Icon,
   comingSoon,
   isCollapsed,
+  external,
+  onClick,
 }: {
   label: string;
-  href: string;
+  /** Omit when `onClick` is provided — this item triggers an in-app action
+   *  (e.g. opening a modal) instead of navigating anywhere. */
+  href?: string;
   icon: LucideIcon;
   comingSoon?: boolean;
   isCollapsed?: boolean;
+  /** Renders a plain `<a target="_blank">` instead of a Next `<Link>`, for
+   *  off-site destinations. Ignored when `onClick` is provided. */
+  external?: boolean;
+  /** When set, renders a `<button>` that runs this instead of navigating —
+   *  `href` is ignored. */
+  onClick?: () => void;
 }) {
   const pathname = usePathname();
-  const isActive = pathname === href;
+  const isActive = !onClick && pathname === href;
 
-  return (
-    <Link
-      href={href}
-      aria-current={isActive ? "page" : undefined}
-      title={isCollapsed ? label : undefined}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-        isActive
-          ? "bg-white/10 text-white"
-          : "text-slate-300 hover:bg-white/5 hover:text-white",
-        isCollapsed && "lg:justify-center",
-      )}
-    >
+  const className = cn(
+    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    isActive
+      ? "bg-white/10 text-white"
+      : "text-slate-300 hover:bg-white/5 hover:text-white",
+    isCollapsed && "lg:justify-center",
+  );
+
+  const content = (
+    <>
       <Icon className="h-4 w-4 shrink-0" />
-      <span className={cn("flex-1", isCollapsed && "lg:hidden")}>{label}</span>
+      <span className={cn("flex-1 text-left", isCollapsed && "lg:hidden")}>{label}</span>
       {comingSoon && (
         <span
           className={cn(
@@ -46,6 +53,39 @@ export function SidebarNavItem({
           Soon
         </span>
       )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} title={isCollapsed ? label : undefined} className={className}>
+        {content}
+      </button>
+    );
+  }
+
+  if (external) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={isCollapsed ? label : undefined}
+        className={className}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      href={href ?? "#"}
+      aria-current={isActive ? "page" : undefined}
+      title={isCollapsed ? label : undefined}
+      className={className}
+    >
+      {content}
     </Link>
   );
 }
