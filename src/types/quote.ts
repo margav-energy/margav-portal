@@ -26,7 +26,10 @@ export interface Quote {
   postcode: string;
   /** Full postal address, e.g. "53 Swan Bank, Wolverhampton, WV4 5PZ" */
   address: string;
+  /** Pre-discount subtotal (units + extras + line items) — see `discountAmount`. */
   amount: number;
+  /** Persisted via the Pricing card's "Edit adjustments" modal; subtract from `amount` for the true total, same as the quote detail page does. */
+  discountAmount: number;
   paymentType: PaymentType;
   stage: QuoteStage;
   /** ISO date, e.g. "2026-07-28" */

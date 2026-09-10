@@ -90,6 +90,7 @@ export function mapQuoteRow(row: QuoteRow, profiles: ProfileMap): Quote {
     postcode: row.postcode,
     address: row.address,
     amount: Number(row.amount),
+    discountAmount: Number(row.discount_amount ?? 0),
     paymentType: row.payment_type as PaymentType,
     stage: row.stage as QuoteStage,
     sentDate: row.sent_date,

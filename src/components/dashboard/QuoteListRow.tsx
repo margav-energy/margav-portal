@@ -50,7 +50,7 @@ export function QuoteListRow({
         <div className="flex items-center gap-2">
           <div className="text-right">
             <p className="text-sm font-semibold text-slate-900">
-              {isRevealed ? formatCurrency(quote.amount) : "**"}
+              {isRevealed ? formatCurrency(quote.amount - quote.discountAmount) : "**"}
             </p>
             {variant === "signed" && (
               <p className="text-sm text-slate-500">

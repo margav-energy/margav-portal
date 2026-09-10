@@ -43,10 +43,15 @@ function productLabel(quote: Quote): string {
   return PRODUCT_TYPE_LABELS[quote.productType ?? "solar"];
 }
 
+/** `amount` is the pre-discount subtotal — net it against `discountAmount` for the true value, same as the quote detail page's total. */
+function netAmount(quote: Quote): number {
+  return quote.amount - quote.discountAmount;
+}
+
 function compareQuotes(a: Quote, b: Quote, key: SortKey): number {
   switch (key) {
     case "amount":
-      return a.amount - b.amount;
+      return netAmount(a) - netAmount(b);
     case "pipelineStatus":
       return statusLabel(a).localeCompare(statusLabel(b));
     case "representative":
@@ -174,7 +179,7 @@ export function QuotesTable({ quotes }: { quotes: Quote[] }) {
               </div>
               <p className="truncate text-sm text-slate-600">{repLabel(quote)}</p>
               <div>
-                <p className="text-sm font-semibold text-slate-900">{formatCurrency(quote.amount)}</p>
+                <p className="text-sm font-semibold text-slate-900">{formatCurrency(netAmount(quote))}</p>
                 <p className="text-sm text-slate-500">{PAYMENT_TYPE_LABELS[quote.paymentType]}</p>
               </div>
               <p className="text-sm text-slate-600">{formatDate(quote.sentDate)}</p>
