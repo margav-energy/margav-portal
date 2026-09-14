@@ -7,7 +7,6 @@ export interface CurrentUser {
   firstName: string;
   initials: string;
   role: "admin" | "rep" | "installer";
-  teamMemberCount: number;
 }
 
 /**
@@ -35,10 +34,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user) return null;
 
-  const [{ data: profile }, { count }] = await Promise.all([
-    supabase.from("profiles").select("full_name, initials, role, active").eq("id", user.id).single(),
-    supabase.from("profiles").select("id", { count: "exact", head: true }),
-  ]);
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, initials, role, active")
+    .eq("id", user.id)
+    .single();
 
   // Covers a teammate deactivated mid-session (signInAction only blocks a
   // *new* login) — the next request after `active` flips to false signs
@@ -57,7 +57,6 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     firstName,
     initials: profile?.initials || firstName[0]?.toUpperCase() || "?",
     role: (profile?.role as "admin" | "rep" | "installer") ?? "rep",
-    teamMemberCount: count ?? 1,
   };
 }
 

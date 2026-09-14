@@ -1,6 +1,11 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getAllProfiles } from "@/data/profiles-service";
+import { buildProfileMap, mapBoilerPropertyDetails, mapNoteRow, mapSolarPropertyDetails } from "@/data/quotes-mappers";
 import type { InstallAcceptanceStatus } from "@/types/installer-availability";
+import type { CustomerDetails, QuoteNote } from "@/types/quote-detail-shared";
+import type { BoilerPropertyDetails } from "@/types/boiler-quote";
+import type { SolarPropertyDetails } from "@/types/solar-quote";
 
 /**
  * Data-access layer for what an installer sees about their own booked jobs
@@ -98,9 +103,31 @@ export interface InstallerSolarArray {
   items: { name: string; quantity: number }[];
 }
 
+/** A quote-level extra/standard-additional/free-text line item, with no
+ *  `unitPrice` — same no-pricing rule as everything else here. `name` holds
+ *  a free-text item's `description` too, so the installer view can treat
+ *  all three sections identically. */
+export interface InstallerLineItem {
+  id: string;
+  name: string;
+  quantity: number;
+}
+
 export interface InstallerJobDetail extends InstallerJob {
+  /** Full contact details — an installer needs the phone number/address to
+   *  actually reach the customer, not just the name shown in the list. */
+  customer: CustomerDetails;
+  property: BoilerPropertyDetails | SolarPropertyDetails;
   boilerUnits?: InstallerBoilerUnit[];
   solarArrays?: InstallerSolarArray[];
+  /** `quote_line_items` sections, pricing stripped — mirrors the admin/rep
+   *  detail page's Extras/Standard Additionals/Free-text Extras sections. */
+  extras: InstallerLineItem[];
+  standardAdditionals: InstallerLineItem[];
+  freeTextExtras: InstallerLineItem[];
+  /** Same shared notes timeline the admin/rep detail page shows — read AND
+   *  write for installers too (see `NotesPanel`, reused as-is on /jobs/[id]). */
+  notes: QuoteNote[];
 }
 
 interface RawLineItem {
@@ -115,6 +142,22 @@ function stripPricing(items: unknown): { name: string; quantity: number }[] {
     name: item.name ?? "",
     quantity: Number(item.quantity ?? 0),
   }));
+}
+
+interface LineItemRow {
+  id: string;
+  section: "extra" | "standard_additional" | "free_text";
+  name: string | null;
+  description: string | null;
+  quantity: number;
+}
+
+function mapInstallerLineItemRow(row: LineItemRow): InstallerLineItem {
+  return {
+    id: row.id,
+    name: row.section === "free_text" ? (row.description ?? "") : (row.name ?? ""),
+    quantity: Number(row.quantity),
+  };
 }
 
 /**
@@ -132,7 +175,7 @@ export async function getInstallerJobDetail(
   const { data: row, error } = await supabase
     .from("quotes")
     .select(
-      "id, customer_name, address, postcode, product_type, reference, install_date, install_acceptance_status, installer_id",
+      "id, customer_name, customer_email, customer_phone, customer_address_lines, address, postcode, product_type, reference, install_date, install_acceptance_status, installer_id, property_details",
     )
     .eq("id", quoteId)
     .maybeSingle();
@@ -154,7 +197,52 @@ export async function getInstallerJobDetail(
     acceptanceStatus: row.install_acceptance_status,
   };
 
-  if (job.productType === "boiler") {
+  const customer: CustomerDetails = {
+    name: row.customer_name,
+    email: row.customer_email ?? "",
+    phone: row.customer_phone ?? "",
+    addressLines: row.customer_address_lines ?? [],
+  };
+
+  const isBoiler = job.productType === "boiler";
+  const property = isBoiler ? mapBoilerPropertyDetails(row.property_details) : mapSolarPropertyDetails(row.property_details);
+
+  // Same three "what's included beyond the unit/array itself" sections the
+  // admin/rep detail page shows (Extras/Standard Additionals/Free-text
+  // Extras) — quantities and names only, no `unit_price` column selected.
+  const [{ data: lineItemRows, error: lineItemsError }, { data: noteRows, error: notesError }, profiles] =
+    await Promise.all([
+      supabase
+        .from("quote_line_items")
+        .select("id, section, name, description, quantity, sort_order")
+        .eq("quote_id", quoteId)
+        .order("sort_order", { ascending: true }),
+      supabase
+        .from("quote_notes")
+        .select("id, author_id, body, created_at")
+        .eq("quote_id", quoteId)
+        .order("created_at", { ascending: false }),
+      getAllProfiles(),
+    ]);
+
+  if (lineItemsError) console.error("getInstallerJobDetail: line items failed", lineItemsError);
+  if (notesError) console.error("getInstallerJobDetail: notes failed", notesError);
+
+  const lineItemRowsTyped = (lineItemRows ?? []) as LineItemRow[];
+  const extras = lineItemRowsTyped.filter((item) => item.section === "extra").map(mapInstallerLineItemRow);
+  const standardAdditionals = lineItemRowsTyped
+    .filter((item) => item.section === "standard_additional")
+    .map(mapInstallerLineItemRow);
+  const freeTextExtras = lineItemRowsTyped.filter((item) => item.section === "free_text").map(mapInstallerLineItemRow);
+
+  const profileMap = buildProfileMap(profiles);
+  const notes = (noteRows ?? []).map((noteRow) =>
+    mapNoteRow(noteRow as { id: string; author_id: string | null; body: string; created_at: string }, profileMap),
+  );
+
+  const shared = { customer, property, extras, standardAdditionals, freeTextExtras, notes };
+
+  if (isBoiler) {
     const { data: unitRows, error: unitsError } = await supabase
       .from("boiler_units")
       .select("id, label, make, model, output_kw, fuel_type, flue_type, install_type, cylinder_litres, warranty_years, items, sort_order")
@@ -177,7 +265,7 @@ export async function getInstallerJobDetail(
       items: stripPricing(unit.items),
     }));
 
-    return { ...job, boilerUnits };
+    return { ...job, ...shared, boilerUnits };
   }
 
   const { data: arrayRows, error: arraysError } = await supabase
@@ -197,5 +285,5 @@ export async function getInstallerJobDetail(
     items: stripPricing(array.items),
   }));
 
-  return { ...job, solarArrays };
+  return { ...job, ...shared, solarArrays };
 }

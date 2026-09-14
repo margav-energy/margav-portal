@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/Card";
-import type { InstallerBoilerUnit, InstallerJobDetail, InstallerSolarArray } from "@/data/installer-jobs-service";
+import type { InstallerBoilerUnit, InstallerJobDetail, InstallerLineItem, InstallerSolarArray } from "@/data/installer-jobs-service";
 
 /** Mirrors the admin/rep "spec line" on the editable quote form (see
  *  specLine() in src/components/quotes/boiler/BoilerUnitsSection.tsx) minus
@@ -13,6 +13,29 @@ function boilerSpecLine(unit: InstallerBoilerUnit): string {
 
 function solarSpecLine(array: InstallerSolarArray): string {
   return `${array.orientation} · ${array.pitchDegrees}° Pitch`;
+}
+
+/** One of the three `quote_line_items` sections (Extras/Standard
+ *  Additionals/Free-text Extras) — mirrors the admin/rep detail page's
+ *  `LineItemsSection` instances, minus price and the add/edit/remove
+ *  controls. Only rendered once there's actually something in it, same as
+ *  there. */
+function ExtrasList({ title, items }: { title: string; items: InstallerLineItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-4">
+      <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        {title} ({items.length})
+      </p>
+      <ul className="mt-1 flex flex-col gap-0.5 text-sm text-slate-700">
+        {items.map((item) => (
+          <li key={item.id}>
+            {item.quantity}× {item.name}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /** "What's being installed" — the equipment side of a job, on the main
@@ -60,6 +83,10 @@ export function InstallerEquipmentCard({ job }: { job: InstallerJobDetail }) {
           )}
         </div>
       ))}
+
+      <ExtrasList title="Extras" items={job.extras} />
+      <ExtrasList title="Standard Additionals" items={job.standardAdditionals} />
+      <ExtrasList title="Free-text Extras" items={job.freeTextExtras} />
     </Card>
   );
 }
