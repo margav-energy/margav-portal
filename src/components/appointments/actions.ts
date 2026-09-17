@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { createAppointmentCalendarEvent } from "@/lib/google-calendar";
+import { isResendConfigured, sendEmail } from "@/lib/resend";
+import { formatDate, formatTimeOnly } from "@/lib/format";
 import { formatUkPhone, formatUkPostcode, normalizeEmail, toTitleCase } from "@/lib/utils";
 import {
   acceptAppointment,
@@ -44,6 +46,80 @@ const APPOINTMENT_PATHS = [
 
 function revalidateAppointmentPaths() {
   for (const path of APPOINTMENT_PATHS) revalidatePath(path);
+}
+
+/**
+ * Inline-styled HTML fragment for the customer-facing booking confirmation
+ * below — same "Margav Heating" header pattern as
+ * `src/lib/esignature/email-templates.ts`/`src/lib/notify.ts`, so this
+ * matches the look of every other portal email instead of arriving as a
+ * bare, unstyled line of text.
+ */
+function appointmentConfirmationEmailHtml(params: {
+  customerName: string;
+  product: string;
+  dateLabel: string;
+  timeLabel: string;
+  address: string;
+}): string {
+  return (
+    `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:480px;">` +
+    `<p style="font-size:18px;font-weight:bold;margin:0 0 4px;">Margav Heating</p>` +
+    `<p style="margin:20px 0 8px;">Hi ${params.customerName},</p>` +
+    `<p style="margin:0 0 16px;">Your ${params.product} appointment is booked in — here are the details:</p>` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px;">` +
+    `<tr><td style="padding:6px 0;color:#64748b;width:90px;">Date</td><td style="padding:6px 0;font-weight:600;">${params.dateLabel}</td></tr>` +
+    `<tr><td style="padding:6px 0;color:#64748b;">Time</td><td style="padding:6px 0;font-weight:600;">${params.timeLabel}</td></tr>` +
+    `<tr><td style="padding:6px 0;color:#64748b;vertical-align:top;">Address</td><td style="padding:6px 0;font-weight:600;">${params.address}</td></tr>` +
+    `</table>` +
+    `<p style="margin:0 0 8px;">One of our team will see you then. If you need to change this appointment, just reply to this email and we&rsquo;ll sort it out.</p>` +
+    `<p style="font-size:12px;color:#94a3b8;margin-top:32px;">Margav Heating</p>` +
+    `</div>`
+  );
+}
+
+/**
+ * Best-effort — a failed send (or Resend not being configured, the common
+ * case in dev) must never fail the appointment/quote it's confirming, which
+ * is why every caller below fires this from inside its own `after()` block
+ * rather than awaiting it inline.
+ */
+async function sendAppointmentConfirmationEmail(params: {
+  customerName: string;
+  customerEmail: string;
+  product: string;
+  address: string;
+  date: string;
+  time: string;
+}): Promise<void> {
+  if (!isResendConfigured() || !params.customerEmail) return;
+
+  const dateLabel = formatDate(params.date);
+  const timeLabel = formatTimeOnly(`${params.date}T${params.time}`);
+
+  try {
+    await sendEmail({
+      to: params.customerEmail,
+      subject: `Your ${params.product} appointment is booked — Margav Heating`,
+      text:
+        `Hi ${params.customerName},\n\n` +
+        `Your ${params.product} appointment is booked in:\n` +
+        `Date: ${dateLabel}\n` +
+        `Time: ${timeLabel}\n` +
+        `Address: ${params.address}\n\n` +
+        `One of our team will see you then. If you need to change this appointment, just reply to this email and we'll sort it out.\n\n` +
+        `Margav Heating`,
+      html: appointmentConfirmationEmailHtml({
+        customerName: params.customerName,
+        product: params.product,
+        dateLabel,
+        timeLabel,
+        address: params.address,
+      }),
+    });
+  } catch (error) {
+    console.error("sendAppointmentConfirmationEmail failed", error);
+  }
 }
 
 export type CreateAppointmentActionInput = Omit<CreateAppointmentInput, "createdBy">;
@@ -158,6 +234,16 @@ export async function createAppointmentAction(
             console.error("cancelAppointment (superseded by rebook) failed", error),
           )
         : Promise.resolve(true),
+      // Lets the customer know when/where to expect us — previously nothing
+      // told them a booking had actually gone through.
+      sendAppointmentConfirmationEmail({
+        customerName,
+        customerEmail: input.email,
+        product: input.product,
+        address: result.address,
+        date: input.date,
+        time: input.time,
+      }),
     ]);
 
     revalidateAppointmentPaths();
