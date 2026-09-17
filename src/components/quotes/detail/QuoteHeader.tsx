@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info, CheckCircle2, XCircle, Trash2 } from "lucide-react";
+import { Star, Mail, History as HistoryIcon, Lock, Unlock, ChevronDown, Info, CheckCircle2, XCircle, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
 import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
@@ -11,7 +11,8 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { LeadStatusPill } from "@/components/quotes/detail/LeadStatusPill";
 import { DeleteQuoteModal } from "@/components/quotes/detail/DeleteQuoteModal";
 import { formatDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
+import { INSTALL_ACCEPTANCE_STATUS_STYLES } from "@/lib/status-colors";
 import {
   logCommunicationsOpened,
   sendCommunicationEmail,
@@ -21,6 +22,7 @@ import {
 } from "@/components/quotes/actions";
 import type { RepProfile } from "@/data/profiles-service";
 import type { QuotePipelineStatus } from "@/types/quote";
+import type { InstallAcceptanceStatus } from "@/types/installer-availability";
 
 function initialsFor(name: string): string {
   return name
@@ -203,6 +205,8 @@ export function QuoteHeader({
   appointmentDate,
   appointmentStartTime,
   appointmentEndTime,
+  installerName,
+  installAcceptanceStatus,
 }: {
   quoteId: string;
   customerName: string;
@@ -231,6 +235,10 @@ export function QuoteHeader({
   appointmentDate?: string;
   appointmentStartTime?: string;
   appointmentEndTime?: string;
+  /** Mirrors `InstallerAssignmentCard` further down the page — surfaced here too so an
+   *  assigned installer is visible at a glance without scrolling to the sidebar. */
+  installerName?: string;
+  installAcceptanceStatus?: InstallAcceptanceStatus;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -320,6 +328,23 @@ export function QuoteHeader({
             }}
             onSelect={(option) => handleToggleLocked(option === "Lock")}
           />
+          {installerName && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
+              <Wrench className="h-3.5 w-3.5 text-slate-400" />
+              <InitialsAvatar
+                name={installerName}
+                initials={getInitials(installerName) || installerName[0]?.toUpperCase() || "?"}
+                className="h-5 w-5 text-[10px]"
+              />
+              {installerName}
+              {installAcceptanceStatus && (
+                <Pill
+                  label={INSTALL_ACCEPTANCE_STATUS_STYLES[installAcceptanceStatus].label}
+                  className={cn("ml-0.5", INSTALL_ACCEPTANCE_STATUS_STYLES[installAcceptanceStatus].className)}
+                />
+              )}
+            </div>
+          )}
           {isAdmin ? (
             <DropdownButton
               label={assignedRepName}

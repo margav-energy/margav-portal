@@ -16,6 +16,7 @@ export function PaymentMethodCard({
   totalCost,
   onSelect,
   onChangeTermYears,
+  locked = false,
 }: {
   selected: PaymentMethodOption;
   /** Only meaningful when `selected === "monthly_plan"`. */
@@ -27,6 +28,8 @@ export function PaymentMethodCard({
   totalCost: number;
   onSelect: (option: PaymentMethodOption) => void;
   onChangeTermYears: (years: number) => void;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables changing the method while locked. */
+  locked?: boolean;
 }) {
   return (
     <Card className="p-5">
@@ -39,11 +42,14 @@ export function PaymentMethodCard({
               key={option.value}
               type="button"
               onClick={() => onSelect(option.value)}
+              disabled={locked}
+              title={locked ? "Unlock this quote to make changes" : undefined}
               className={cn(
                 "flex items-start gap-2 rounded-lg border px-3 py-3 text-left transition-colors",
                 isSelected
                   ? "border-brand-blue bg-brand-blue/5"
                   : "border-slate-200 hover:bg-slate-50",
+                locked && "cursor-not-allowed opacity-50",
               )}
             >
               <span
@@ -72,9 +78,10 @@ export function PaymentMethodCard({
             <div className="flex items-center gap-2">
               <select
                 id="monthly-plan-term"
-                className={cn(inputClassName, "w-auto py-1.5")}
+                className={cn(inputClassName, "w-auto py-1.5", locked && "cursor-not-allowed opacity-50")}
                 value={termYears ?? MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.length - 1]}
                 onChange={(event) => onChangeTermYears(Number(event.target.value))}
+                disabled={locked}
               >
                 {MONTHLY_PLAN_TERM_YEARS.map((years) => (
                   <option key={years} value={years}>

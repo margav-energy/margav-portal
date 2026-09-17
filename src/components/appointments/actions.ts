@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
@@ -50,7 +51,7 @@ export type CreateAppointmentActionInput = Omit<CreateAppointmentInput, "created
 /** Admin-only — see the page-level guard on `/appointments/create` (src/app/appointments/create/page.tsx). */
 export async function createAppointmentAction(
   input: CreateAppointmentActionInput,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; quoteId?: string | null }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "You must be signed in to do that." };
   if (user.role !== "admin") return { ok: false, error: "Only admins can create appointments." };
@@ -80,68 +81,90 @@ export async function createAppointmentAction(
   // looks to whoever opens it like the original was erased.
   const existingQuoteId = input.rebookedFromId ? await getQuoteIdForAppointment(input.rebookedFromId) : null;
 
-  await Promise.all([
-    logActivity({
-      actorId: user.id,
-      customerName,
-      description: input.rebookedFromId
-        ? "Rebooked a cancelled appointment"
-        : "Created a new appointment",
-      status: "unallocated",
-      entityType: "appointment",
-      entityId: result.id,
-    }),
-    existingQuoteId
-      ? relinkQuoteToRebookedAppointment(existingQuoteId, result.id, customerName).catch((error) =>
-          console.error("relinkQuoteToRebookedAppointment failed", error),
-        )
-      : // Keeps the Quotes section in sync — every genuinely new appointment gets a
-        // matching "new_lead" quote a rep can pick up once they pitch it.
-        // Wrapped so a failure here can never fail the appointment itself.
-        createQuoteForAppointment({
-          appointmentId: result.id,
-          customerName,
-          customerEmail: input.email,
-          customerPhone: input.phone,
-          postcode: input.postcode,
-          address: result.address,
-          productType: result.productType,
-          notes: input.notes,
-          createdBy: user.id,
-        }).catch((error) => console.error("createQuoteForAppointment failed", error)),
-    // Puts name/address/contact/notes on Lucy's Google Calendar at a glance.
-    // Wrapped the same way — a Calendar API hiccup can never fail the
-    // appointment itself. No-ops (resolves to null) if unconfigured.
-    createAppointmentCalendarEvent({
-      customerName,
-      address: result.address,
-      postcode: input.postcode,
-      phone: input.phone,
-      email: input.email,
-      product: input.product,
-      notes: input.notes,
-      source: input.source,
-      medium: input.medium,
-      date: input.date,
-      startTime: input.time,
-    })
-      // Stashes the event id so a future rebook/delete can remove this exact event instead
-      // of leaving it on Lucy's calendar forever alongside whatever replaces it.
-      .then((event) => (event ? setAppointmentCalendarEventId(result.id, event.id) : undefined))
-      .catch((error) => console.error("createAppointmentCalendarEvent failed", error)),
-    // The appointment being rebooked from is superseded by this new one — cancel it so it
-    // drops off the calendar/pipeline lists instead of sitting there as a second, still-live
-    // appointment for the same customer (this is what made a rebooked customer appear twice
-    // on the calendar: the original was never actually closed out).
-    input.rebookedFromId
-      ? cancelAppointment(input.rebookedFromId, "Rebooked to a new date/time").catch((error) =>
-          console.error("cancelAppointment (superseded by rebook) failed", error),
-        )
-      : Promise.resolve(true),
-  ]);
+  // Resolved below so the action can hand the caller a quote id to redirect to —
+  // either the existing quote carried forward by a rebook, or the freshly created one.
+  const quotePromise = existingQuoteId
+    ? relinkQuoteToRebookedAppointment(existingQuoteId, result.id, customerName)
+        .then(() => existingQuoteId)
+        .catch((error) => {
+          console.error("relinkQuoteToRebookedAppointment failed", error);
+          return existingQuoteId;
+        })
+    : // Keeps the Quotes section in sync — every genuinely new appointment gets a
+      // matching "new_lead" quote a rep can pick up once they pitch it.
+      // Wrapped so a failure here can never fail the appointment itself.
+      createQuoteForAppointment({
+        appointmentId: result.id,
+        customerName,
+        customerEmail: input.email,
+        customerPhone: input.phone,
+        postcode: input.postcode,
+        address: result.address,
+        productType: result.productType,
+        notes: input.notes,
+        createdBy: user.id,
+      })
+        .then((quoteResult) => ("id" in quoteResult ? quoteResult.id : null))
+        .catch((error) => {
+          console.error("createQuoteForAppointment failed", error);
+          return null;
+        });
+
+  // Only the quote id is needed before the rep can be redirected — everything else here
+  // (activity log, Google Calendar, closing out the superseded rebook target) is best-effort
+  // side-plumbing that shouldn't hold up the response. Deferred to `after()` so it runs once
+  // the response has already gone out, instead of adding its latency (Calendar API round-trip
+  // especially) to every appointment save.
+  const newQuoteId = await quotePromise;
+
+  after(async () => {
+    await Promise.all([
+      logActivity({
+        actorId: user.id,
+        customerName,
+        description: input.rebookedFromId
+          ? "Rebooked a cancelled appointment"
+          : "Created a new appointment",
+        status: "unallocated",
+        entityType: "appointment",
+        entityId: result.id,
+      }),
+      // Puts name/address/contact/notes on Lucy's Google Calendar at a glance.
+      // Wrapped the same way — a Calendar API hiccup can never fail the
+      // appointment itself. No-ops (resolves to null) if unconfigured.
+      createAppointmentCalendarEvent({
+        customerName,
+        address: result.address,
+        postcode: input.postcode,
+        phone: input.phone,
+        email: input.email,
+        product: input.product,
+        notes: input.notes,
+        source: input.source,
+        medium: input.medium,
+        date: input.date,
+        startTime: input.time,
+      })
+        // Stashes the event id so a future rebook/delete can remove this exact event instead
+        // of leaving it on Lucy's calendar forever alongside whatever replaces it.
+        .then((event) => (event ? setAppointmentCalendarEventId(result.id, event.id) : undefined))
+        .catch((error) => console.error("createAppointmentCalendarEvent failed", error)),
+      // The appointment being rebooked from is superseded by this new one — cancel it so it
+      // drops off the calendar/pipeline lists instead of sitting there as a second, still-live
+      // appointment for the same customer (this is what made a rebooked customer appear twice
+      // on the calendar: the original was never actually closed out).
+      input.rebookedFromId
+        ? cancelAppointment(input.rebookedFromId, "Rebooked to a new date/time").catch((error) =>
+            console.error("cancelAppointment (superseded by rebook) failed", error),
+          )
+        : Promise.resolve(true),
+    ]);
+
+    revalidateAppointmentPaths();
+  });
 
   revalidateAppointmentPaths();
-  return { ok: true };
+  return { ok: true, quoteId: newQuoteId };
 }
 
 export interface AppointmentOverview {
@@ -217,6 +240,7 @@ export async function allocateAppointmentAction(
       body: summary?.customerName
         ? `You've been assigned an appointment with ${summary.customerName}. Log in to Margav Portal to view it.`
         : "You've been assigned a new appointment. Log in to Margav Portal to view it.",
+      link: "/appointments/allocated-not-accepted",
     }),
   ]);
 
@@ -308,6 +332,7 @@ export async function declineConfirmationAction(id: string): Promise<{ ok: boole
           body: summary.customerName
             ? `${summary.customerName} declined confirmation — the appointment has been cancelled.`
             : "A customer declined confirmation — the appointment has been cancelled.",
+          link: "/appointments/recently-cancelled",
         })
       : Promise.resolve(),
   ]);

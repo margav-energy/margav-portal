@@ -171,6 +171,7 @@ export async function assignInstallerToJobAction(
       userId: installerId,
       title: "New job booked in",
       body: `You've been booked to install ${customerName}'s job on ${dateLabel}. Log in to Margav Portal to view it.`,
+      link: "/jobs",
     }),
   ]);
 
@@ -223,6 +224,7 @@ export async function unassignInstallerFromJobAction(quoteId: string): Promise<A
       userId: existing.installer_id,
       title: "Job unassigned",
       body: `You're no longer booked for ${existing.customer_name}'s job.`,
+      link: "/jobs",
     });
   }
 

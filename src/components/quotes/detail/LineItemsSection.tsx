@@ -161,6 +161,7 @@ export function LineItemsSection({
   onItemsChange,
   isFreeText = false,
   catalog,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
@@ -171,6 +172,8 @@ export function LineItemsSection({
   onItemsChange: (items: DisplayItem[]) => void;
   isFreeText?: boolean;
   catalog?: ExtraCatalogEntry[];
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables Add/Edit/Remove while locked. */
+  locked?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingItem, setEditingItem] = useState<DisplayItem | null>(null);
@@ -216,10 +219,22 @@ export function LineItemsSection({
                 {title.replace(/s$/, "")} #{index + 1}
               </p>
               <div className="flex shrink-0 gap-2">
-                <Button variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setEditingItem(item)}>
+                <Button
+                  variant="primary"
+                  className="px-3 py-1.5 text-xs"
+                  onClick={() => setEditingItem(item)}
+                  disabled={locked}
+                  title={locked ? "Unlock this quote to make changes" : undefined}
+                >
                   Edit
                 </Button>
-                <Button variant="danger" className="px-3 py-1.5 text-xs" onClick={() => handleRemove(item)}>
+                <Button
+                  variant="danger"
+                  className="px-3 py-1.5 text-xs"
+                  onClick={() => handleRemove(item)}
+                  disabled={locked}
+                  title={locked ? "Unlock this quote to make changes" : undefined}
+                >
                   Remove
                 </Button>
               </div>
@@ -247,7 +262,13 @@ export function LineItemsSection({
         </div>
       )}
 
-      <Button variant="secondary" className="w-fit self-center" onClick={() => setIsAdding(true)}>
+      <Button
+        variant="secondary"
+        className="w-fit self-center"
+        onClick={() => setIsAdding(true)}
+        disabled={locked}
+        title={locked ? "Unlock this quote to make changes" : undefined}
+      >
         {addLabel}
       </Button>
 

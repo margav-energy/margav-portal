@@ -200,11 +200,14 @@ export function SolarArraySection({
   customerName,
   arrays,
   onArraysChange,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
   arrays: SolarArray[];
   onArraysChange: (arrays: SolarArray[]) => void;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables Add/Edit/Remove while locked. */
+  locked?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingArray, setEditingArray] = useState<SolarArray | null>(null);
@@ -240,10 +243,22 @@ export function SolarArraySection({
               <p className="text-sm text-slate-500">{specLine(array)}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setEditingArray(array)}>
+              <Button
+                variant="primary"
+                className="px-3 py-1.5 text-xs"
+                onClick={() => setEditingArray(array)}
+                disabled={locked}
+                title={locked ? "Unlock this quote to make changes" : undefined}
+              >
                 Edit
               </Button>
-              <Button variant="danger" className="px-3 py-1.5 text-xs" onClick={() => handleRemove(array)}>
+              <Button
+                variant="danger"
+                className="px-3 py-1.5 text-xs"
+                onClick={() => handleRemove(array)}
+                disabled={locked}
+                title={locked ? "Unlock this quote to make changes" : undefined}
+              >
                 Remove
               </Button>
             </div>
@@ -264,7 +279,13 @@ export function SolarArraySection({
         </Card>
       ))}
 
-      <Button variant="secondary" className="w-fit self-center" onClick={() => setIsAdding(true)}>
+      <Button
+        variant="secondary"
+        className="w-fit self-center"
+        onClick={() => setIsAdding(true)}
+        disabled={locked}
+        title={locked ? "Unlock this quote to make changes" : undefined}
+      >
         Add solar array
       </Button>
 

@@ -173,6 +173,8 @@ export function SolarQuoteDetail({
         appointmentDate={detail.appointmentDate}
         appointmentStartTime={detail.appointmentStartTime}
         appointmentEndTime={detail.appointmentEndTime}
+        installerName={installerName}
+        installAcceptanceStatus={acceptanceStatus}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -184,13 +186,14 @@ export function SolarQuoteDetail({
               address={customer.addressLines.join(", ")}
               photoUrl={propertyPhotoUrl}
             />
-            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} />
+            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} locked={locked} />
           </div>
           <SolarPropertyCard
             quoteId={detail.quoteId}
             customerName={customer.name}
             property={property}
             onUpdated={setProperty}
+            locked={locked}
           />
 
           <SolarArraySection
@@ -198,6 +201,7 @@ export function SolarQuoteDetail({
             customerName={customer.name}
             arrays={solarArrays}
             onArraysChange={setSolarArrays}
+            locked={locked}
           />
 
           <LineItemsSection
@@ -208,6 +212,7 @@ export function SolarQuoteDetail({
             items={extras}
             addLabel="Add extra"
             onItemsChange={setExtras}
+            locked={locked}
           />
           <NotesPanel
             quoteId={detail.quoteId}
@@ -225,6 +230,7 @@ export function SolarQuoteDetail({
             totalCost={totalAfterDiscount}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
+            locked={locked}
           />
           <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
           <PricingCard items={detail.pricingBreakdown} extras={extras} />
@@ -234,12 +240,14 @@ export function SolarQuoteDetail({
             subtotal={totalCost}
             adjustments={pricingAdjustments}
             onUpdated={setPricingAdjustments}
+            locked={locked}
           />
           <ProfitCard
             quoteId={detail.quoteId}
             customerName={customer.name}
             profit={profit}
             onUpdated={(nextProfit) => setCostPrice(nextProfit.costPrice)}
+            locked={locked}
           />
           <InstallerAssignmentCard
             quoteId={detail.quoteId}

@@ -67,6 +67,7 @@ export function ProfitCard({
   profit,
   onUpdated,
   editable = true,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
@@ -80,6 +81,8 @@ export function ProfitCard({
    * `true` (a rep enters it manually).
    */
   editable?: boolean;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables editing while locked. */
+  locked?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -118,7 +121,9 @@ export function ProfitCard({
                 type="button"
                 onClick={() => setIsEditing(true)}
                 aria-label="Edit cost price"
-                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                disabled={locked}
+                title={locked ? "Unlock this quote to make changes" : undefined}
+                className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Pencil className="h-3.5 w-3.5" />
               </button>

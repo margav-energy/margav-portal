@@ -92,12 +92,15 @@ export function PricingAdjustmentsCard({
   subtotal,
   adjustments,
   onUpdated,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
   subtotal: number;
   adjustments: PricingAdjustments;
   onUpdated: (adjustments: PricingAdjustments) => void;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables editing while locked. */
+  locked?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const total = subtotal - adjustments.discountAmount;
@@ -124,7 +127,9 @@ export function PricingAdjustmentsCard({
               type="button"
               onClick={() => setIsEditing(true)}
               aria-label="Edit pricing adjustments"
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              disabled={locked}
+              title={locked ? "Unlock this quote to make changes" : undefined}
+              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>

@@ -74,6 +74,7 @@ async function respondToJob(
           status === "accepted"
             ? `${user.firstName} confirmed they're doing ${existing.customer_name}'s install on ${dateLabel}.`
             : `${user.firstName} can't do ${existing.customer_name}'s install on ${dateLabel} — it needs reassigning.`,
+        link: `/quotes/${quoteId}`,
       }),
     ),
   );

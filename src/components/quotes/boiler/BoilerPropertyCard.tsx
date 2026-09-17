@@ -168,11 +168,14 @@ export function BoilerPropertyCard({
   customerName,
   property,
   onUpdated,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
   property: BoilerPropertyDetails;
   onUpdated: (property: BoilerPropertyDetails) => void;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables Edit while locked. */
+  locked?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
@@ -185,7 +188,13 @@ export function BoilerPropertyCard({
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Property details</h3>
-        <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setIsEditing(true)}>
+        <Button
+          variant="secondary"
+          className="px-3 py-1.5 text-xs"
+          onClick={() => setIsEditing(true)}
+          disabled={locked}
+          title={locked ? "Unlock this quote to make changes" : undefined}
+        >
           Edit
         </Button>
       </div>

@@ -24,6 +24,7 @@ interface ButtonProps {
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  title?: string;
 }
 
 export function Button({
@@ -35,24 +36,37 @@ export function Button({
   onClick,
   type = "button",
   disabled = false,
+  title,
 }: ButtonProps) {
   const classes = cn(
     baseClasses,
     VARIANT_CLASSES[variant],
-    disabled && "pointer-events-none opacity-50",
+    // A plain <button> already blocks clicks via the native `disabled`
+    // attribute below, so it only needs `cursor-not-allowed` to show on
+    // hover. An <a> (the `href` branch) has no native disabled state, so it
+    // still needs `pointer-events-none` to actually block navigation —
+    // that also suppresses its own hover/cursor, which is an accepted
+    // trade-off for that one case.
+    disabled && (href ? "pointer-events-none opacity-50" : "cursor-not-allowed opacity-50"),
     className,
   );
 
   if (href) {
     return (
-      <Link href={href} target={target} rel={target === "_blank" ? "noopener noreferrer" : undefined} className={classes}>
+      <Link
+        href={href}
+        target={target}
+        rel={target === "_blank" ? "noopener noreferrer" : undefined}
+        className={classes}
+        title={title}
+      >
         {children}
       </Link>
     );
   }
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={classes}>
+    <button type={type} onClick={onClick} disabled={disabled} className={classes} title={title}>
       {children}
     </button>
   );

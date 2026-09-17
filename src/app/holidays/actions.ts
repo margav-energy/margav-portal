@@ -79,6 +79,7 @@ export async function updateHolidayStatusAction(
       userId: holiday.rep_id,
       title: `Holiday request ${verb}`,
       body: `Your holiday request for ${dateRange} was ${verb}.`,
+      link: "/holidays",
     });
   }
 

@@ -463,6 +463,7 @@ export function BoilerUnitsSection({
   units,
   onUnitsChange,
   onUnitSaved,
+  locked = false,
 }: {
   quoteId: string;
   customerName: string;
@@ -472,6 +473,8 @@ export function BoilerUnitsSection({
    *  parent react to what was picked (e.g. auto-adding the Intergas
    *  "included" extras, see `BoilerQuoteDetail.handleBoilerUnitSaved`). */
   onUnitSaved?: (unit: BoilerUnit) => void;
+  /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables Add/Edit/Remove while locked. */
+  locked?: boolean;
 }) {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUnit, setEditingUnit] = useState<BoilerUnit | null>(null);
@@ -515,10 +518,22 @@ export function BoilerUnitsSection({
             <div className="flex shrink-0 items-center gap-3">
               <p className="text-sm font-semibold text-slate-900">{formatCurrency(unit.price)}</p>
               <div className="flex shrink-0 gap-2">
-                <Button variant="primary" className="px-3 py-1.5 text-xs" onClick={() => setEditingUnit(unit)}>
+                <Button
+                  variant="primary"
+                  className="px-3 py-1.5 text-xs"
+                  onClick={() => setEditingUnit(unit)}
+                  disabled={locked}
+                  title={locked ? "Unlock this quote to make changes" : undefined}
+                >
                   Edit
                 </Button>
-                <Button variant="danger" className="px-3 py-1.5 text-xs" onClick={() => handleRemove(unit)}>
+                <Button
+                  variant="danger"
+                  className="px-3 py-1.5 text-xs"
+                  onClick={() => handleRemove(unit)}
+                  disabled={locked}
+                  title={locked ? "Unlock this quote to make changes" : undefined}
+                >
                   Remove
                 </Button>
               </div>
@@ -540,7 +555,13 @@ export function BoilerUnitsSection({
         </Card>
       ))}
 
-      <Button variant="secondary" className="w-fit self-center" onClick={() => setIsAdding(true)}>
+      <Button
+        variant="secondary"
+        className="w-fit self-center"
+        onClick={() => setIsAdding(true)}
+        disabled={locked}
+        title={locked ? "Unlock this quote to make changes" : undefined}
+      >
         Add boiler
       </Button>
 

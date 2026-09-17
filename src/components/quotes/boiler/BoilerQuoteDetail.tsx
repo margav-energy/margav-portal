@@ -270,6 +270,8 @@ export function BoilerQuoteDetail({
         appointmentDate={detail.appointmentDate}
         appointmentStartTime={detail.appointmentStartTime}
         appointmentEndTime={detail.appointmentEndTime}
+        installerName={installerName}
+        installAcceptanceStatus={acceptanceStatus}
       />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -281,13 +283,14 @@ export function BoilerQuoteDetail({
               address={customer.addressLines.join(", ")}
               photoUrl={propertyPhotoUrl}
             />
-            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} />
+            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} locked={locked} />
           </div>
           <BoilerPropertyCard
             quoteId={detail.quoteId}
             customerName={customer.name}
             property={property}
             onUpdated={setProperty}
+            locked={locked}
           />
 
           <BoilerUnitsSection
@@ -296,6 +299,7 @@ export function BoilerQuoteDetail({
             units={boilerUnits}
             onUnitsChange={setBoilerUnits}
             onUnitSaved={(unit) => void handleBoilerUnitSaved(unit)}
+            locked={locked}
           />
 
           <LineItemsSection
@@ -307,6 +311,7 @@ export function BoilerQuoteDetail({
             addLabel="Add extra"
             onItemsChange={setExtras}
             catalog={EXTRAS_CATALOG}
+            locked={locked}
           />
           <NotesPanel
             quoteId={detail.quoteId}
@@ -324,6 +329,7 @@ export function BoilerQuoteDetail({
             totalCost={totalAfterDiscount}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
+            locked={locked}
           />
           {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
           <PricingCard items={pricingBreakdown} extras={extras} />
@@ -333,6 +339,7 @@ export function BoilerQuoteDetail({
             subtotal={totalCost}
             adjustments={pricingAdjustments}
             onUpdated={setPricingAdjustments}
+            locked={locked}
           />
           <ProfitCard
             quoteId={detail.quoteId}
@@ -342,6 +349,7 @@ export function BoilerQuoteDetail({
             // (see `editable={false}`) — this is never actually invoked.
             onUpdated={() => {}}
             editable={false}
+            locked={locked}
           />
           <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />
           <InstallerAssignmentCard

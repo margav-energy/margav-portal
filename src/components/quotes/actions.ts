@@ -85,6 +85,23 @@ function revalidateQuote(quoteId: string) {
 }
 
 /**
+ * Server-side backstop for the header's Lock/Unlock toggle (QuoteHeader.tsx)
+ * — every mutation below that changes what's actually in the quote (customer/
+ * property details, units/arrays, extras, pricing, payment method) checks
+ * this first and no-ops if locked, the same way `assignQuoteRepresentative`
+ * checks `role === "admin"`. Without this, "Locked" was purely a label: the
+ * UI disables its edit controls, but nothing stopped a write from going
+ * through underneath it.
+ */
+async function isQuoteLocked(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  quoteId: string,
+): Promise<boolean> {
+  const { data } = await supabase.from("quotes").select("is_locked").eq("id", quoteId).maybeSingle();
+  return data?.is_locked ?? false;
+}
+
+/**
  * `quotes.amount` — the "Value" column on the Quotes list — is a stored
  * column, not derived at read time like the detail page's `sellPrice`
  * (see the doc comment on `buildProfitBreakdown` in quotes-mappers.ts).
@@ -587,6 +604,7 @@ export async function assignQuoteRepresentative(
       userId: repId,
       title: "New quote assigned to you",
       body: `You've been assigned to ${customerName}'s quote. Log in to Margav Portal to view it.`,
+      link: `/quotes/${quoteId}`,
     }),
     // Keeps the underlying appointment's rep in sync — the calendar reads
     // `appointments.rep_id` exclusively, not `quotes.representative_id`, so
@@ -731,6 +749,7 @@ export async function sendCommunicationEmail(
 
 export async function updateQuoteCustomer(quoteId: string, customer: CustomerDetails): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const customerName = toTitleCase(customer.name.trim());
@@ -770,6 +789,7 @@ export async function updateQuotePropertyDetails(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase
@@ -811,6 +831,7 @@ export async function updateQuoteCostPrice(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase.from("quotes").update({ profit_breakdown: { costPrice } }).eq("id", quoteId);
@@ -854,6 +875,7 @@ export async function updatePricingAdjustments(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase
@@ -903,6 +925,7 @@ export async function updateSelectedPaymentMethod(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase
@@ -947,6 +970,7 @@ export async function createBoilerUnit(
   customerName: string,
 ): Promise<BoilerUnit | null> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
   const sortOrder = await nextSortOrder("boiler_units", quoteId);
 
@@ -993,6 +1017,7 @@ export async function createBoilerUnit(
 
 export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, customerName: string): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase
@@ -1035,6 +1060,7 @@ export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, custom
 
 export async function deleteBoilerUnit(quoteId: string, unitId: string, unitLabel: string, customerName: string): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase.from("boiler_units").delete().eq("id", unitId);
@@ -1069,6 +1095,7 @@ export async function createSolarArray(
   customerName: string,
 ): Promise<SolarArray | null> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
   const sortOrder = await nextSortOrder("solar_arrays", quoteId);
 
@@ -1109,6 +1136,7 @@ export async function createSolarArray(
 
 export async function updateSolarArray(quoteId: string, array: SolarArray, customerName: string): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase
@@ -1150,6 +1178,7 @@ export async function deleteSolarArray(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase.from("solar_arrays").delete().eq("id", arrayId);
@@ -1192,6 +1221,7 @@ export async function createQuoteLineItem(
   customerName: string,
 ): Promise<LineItem | FreeTextExtra | null> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
   const sortOrder = await nextSortOrder("quote_line_items", quoteId, { column: "section", value: section });
 
@@ -1245,6 +1275,7 @@ export async function updateQuoteLineItem(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
   const isFreeText = section === "free_text";
 
@@ -1291,6 +1322,7 @@ export async function deleteQuoteLineItem(
   customerName: string,
 ): Promise<boolean> {
   const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
   const { error } = await supabase.from("quote_line_items").delete().eq("id", itemId);

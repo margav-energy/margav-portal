@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { FormSection } from "@/components/ui/FormSection";
 import { FormField, inputClassName } from "@/components/ui/FormField";
@@ -50,7 +51,7 @@ const EMPTY_FORM: FormValues = {
   medium: "",
   term: "",
   notes: "",
-  product: APPOINTMENT_PRODUCTS[1],
+  product: "Boiler",
   date: "",
   time: "",
 };
@@ -119,6 +120,7 @@ export function CreateAppointmentForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const addressSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const router = useRouter();
 
   useAutosaveDraft(DRAFT_KEY, values);
 
@@ -260,6 +262,12 @@ export function CreateAppointmentForm({
       setAddressSuggestions([]);
       setDraftDismissed(true);
       clearDraft(DRAFT_KEY);
+
+      // Every appointment gets (or carries forward) a linked quote — take the rep
+      // straight there instead of leaving them on this now-blank form.
+      if (result.quoteId) {
+        router.push(`/quotes/${result.quoteId}`);
+      }
     });
   }
 

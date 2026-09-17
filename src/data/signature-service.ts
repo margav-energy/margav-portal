@@ -495,6 +495,7 @@ async function performQuoteSignedSideEffects(row: SignatureRequestRow): Promise<
           userId: quote.representative_id,
           title: "Quote signed",
           body: `${customerName}'s quote has been signed.`,
+          link: `/quotes/${row.quote_id}`,
         })
       : Promise.resolve(),
   ]);
@@ -530,6 +531,7 @@ async function performAgreementSignedSideEffects(row: SignatureRequestRow): Prom
           userId: quote.representative_id,
           title: "Installation agreement signed",
           body: `${customerName} signed the installation agreement.`,
+          link: `/quotes/${row.quote_id}`,
         })
       : Promise.resolve(),
   ]);
@@ -565,6 +567,7 @@ async function performWaiverSignedSideEffects(row: SignatureRequestRow): Promise
           userId: quote.representative_id,
           title: "Cooling-off waiver signed",
           body: `${customerName} signed the cooling-off waiver.`,
+          link: `/quotes/${row.quote_id}`,
         })
       : Promise.resolve(),
   ]);
@@ -776,6 +779,7 @@ export async function declineSignature(
           userId: quote.representative_id,
           title: notifyTitle,
           body: `${customerName} declined to sign the ${documentLabel}.`,
+          link: `/quotes/${row.quote_id}`,
         })
       : Promise.resolve(),
   ]);
