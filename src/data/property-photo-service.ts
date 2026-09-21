@@ -1,4 +1,5 @@
 import "server-only";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { fetchStreetViewPhoto, isStreetViewConfigured } from "@/lib/google-street-view";
@@ -112,5 +113,10 @@ export async function fetchStreetViewPhotoForQuote(quoteId: string, address: str
     return false;
   }
 
+  // The auto-fetch at quote creation runs via `after()`, well past the
+  // response that rendered the quote page — without this, a rep who's
+  // already on the page has no way to see the photo land short of a
+  // manual refresh.
+  revalidatePath(`/quotes/${quoteId}`);
   return true;
 }
