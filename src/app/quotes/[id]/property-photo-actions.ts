@@ -61,7 +61,7 @@ export async function uploadPropertyPhotoAction(
 
   const { error: updateError } = await supabase
     .from("quotes")
-    .update({ property_photo_path: storagePath })
+    .update({ property_photo_path: storagePath, property_photo_source: "upload" })
     .eq("id", quoteId);
 
   if (updateError) {
@@ -98,7 +98,7 @@ export async function removePropertyPhotoAction(quoteId: string): Promise<Proper
 
   const { error: updateError } = await supabase
     .from("quotes")
-    .update({ property_photo_path: null })
+    .update({ property_photo_path: null, property_photo_source: null })
     .eq("id", quoteId);
 
   if (updateError) {

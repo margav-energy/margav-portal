@@ -68,7 +68,8 @@ export async function ensurePropertyPhotosBucketExists(): Promise<void> {
  * site (e.g. `"123 Elm Street, SW1A 1AA"`) — Street View geocodes it the
  * same way a human would type it into Google Maps, no separate postcode
  * field needed. Never overwrites an existing photo (manual upload or an
- * earlier fetch) — this only ever fills in an *empty* Property Photo card.
+ * earlier fetch) — this only ever fills in an *empty* Property Photo card;
+ * see `refreshStreetViewPhotoForQuote` for the address-changed case.
  * Returns whether a photo was actually saved, purely so the manual-retry
  * button can show "no Street View imagery for this address" instead of a
  * false "done".
@@ -88,29 +89,84 @@ export async function fetchStreetViewPhotoForQuote(quoteId: string, address: str
   }
   if (quote?.property_photo_path) return false; // already has a photo — never clobber it.
 
+  return saveStreetViewPhoto(quoteId, address, undefined);
+}
+
+/**
+ * For when the customer's address is edited (`updateQuoteCustomer`,
+ * src/components/quotes/actions.ts) — swaps a Street View photo of the
+ * *old* address for one of the new address. A manually-uploaded photo is
+ * left alone (see supabase/migrations/0038_quote_property_photo_source.sql).
+ * If Street View has nothing for the new address, the old photo is removed
+ * rather than left showing the wrong house; the card falls back to its
+ * "Fetch / Upload" empty state.
+ */
+export async function refreshStreetViewPhotoForQuote(quoteId: string, address: string): Promise<void> {
+  if (!isStreetViewConfigured()) return;
+
+  const supabase = await createClient();
+  const { data: quote, error: fetchError } = await supabase
+    .from("quotes")
+    .select("property_photo_path, property_photo_source")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (fetchError) {
+    console.error("refreshStreetViewPhotoForQuote: could not load quote", fetchError);
+    return;
+  }
+  const existingPath = quote?.property_photo_path ?? undefined;
+  if (existingPath && quote?.property_photo_source !== "street_view") return; // a rep's own photo — keep it.
+
+  const saved = await saveStreetViewPhoto(quoteId, address, existingPath);
+  if (saved || !existingPath) return;
+
+  const { error: clearError } = await supabase
+    .from("quotes")
+    .update({ property_photo_path: null, property_photo_source: null })
+    .eq("id", quoteId);
+  if (clearError) {
+    console.error("refreshStreetViewPhotoForQuote: could not clear stale photo", clearError);
+    return;
+  }
+  await supabase.storage.from(PROPERTY_PHOTOS_BUCKET).remove([existingPath]);
+  revalidatePath(`/quotes/${quoteId}`);
+}
+
+/**
+ * Fetches + stores a Street View photo and points the quote at it. Each
+ * fetch gets its own storage path — overwriting one path in place can keep
+ * serving the old image from Storage's CDN cache — and the previous object
+ * (`replacingPath`) is deleted once the quote has moved off it.
+ */
+async function saveStreetViewPhoto(quoteId: string, address: string, replacingPath: string | undefined): Promise<boolean> {
   const photo = await fetchStreetViewPhoto(address);
   if (!photo) return false;
 
   await ensurePropertyPhotosBucketExists();
 
+  const supabase = await createClient();
   const extension = photo.contentType === "image/png" ? "png" : "jpg";
-  const storagePath = `${quoteId}/photo.${extension}`;
+  const storagePath = `${quoteId}/street-view-${Date.now()}.${extension}`;
 
   const { error: uploadError } = await supabase.storage
     .from(PROPERTY_PHOTOS_BUCKET)
     .upload(storagePath, photo.bytes, { contentType: photo.contentType, upsert: true });
   if (uploadError) {
-    console.error("fetchStreetViewPhotoForQuote: storage upload failed", uploadError);
+    console.error("saveStreetViewPhoto: storage upload failed", uploadError);
     return false;
   }
 
   const { error: updateError } = await supabase
     .from("quotes")
-    .update({ property_photo_path: storagePath })
+    .update({ property_photo_path: storagePath, property_photo_source: "street_view" })
     .eq("id", quoteId);
   if (updateError) {
-    console.error("fetchStreetViewPhotoForQuote: quote update failed", updateError);
+    console.error("saveStreetViewPhoto: quote update failed", updateError);
     return false;
+  }
+
+  if (replacingPath && replacingPath !== storagePath) {
+    await supabase.storage.from(PROPERTY_PHOTOS_BUCKET).remove([replacingPath]);
   }
 
   // The auto-fetch at quote creation runs via `after()`, well past the

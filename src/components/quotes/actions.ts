@@ -8,7 +8,7 @@ import { getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { allocateAppointment } from "@/data/appointments-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
-import { fetchStreetViewPhotoForQuote } from "@/data/property-photo-service";
+import { fetchStreetViewPhotoForQuote, refreshStreetViewPhotoForQuote } from "@/data/property-photo-service";
 import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest } from "@/data/signature-service";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { signAgreementEmailHtml, signQuoteEmailHtml, signWaiverEmailHtml } from "@/lib/esignature/email-templates";
@@ -752,6 +752,14 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
+  const { data: previous } = await supabase
+    .from("quotes")
+    .select("customer_address_lines")
+    .eq("id", quoteId)
+    .maybeSingle();
+  const previousAddress = (previous?.customer_address_lines ?? []).join(", ");
+  const newAddress = customer.addressLines.join(", ");
+
   const customerName = toTitleCase(customer.name.trim());
   const { error } = await supabase
     .from("quotes")
@@ -766,6 +774,12 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
   if (error) {
     console.error("updateQuoteCustomer failed", error);
     return false;
+  }
+
+  // Awaited rather than `after()` so the refreshed photo arrives with this
+  // action's revalidation — the rep is already looking at the page.
+  if (newAddress.trim() && newAddress !== previousAddress) {
+    await refreshStreetViewPhotoForQuote(quoteId, newAddress);
   }
 
   await Promise.all([
