@@ -97,7 +97,8 @@ export function EditTeammateModal({ teammate, onClose }: { teammate: TeammatePro
           <span className="font-medium text-slate-700">Calendar colour</span>
           <RepColorPicker teammateId={teammate.id} currentColor={teammate.calendarColor} />
           <span className="text-xs text-slate-400">
-            Saves immediately — used to colour their appointments on the calendar. &ldquo;A&rdquo; uses the automatic colour.
+            Saves immediately — used to colour their appointments (or, for installers, their availability) on the
+            calendars. &ldquo;A&rdquo; uses the automatic colour.
           </span>
         </div>
 

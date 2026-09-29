@@ -248,11 +248,48 @@ export function deriveCalendarStage(row: AppointmentRow): AppointmentStage {
   }
 }
 
-export async function getAllCalendarAppointments(): Promise<CalendarAppointment[]> {
-  const [rows, profiles] = await Promise.all([fetchAppointmentRows(), getAllProfiles()]);
+/** Ids of appointments whose linked quote is assigned to `repId` (`quotes.representative_id`). */
+async function getAppointmentIdsForRepQuotes(repId: string): Promise<Set<string>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("appointment_id")
+    .eq("representative_id", repId)
+    .not("appointment_id", "is", null);
+
+  if (error) {
+    console.error("getAppointmentIdsForRepQuotes failed", error);
+    return new Set();
+  }
+  return new Set((data ?? []).map((row) => row.appointment_id as string));
+}
+
+/**
+ * Admins see every appointment on the calendar; a rep only sees their own —
+ * allocated to them (`rep_id`) or backing a quote assigned to them. The
+ * quote check covers appointments whose `rep_id` was never synced from their
+ * quote (see `syncUnallocatedAppointmentReps`), so a rep's own quote can't
+ * go missing from their calendar.
+ */
+export async function isAppointmentVisibleTo(
+  viewer: CurrentUser,
+  row: Pick<AppointmentRow, "id" | "rep_id">,
+): Promise<boolean> {
+  if (viewer.role === "admin" || row.rep_id === viewer.id) return true;
+  return (await getAppointmentIdsForRepQuotes(viewer.id)).has(row.id);
+}
+
+export async function getAllCalendarAppointments(viewer: CurrentUser): Promise<CalendarAppointment[]> {
+  const [rows, profiles, repQuoteAppointmentIds] = await Promise.all([
+    fetchAppointmentRows(),
+    getAllProfiles(),
+    viewer.role === "admin" ? Promise.resolve(null) : getAppointmentIdsForRepQuotes(viewer.id),
+  ]);
 
   return rows
     .filter((row) => row.lifecycle_stage !== "cancelled")
+    // Same rule as `isAppointmentVisibleTo`, with the quote lookup done once for the whole list.
+    .filter((row) => !repQuoteAppointmentIds || row.rep_id === viewer.id || repQuoteAppointmentIds.has(row.id))
     .map((row) => {
       const startTime = toHHmm(row.start_time) ?? "09:00";
       return {

@@ -21,6 +21,7 @@ import {
   deriveCalendarStage,
   getAppointmentById,
   getAppointmentSummary,
+  isAppointmentVisibleTo,
   logOutcome,
   setAppointmentCalendarEventId,
   type CreateAppointmentInput,
@@ -279,7 +280,8 @@ export async function getAppointmentOverviewAction(id: string): Promise<Appointm
   if (!user) return null;
 
   const [row, quote] = await Promise.all([getAppointmentById(id), getQuoteSummaryForAppointment(id)]);
-  if (!row) return null;
+  // A rep only gets their own appointments — same rule as the calendar itself.
+  if (!row || !(await isAppointmentVisibleTo(user, row))) return null;
 
   const rep = await getProfileById(row.rep_id);
 

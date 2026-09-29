@@ -10,8 +10,19 @@ import { cn } from "@/lib/utils";
 import type { CalendarAppointment } from "@/types/calendar-appointment";
 
 const GRID_HEIGHT = CALENDAR_HOURS.length * CALENDAR_ROW_HEIGHT;
+const DAY_MIN_WIDTH = 140;
 
-/** Renders either a full week (7 days) or a single day — same grid either way. */
+/**
+ * Renders either a full week (7 days) or a single day — same grid either way.
+ *
+ * One scroll container for the whole grid, filling whatever height the
+ * calendar gives it: the day-header row is `sticky top-0` and the time
+ * column `sticky left-0`, so scrolling down through the hours keeps the days
+ * visible, and scrolling across the days (narrow screens) keeps the times
+ * visible — header, times and columns always move together. (Previously
+ * header and body each had their own horizontal scroller, which drifted out
+ * of line, and the body's scrollbar sat below 21:00, off-screen.)
+ */
 export function WeekGrid({
   days,
   appointments,
@@ -32,15 +43,16 @@ export function WeekGrid({
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="flex border-b border-slate-200">
-        <div style={{ width: CALENDAR_TIME_COL_WIDTH }} className="shrink-0" />
-        <div className="flex flex-1 overflow-x-auto">
+    <div className="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white">
+      <div style={{ minWidth: CALENDAR_TIME_COL_WIDTH + days.length * DAY_MIN_WIDTH }}>
+        <div className="sticky top-0 z-30 flex border-b border-slate-200 bg-white">
+          <div style={{ width: CALENDAR_TIME_COL_WIDTH }} className="sticky left-0 z-10 shrink-0 bg-white" />
           {days.map((day) => (
             <div
               key={day.toISOString()}
+              style={{ minWidth: DAY_MIN_WIDTH }}
               className={cn(
-                "min-w-[140px] flex-1 border-l border-slate-100 px-3 py-3 text-center text-sm font-medium",
+                "flex-1 border-l border-slate-100 px-3 py-3 text-center text-sm font-medium",
                 isSameDay(day, today) ? "bg-brand-blue/5 text-brand-blue" : "text-slate-700",
               )}
             >
@@ -48,19 +60,24 @@ export function WeekGrid({
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="flex overflow-y-auto">
-        <div style={{ width: CALENDAR_TIME_COL_WIDTH }} className="shrink-0">
-          {CALENDAR_HOURS.map((hour) => (
-            <div key={hour} style={{ height: CALENDAR_ROW_HEIGHT }} className="relative">
-              <span className="absolute top-0 right-2 -translate-y-1/2 text-xs text-slate-400">
-                {formatHourLabel(hour)}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-1 overflow-x-auto">
+        <div className="flex">
+          {/* z-[25]: above the appointment blocks (z-10) and today's now-line (z-20) as they scroll underneath it. */}
+          <div style={{ width: CALENDAR_TIME_COL_WIDTH }} className="sticky left-0 z-[25] shrink-0 bg-white">
+            {CALENDAR_HOURS.map((hour) => (
+              <div key={hour} style={{ height: CALENDAR_ROW_HEIGHT }} className="relative">
+                {/* The first label would be clipped by the header above it if nudged up like the rest. */}
+                <span
+                  className={cn(
+                    "absolute top-0 right-2 text-xs text-slate-400",
+                    hour !== CALENDAR_HOURS[0] && "-translate-y-1/2",
+                  )}
+                >
+                  {formatHourLabel(hour)}
+                </span>
+              </div>
+            ))}
+          </div>
           {days.map((day) => {
             const dayAppointments = appointmentsForDay(day);
             const isToday = isSameDay(day, today);
@@ -75,11 +92,8 @@ export function WeekGrid({
             return (
               <div
                 key={day.toISOString()}
-                style={{ height: GRID_HEIGHT }}
-                className={cn(
-                  "relative min-w-[140px] flex-1 border-l border-slate-100",
-                  isToday && "bg-brand-blue/[0.03]",
-                )}
+                style={{ height: GRID_HEIGHT, minWidth: DAY_MIN_WIDTH }}
+                className={cn("relative flex-1 border-l border-slate-100", isToday && "bg-brand-blue/[0.03]")}
               >
                 {CALENDAR_HOURS.map((hour) => (
                   <div key={hour} style={{ height: CALENDAR_ROW_HEIGHT }} className="border-b border-slate-50" />

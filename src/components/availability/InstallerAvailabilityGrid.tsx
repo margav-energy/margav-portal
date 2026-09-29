@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { formatDayHeader, parseISODate } from "@/lib/date-utils";
 import { Card } from "@/components/ui/Card";
-import { InitialsAvatar } from "@/components/ui/InitialsAvatar";
 import { INSTALLER_AVAILABILITY_STATUS_STYLES } from "@/lib/status-colors";
-import { accentForName, borderAccentForName } from "@/lib/name-color";
+import { installerColorFor, type RepColor } from "@/lib/rep-colors";
 import { cn } from "@/lib/utils";
 import { AssignJobModal } from "@/components/availability/AssignJobModal";
 import { UnassignJobModal } from "@/components/availability/UnassignJobModal";
@@ -21,12 +20,18 @@ const COMPACT_LABEL: Record<"available" | "unavailable" | "unset", string> = {
 const CELL_WIDTH = 84;
 const FIRST_COL_WIDTH = 220;
 
-/** Booked cells use the same hashed color as the installer's own avatar
- *  (see InitialsAvatar/accentForName) — a color scanned anywhere in the
- *  grid ties straight back to whose row it's in, without reading names. */
-function cellFor(day: InstallerAvailabilityDay, todayISO: string, installerName: string) {
+/** Booked cells are filled solid in the installer's calendar colour (see
+ *  `installerColorFor`) — the same colour as their row accent here and their
+ *  entries on the Calendar layout, so it ties straight back to whose it is
+ *  without reading names. */
+function cellFor(day: InstallerAvailabilityDay, todayISO: string, color: RepColor) {
   if (day.assignedJob) {
-    return { label: day.assignedJob.customerName, className: accentForName(installerName), kind: "booked" as const };
+    return {
+      label: day.assignedJob.customerName,
+      className: "text-white",
+      style: { backgroundColor: color.hex } as React.CSSProperties,
+      kind: "booked" as const,
+    };
   }
   const status = day.status ?? "unset";
   const { className } = INSTALLER_AVAILABILITY_STATUS_STYLES[status];
@@ -34,6 +39,7 @@ function cellFor(day: InstallerAvailabilityDay, todayISO: string, installerName:
   return {
     label: COMPACT_LABEL[status],
     className,
+    style: undefined,
     kind: status === "available" && !isPast ? ("assign" as const) : ("inert" as const),
   };
 }
@@ -102,19 +108,24 @@ export function InstallerAvailabilityGrid({
           </div>
 
           {/* Installer rows */}
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const color = installerColorFor(row.installerName, row.calendarColor);
+            return (
             <div key={row.installerId} className="grid border-b border-slate-100 last:border-0" style={{ gridTemplateColumns }}>
               <div
-                className={cn(
-                  "sticky left-0 z-10 flex h-[60px] items-center gap-2.5 border-r border-slate-100 border-l-4 bg-white pr-4 pl-3",
-                  borderAccentForName(row.installerName),
-                )}
+                className="sticky left-0 z-10 flex h-[60px] items-center gap-2.5 border-r border-l-4 border-r-slate-100 bg-white pr-4 pl-3"
+                style={{ borderLeftColor: color.hex }}
               >
-                <InitialsAvatar name={row.installerName} initials={row.installerInitials} className="h-8 w-8 text-xs" />
+                <span
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold"
+                  style={color.blockStyle}
+                >
+                  {row.installerInitials}
+                </span>
                 <span className="truncate text-sm font-medium text-slate-900">{row.installerName}</span>
               </div>
               {row.days.map((day) => {
-                const cell = cellFor(day, todayISO, row.installerName);
+                const cell = cellFor(day, todayISO, color);
                 const commonClassName = cn(
                   "flex h-[60px] w-full items-center justify-center px-1.5 py-1",
                 );
@@ -131,6 +142,7 @@ export function InstallerAvailabilityGrid({
                         type="button"
                         title={`Assign a job to ${row.installerName} on ${day.date}`}
                         className={chipClassName}
+                        style={cell.style}
                         onClick={() => setAssignTarget({ installerId: row.installerId, installerName: row.installerName, date: day.date })}
                       >
                         {cell.label}
@@ -146,6 +158,7 @@ export function InstallerAvailabilityGrid({
                         type="button"
                         title={`${day.assignedJob.customerName} — click to unassign`}
                         className={chipClassName}
+                        style={cell.style}
                         onClick={() =>
                           setUnassignTarget({
                             quoteId: day.assignedJob!.quoteId,
@@ -163,12 +176,15 @@ export function InstallerAvailabilityGrid({
 
                 return (
                   <div key={day.date} className={commonClassName}>
-                    <div className={chipClassName}>{cell.label}</div>
+                    <div className={chipClassName} style={cell.style}>
+                      {cell.label}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
 

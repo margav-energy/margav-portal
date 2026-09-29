@@ -115,11 +115,13 @@ async function getAssignedJobsByInstaller(
   return byInstaller;
 }
 
-export async function getInstallers(): Promise<{ id: string; fullName: string; initials: string }[]> {
+export async function getInstallers(): Promise<
+  { id: string; fullName: string; initials: string; calendarColor?: string }[]
+> {
   const profiles = await getAllProfiles();
   return profiles
     .filter((profile) => profile.role === "installer")
-    .map(({ id, fullName, initials }) => ({ id, fullName, initials }));
+    .map(({ id, fullName, initials, calendarColor }) => ({ id, fullName, initials, calendarColor }));
 }
 
 /** One installer's availability across [startDate, endDate], densified,
@@ -196,6 +198,7 @@ export async function getAllInstallersAvailability(
     installerId: installer.id,
     installerName: installer.fullName,
     installerInitials: installer.initials,
+    calendarColor: installer.calendarColor,
     days: densify(
       startDate,
       endDate,

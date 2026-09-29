@@ -1,11 +1,9 @@
 /**
  * Deterministic color hashed from a name — same input always gets the same
  * color, with no state or lookup table to keep in sync. Originally just
- * `InitialsAvatar`'s accent; shared here so anything else that needs to tie
- * back to "whose is this" (e.g. the installer availability grid's booked-job
- * chips and row accent, src/components/availability/InstallerAvailabilityGrid.tsx)
- * uses the exact same color as that person's avatar instead of inventing a
- * second, unrelated palette.
+ * `InitialsAvatar`'s accent. (The installer availability table/calendar use
+ * the admin-pickable calendar colour instead — see `installerColorFor` in
+ * src/lib/rep-colors.ts.)
  *
  * Every class below is a literal string (never built by concatenation) —
  * Tailwind only generates CSS for class names it can find as-written in
@@ -35,8 +33,4 @@ function indexForName(name: string): number {
 
 export function accentForName(name: string): string {
   return PALETTE[indexForName(name)].chip;
-}
-
-export function borderAccentForName(name: string): string {
-  return PALETTE[indexForName(name)].border;
 }

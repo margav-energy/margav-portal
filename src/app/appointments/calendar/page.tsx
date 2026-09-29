@@ -5,11 +5,8 @@ import { getSavedCalendarViews } from "@/data/appointments-service";
 import { CalendarView } from "@/components/calendar/CalendarView";
 
 export default async function CalendarPage() {
-  const [appointments, profiles, user] = await Promise.all([
-    getAllCalendarAppointments(),
-    getAllProfiles(),
-    requireStaffUser(),
-  ]);
+  const user = await requireStaffUser();
+  const [appointments, profiles] = await Promise.all([getAllCalendarAppointments(user), getAllProfiles()]);
 
   const reps = profiles.map((profile) => ({ fullName: profile.fullName, calendarColor: profile.calendarColor }));
   const savedViews = await getSavedCalendarViews(user.id);

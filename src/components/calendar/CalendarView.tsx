@@ -159,11 +159,14 @@ export function CalendarView({
           repOptions={repOptions}
           selectedReps={selectedReps}
           onRepsChange={setSelectedReps}
+          showRepFilter={isAdmin}
           favourites={favourites}
           onApplyFavourite={handleApplyFavourite}
           onDeleteFavourite={handleDeleteFavourite}
         />
-        <div className="flex-1 overflow-auto p-4">
+        {/* flex-col so the week/day grid can fill the height and scroll inside itself (sticky day
+            header + time column, see WeekGrid); the month grid just scrolls here as before. */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-auto p-4">
           {viewMode === "month" ? (
             <MonthGrid
               monthDate={anchorDate}

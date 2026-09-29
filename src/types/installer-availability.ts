@@ -33,5 +33,7 @@ export interface InstallerAvailabilityRow {
   installerId: string;
   installerName: string;
   installerInitials: string;
+  /** Manually picked on Settings → Team Members, if any — see `repColorFor` (src/lib/rep-colors.ts). */
+  calendarColor?: string;
   days: InstallerAvailabilityDay[];
 }

@@ -69,3 +69,8 @@ export function repColorFor(repName: string | null | undefined, calendarColorHex
   const hex = calendarColorHex || REP_COLOR_PALETTE_HEX[hashString(repName) % REP_COLOR_PALETTE_HEX.length];
   return repColorFromHex(hex);
 }
+
+/** `repColorFor` for someone who always has a colour (an installer is never "Unallocated") — the Installer Availability table and calendar. */
+export function installerColorFor(installerName: string, calendarColorHex?: string | null): RepColor {
+  return repColorFor(installerName, calendarColorHex) ?? repColorFromHex(REP_COLOR_PALETTE_HEX[0]);
+}

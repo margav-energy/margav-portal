@@ -10,6 +10,7 @@ export function CalendarSidebarFilters({
   repOptions,
   selectedReps,
   onRepsChange,
+  showRepFilter,
   favourites,
   onApplyFavourite,
   onDeleteFavourite,
@@ -21,6 +22,8 @@ export function CalendarSidebarFilters({
   repOptions: FilterOption[];
   selectedReps: string[];
   onRepsChange: (value: string[]) => void;
+  /** False for reps — their calendar only has their own appointments, so there's nobody else to filter by. */
+  showRepFilter: boolean;
   favourites: FavouriteView[];
   onApplyFavourite: (favourite: FavouriteView) => void;
   onDeleteFavourite: (favourite: FavouriteView) => void;
@@ -39,12 +42,14 @@ export function CalendarSidebarFilters({
           selected={selectedStages}
           onChange={onStagesChange}
         />
-        <CalendarFilterGroup
-          title="Representative"
-          options={repOptions}
-          selected={selectedReps}
-          onChange={onRepsChange}
-        />
+        {showRepFilter && (
+          <CalendarFilterGroup
+            title="Representative"
+            options={repOptions}
+            selected={selectedReps}
+            onChange={onRepsChange}
+          />
+        )}
         <FavouritesPanel favourites={favourites} onApply={onApplyFavourite} onDelete={onDeleteFavourite} />
       </div>
     </aside>
