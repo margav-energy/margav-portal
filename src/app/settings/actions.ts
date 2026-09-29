@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/data/current-user";
 import { getInitials } from "@/lib/utils";
 import { clearMySignature, saveMySignature } from "@/data/profile-signature-service";
+import { stripPhoneFromCalendarEvents } from "@/lib/google-calendar";
 
 export interface ProfileFormState {
   error?: string;
@@ -81,4 +82,13 @@ export async function saveMySignatureAction(
 
 export async function clearMySignatureAction(): Promise<{ ok: boolean; error?: string }> {
   return clearMySignature();
+}
+
+/** Admin utility (Settings) — see `stripPhoneFromCalendarEvents` in src/lib/google-calendar.ts. */
+export async function stripPhoneFromCalendarAction(): Promise<{ ok: boolean; updatedCount: number; error?: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, updatedCount: 0, error: "You must be signed in to do that." };
+  if (user.role !== "admin") return { ok: false, updatedCount: 0, error: "Only admins can run this." };
+
+  return stripPhoneFromCalendarEvents();
 }

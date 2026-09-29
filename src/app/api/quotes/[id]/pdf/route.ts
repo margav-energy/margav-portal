@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireStaffUser } from "@/data/current-user";
+import { canViewCustomerPhone, requireStaffUser } from "@/data/current-user";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { buildDocumentSnapshot } from "@/lib/esignature/document";
 import { renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
@@ -25,6 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (user.role === "rep" && result.detail.assignedRepId !== user.id) {
     return NextResponse.json({ error: "Quote not found" }, { status: 404 });
   }
+  if (!canViewCustomerPhone(user)) result.detail.customer.phone = "";
 
   const snapshot = await buildDocumentSnapshot(result.quote, result.detail);
   const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);

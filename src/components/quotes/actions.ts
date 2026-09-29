@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getSiteOrigin } from "@/lib/site-origin";
-import { getCurrentUser } from "@/data/current-user";
+import { canViewCustomerPhone, getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { allocateAppointment } from "@/data/appointments-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
@@ -766,7 +766,11 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
     .update({
       customer_name: customerName,
       customer_email: customer.email ? normalizeEmail(customer.email) : null,
-      customer_phone: customer.phone ? formatUkPhone(customer.phone) : null,
+      // A rep never had the real number to begin with (see `canViewCustomerPhone`) —
+      // leave it alone rather than overwriting it with the blank their form sent.
+      ...(user && canViewCustomerPhone(user)
+        ? { customer_phone: customer.phone ? formatUkPhone(customer.phone) : null }
+        : {}),
       customer_address_lines: customer.addressLines,
     })
     .eq("id", quoteId);

@@ -283,7 +283,13 @@ export function BoilerQuoteDetail({
               address={customer.addressLines.join(", ")}
               photoUrl={propertyPhotoUrl}
             />
-            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} locked={locked} />
+            <CustomerCard
+              quoteId={detail.quoteId}
+              customer={customer}
+              onUpdated={setCustomer}
+              locked={locked}
+              showPhone={isAdmin}
+            />
           </div>
           <BoilerPropertyCard
             quoteId={detail.quoteId}

@@ -4,9 +4,9 @@ import { requireStaffUser } from "@/data/current-user";
 import { OutcomeMissingTable } from "@/components/appointments/OutcomeMissingTable";
 
 export default async function OutcomeMissingPage() {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
-  const [leads, profiles] = await Promise.all([getAllOutcomeMissingLeads(), getAllProfiles()]);
+  const [leads, profiles] = await Promise.all([getAllOutcomeMissingLeads(user), getAllProfiles()]);
   const reps = profiles.map((profile) => profile.fullName);
 
   return (

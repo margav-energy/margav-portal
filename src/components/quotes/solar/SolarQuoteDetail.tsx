@@ -186,7 +186,13 @@ export function SolarQuoteDetail({
               address={customer.addressLines.join(", ")}
               photoUrl={propertyPhotoUrl}
             />
-            <CustomerCard quoteId={detail.quoteId} customer={customer} onUpdated={setCustomer} locked={locked} />
+            <CustomerCard
+              quoteId={detail.quoteId}
+              customer={customer}
+              onUpdated={setCustomer}
+              locked={locked}
+              showPhone={isAdmin}
+            />
           </div>
           <SolarPropertyCard
             quoteId={detail.quoteId}

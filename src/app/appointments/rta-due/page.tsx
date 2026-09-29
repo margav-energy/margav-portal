@@ -3,9 +3,9 @@ import { requireStaffUser } from "@/data/current-user";
 import { LeadTable } from "@/components/appointments/LeadTable";
 
 export default async function RtaDuePage() {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
-  const leads = await getAllRtaLeads();
+  const leads = await getAllRtaLeads(user);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-4">

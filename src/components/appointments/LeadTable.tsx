@@ -129,7 +129,7 @@ export function LeadTable({
           rows={rows.map((lead) => (
             <div key={lead.id} className={cn("grid items-center gap-4 px-5 py-4 hover:bg-slate-50", gridCols)}>
               <p className="truncate text-sm font-semibold text-slate-900">{lead.leadName}</p>
-              <p className="text-sm text-slate-600">{lead.phone}</p>
+              <p className="text-sm text-slate-600">{lead.phone || "—"}</p>
               <p className="text-sm text-slate-600">{formatDateTime(lead.appointmentAt)}</p>
               {reps && (
                 <select

@@ -25,10 +25,12 @@ function Row({ icon, children }: { icon: React.ReactNode; children: React.ReactN
 
 function EditCustomerModal({
   customer,
+  showPhone,
   onClose,
   onSave,
 }: {
   customer: CustomerDetails;
+  showPhone: boolean;
   onClose: () => void;
   onSave: (customer: CustomerDetails) => void;
 }) {
@@ -87,18 +89,20 @@ function EditCustomerModal({
             onBlur={() => setEmail((current) => (current.trim() ? normalizeEmail(current) : current))}
           />
         </FormField>
-        <FormField label="Phone" htmlFor="customer-phone">
-          <input
-            id="customer-phone"
-            className={inputClassName}
-            value={phone}
-            onChange={(event) => {
-              setPhone(event.target.value);
-              setError(null);
-            }}
-            onBlur={() => setPhone((current) => (current.trim() ? formatUkPhone(current) : current))}
-          />
-        </FormField>
+        {showPhone && (
+          <FormField label="Phone" htmlFor="customer-phone">
+            <input
+              id="customer-phone"
+              className={inputClassName}
+              value={phone}
+              onChange={(event) => {
+                setPhone(event.target.value);
+                setError(null);
+              }}
+              onBlur={() => setPhone((current) => (current.trim() ? formatUkPhone(current) : current))}
+            />
+          </FormField>
+        )}
         {error && <p className="text-xs text-red-600">{error}</p>}
         <FormField label="Address" htmlFor="customer-address">
           <textarea
@@ -128,10 +132,13 @@ export function CustomerCard({
   customer,
   onUpdated,
   locked = false,
+  showPhone,
 }: {
   quoteId: string;
   customer: CustomerDetails;
   onUpdated: (customer: CustomerDetails) => void;
+  /** False for reps — customer numbers are admin-only (see `canViewCustomerPhone`, src/data/current-user.ts), and the page has already blanked `customer.phone` server-side. */
+  showPhone: boolean;
   /** Mirrors the quote's Lock/Unlock toggle (QuoteHeader.tsx) — disables Edit while locked. */
   locked?: boolean;
 }) {
@@ -169,12 +176,14 @@ export function CustomerCard({
             <CopyButton value={customer.email} />
           </div>
         </Row>
-        <Row icon={<Phone className="h-4 w-4" />}>
-          <div className="flex items-center gap-1.5">
-            <PhoneLink phone={customer.phone} />
-            <CopyButton value={customer.phone} />
-          </div>
-        </Row>
+        {showPhone && (
+          <Row icon={<Phone className="h-4 w-4" />}>
+            <div className="flex items-center gap-1.5">
+              <PhoneLink phone={customer.phone} />
+              <CopyButton value={customer.phone} />
+            </div>
+          </Row>
+        )}
         <Row icon={<MapPin className="h-4 w-4" />}>
           <div className="flex items-start gap-1.5">
             <p className="whitespace-pre-line">{address}</p>
@@ -184,7 +193,7 @@ export function CustomerCard({
       </div>
 
       {isEditing && (
-        <EditCustomerModal customer={customer} onClose={() => setIsEditing(false)} onSave={handleSave} />
+        <EditCustomerModal customer={customer} showPhone={showPhone} onClose={() => setIsEditing(false)} onSave={handleSave} />
       )}
     </Card>
   );

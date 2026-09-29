@@ -98,3 +98,15 @@ export async function requireInstallerUser(): Promise<CurrentUser> {
 export function assertQuoteOwnedByUser(user: CurrentUser, assignedRepId: string | undefined): void {
   if (user.role === "rep" && assignedRepId !== user.id) notFound();
 }
+
+/**
+ * Customer phone numbers are admin-only — reps (even the one an appointment
+ * or quote is assigned to) see everything else about the customer, just no
+ * number to ring. Applied server-side (appointments-service.ts, the
+ * /quotes/[id] pages + PDF route) so the number never reaches a rep's
+ * browser at all, and `updateQuoteCustomer` refuses to overwrite it for
+ * anyone who can't see it.
+ */
+export function canViewCustomerPhone(user: Pick<CurrentUser, "role">): boolean {
+  return user.role === "admin";
+}

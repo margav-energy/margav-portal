@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Download, Info } from "lucide-react";
 import { getQuoteDetail } from "@/data/quotes-service";
-import { assertQuoteOwnedByUser, requireStaffUser } from "@/data/current-user";
+import { assertQuoteOwnedByUser, canViewCustomerPhone, requireStaffUser } from "@/data/current-user";
 import { buildDocumentSnapshot } from "@/lib/esignature/document";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
@@ -37,6 +37,8 @@ export default async function ViewQuotePage({
 
   const { quote, detail } = result;
   assertQuoteOwnedByUser(user, detail.assignedRepId);
+  // Only this internal preview — the copy actually sent to the customer is built separately.
+  if (!canViewCustomerPhone(user)) detail.customer.phone = "";
 
   const isBoiler = quote.productType === "boiler";
 

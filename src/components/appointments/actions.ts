@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { getCurrentUser } from "@/data/current-user";
+import { canViewCustomerPhone, getCurrentUser } from "@/data/current-user";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { createAppointmentCalendarEvent } from "@/lib/google-calendar";
@@ -205,14 +205,13 @@ export async function createAppointmentAction(
         entityType: "appointment",
         entityId: result.id,
       }),
-      // Puts name/address/contact/notes on Lucy's Google Calendar at a glance.
+      // Puts name/address/email/notes on Lucy's Google Calendar at a glance.
       // Wrapped the same way — a Calendar API hiccup can never fail the
       // appointment itself. No-ops (resolves to null) if unconfigured.
       createAppointmentCalendarEvent({
         customerName,
         address: result.address,
         postcode: input.postcode,
-        phone: input.phone,
         email: input.email,
         product: input.product,
         notes: input.notes,
@@ -287,7 +286,8 @@ export async function getAppointmentOverviewAction(id: string): Promise<Appointm
   return {
     id: row.id,
     customerName: `${row.first_name} ${row.last_name}`.trim(),
-    phone: row.phone,
+    // Blank for reps — the modal just omits the line.
+    phone: canViewCustomerPhone(user) ? row.phone : "",
     email: row.email ?? "",
     address: row.address,
     postcode: row.postcode,

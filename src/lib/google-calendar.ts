@@ -73,7 +73,6 @@ export interface AppointmentCalendarEventInput {
   customerName: string;
   address: string;
   postcode: string;
-  phone: string;
   email: string;
   product: string;
   notes: string;
@@ -104,7 +103,6 @@ function buildDescription(input: AppointmentCalendarEventInput): string {
   const lines = [
     `Name: ${input.customerName}`,
     `Address: ${input.address}${input.postcode ? ` (${input.postcode})` : ""}`,
-    `Phone: ${input.phone}`,
     `Email: ${input.email || "—"}`,
     `Product: ${input.product}`,
   ];
@@ -205,5 +203,80 @@ export async function deleteAppointmentCalendarEvent(eventId: string): Promise<b
   } catch (error) {
     console.error("Google Calendar event deletion failed", error);
     return false;
+  }
+}
+
+/** The "Phone: …" line older portal-created events carry in their description — see `stripPhoneFromCalendarEvents`. */
+const PHONE_LINE = /^Phone: .*(\r?\n)?/m;
+
+/** Only events in the exact shape `buildDescription` writes — so nothing else on Lucy's calendar is ever touched. */
+function isPortalAppointmentDescription(description: string): boolean {
+  return description.startsWith("Name: ") && description.includes("\nProduct: ") && PHONE_LINE.test(description);
+}
+
+/**
+ * One-off (and re-runnable) cleanup for events created before customer phone
+ * numbers stopped going onto the calendar — removes just the "Phone:" line
+ * from each portal-created event's description, leaving everything else as
+ * it was. Scans the calendar itself rather than `appointments.google_calendar_event_id`,
+ * since events created before that column existed have no stored id.
+ * Unlike the functions above this reports failure rather than hiding it —
+ * it's run by hand from Settings, where "it didn't work" needs saying.
+ */
+export async function stripPhoneFromCalendarEvents(): Promise<
+  { ok: true; updatedCount: number } | { ok: false; updatedCount: number; error: string }
+> {
+  if (!isGoogleCalendarConfigured()) {
+    return { ok: false, updatedCount: 0, error: "Google Calendar isn't configured." };
+  }
+
+  let updatedCount = 0;
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return { ok: false, updatedCount, error: "Could not sign in to Google Calendar." };
+
+    const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary";
+    const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+    let pageToken: string | undefined;
+    do {
+      const params = new URLSearchParams({ q: "Phone", maxResults: "250", showDeleted: "false" });
+      if (pageToken) params.set("pageToken", pageToken);
+
+      const listResponse = await fetch(`${eventsUrl}?${params}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!listResponse.ok) {
+        console.error("Google Calendar event listing failed", listResponse.status, await listResponse.text());
+        return { ok: false, updatedCount, error: "Could not read the calendar. Please try again." };
+      }
+
+      const page = (await listResponse.json()) as {
+        items?: { id: string; description?: string }[];
+        nextPageToken?: string;
+      };
+
+      for (const event of page.items ?? []) {
+        if (!event.description || !isPortalAppointmentDescription(event.description)) continue;
+
+        const patchResponse = await fetch(`${eventsUrl}/${encodeURIComponent(event.id)}`, {
+          method: "PATCH",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ description: event.description.replace(PHONE_LINE, "") }),
+        });
+        if (!patchResponse.ok) {
+          console.error("Google Calendar event update failed", event.id, patchResponse.status, await patchResponse.text());
+          return { ok: false, updatedCount, error: "Some events couldn't be updated. Run it again to retry the rest." };
+        }
+        updatedCount++;
+      }
+
+      pageToken = page.nextPageToken;
+    } while (pageToken);
+
+    return { ok: true, updatedCount };
+  } catch (error) {
+    console.error("stripPhoneFromCalendarEvents failed", error);
+    return { ok: false, updatedCount, error: "Something went wrong — please try again." };
   }
 }

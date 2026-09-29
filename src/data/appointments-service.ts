@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { deleteAppointmentCalendarEvent } from "@/lib/google-calendar";
 import { getAllProfiles, type RepProfile } from "@/data/profiles-service";
+import { canViewCustomerPhone, type CurrentUser } from "@/data/current-user";
 import type { AppointmentStage, CalendarAppointment } from "@/types/calendar-appointment";
 import type { AcceptanceStatus, AllocatedAppointment } from "@/types/allocated-appointment";
 import type { ConfirmationStatus, ReadyToConfirmLead } from "@/types/ready-to-confirm";
@@ -88,6 +89,11 @@ export interface SavedCalendarView {
 
 function fullName(firstName: string, lastName: string): string {
   return `${firstName} ${lastName}`.trim();
+}
+
+/** `row.phone`, or "" when `viewer` isn't allowed to see it — see `canViewCustomerPhone`. */
+function phoneFor(row: AppointmentRow, viewer: CurrentUser): string {
+  return canViewCustomerPhone(viewer) ? row.phone : "";
 }
 
 function repNameFor(repId: string | null, profiles: RepProfile[]): string {
@@ -285,7 +291,7 @@ export async function getAllAllocatedAppointments(): Promise<AllocatedAppointmen
 
 // ── ready to confirm ─────────────────────────────────────────────────────
 
-export async function getAllReadyToConfirmLeads(): Promise<ReadyToConfirmLead[]> {
+export async function getAllReadyToConfirmLeads(viewer: CurrentUser): Promise<ReadyToConfirmLead[]> {
   const rows = await fetchAppointmentRows();
 
   return rows
@@ -293,7 +299,7 @@ export async function getAllReadyToConfirmLeads(): Promise<ReadyToConfirmLead[]>
     .map((row) => ({
       id: row.id,
       leadName: fullName(row.first_name, row.last_name),
-      phone: row.phone,
+      phone: phoneFor(row, viewer),
       appointmentAt: toISODateTime(row.appointment_date, row.start_time),
       occupancy: row.occupancy ?? "—",
       confirmation: row.confirmation_status ?? "awaiting",
@@ -307,7 +313,7 @@ export async function getAllReadyToConfirmLeads(): Promise<ReadyToConfirmLead[]>
  * `confirmed` but hasn't had an outcome logged yet — the pipeline stage
  * right before `completed`.
  */
-export async function getAllOutcomeMissingLeads(): Promise<OutcomeMissingLead[]> {
+export async function getAllOutcomeMissingLeads(viewer: CurrentUser): Promise<OutcomeMissingLead[]> {
   const [rows, profiles] = await Promise.all([fetchAppointmentRows(), getAllProfiles()]);
 
   return rows
@@ -316,7 +322,7 @@ export async function getAllOutcomeMissingLeads(): Promise<OutcomeMissingLead[]>
       id: row.id,
       leadName: fullName(row.first_name, row.last_name),
       address: row.address,
-      phone: row.phone,
+      phone: phoneFor(row, viewer),
       representativeName: repNameFor(row.rep_id, profiles),
       appointmentAt: toISODateTime(row.appointment_date, row.start_time),
     }));
@@ -324,7 +330,7 @@ export async function getAllOutcomeMissingLeads(): Promise<OutcomeMissingLead[]>
 
 // ── RTA due ──────────────────────────────────────────────────────────────
 
-export async function getAllRtaLeads(): Promise<RtaLead[]> {
+export async function getAllRtaLeads(viewer: CurrentUser): Promise<RtaLead[]> {
   const rows = await fetchAppointmentRows();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -339,14 +345,14 @@ export async function getAllRtaLeads(): Promise<RtaLead[]> {
     .map((row) => ({
       id: row.id,
       leadName: fullName(row.first_name, row.last_name),
-      phone: row.phone,
+      phone: phoneFor(row, viewer),
       appointmentAt: toISODateTime(row.appointment_date, row.start_time),
     }));
 }
 
 // ── unallocated ──────────────────────────────────────────────────────────
 
-export async function getAllUnallocatedLeads(): Promise<RtaLead[]> {
+export async function getAllUnallocatedLeads(viewer: CurrentUser): Promise<RtaLead[]> {
   const rows = await fetchAppointmentRows();
 
   return rows
@@ -354,7 +360,7 @@ export async function getAllUnallocatedLeads(): Promise<RtaLead[]> {
     .map((row) => ({
       id: row.id,
       leadName: fullName(row.first_name, row.last_name),
-      phone: row.phone,
+      phone: phoneFor(row, viewer),
       appointmentAt: toISODateTime(row.appointment_date, row.start_time),
     }));
 }

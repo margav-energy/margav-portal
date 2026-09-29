@@ -3,9 +3,9 @@ import { requireStaffUser } from "@/data/current-user";
 import { ReadyToConfirmTable } from "@/components/appointments/ReadyToConfirmTable";
 
 export default async function ReadyToConfirmPage() {
-  await requireStaffUser();
+  const user = await requireStaffUser();
 
-  const leads = await getAllReadyToConfirmLeads();
+  const leads = await getAllReadyToConfirmLeads(user);
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-4">
