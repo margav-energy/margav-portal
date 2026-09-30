@@ -197,11 +197,13 @@ function PhotoItemGroup({
           <input
             type="file"
             accept="image/*"
-            capture="environment"
+            // No `capture` attribute — it forces phones/tablets straight into the
+            // camera, hiding the photo library. Without it iOS/Android show a
+            // chooser offering both "Take Photo" and the gallery.
+            multiple
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onAddFile(file);
+              for (const file of Array.from(e.target.files ?? [])) onAddFile(file);
               e.target.value = "";
             }}
           />

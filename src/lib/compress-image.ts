@@ -16,8 +16,8 @@
  * down to a few hundred KB.
  *
  * Fails soft: any decode/encode error (e.g. a HEIC photo picked from the
- * library on a browser that can't decode HEIC — camera captures via this
- * form's `capture="environment"` input are JPEG already) returns the
+ * library on a browser that can't decode HEIC — iOS normally converts
+ * library picks to JPEG for `accept="image/*"` inputs anyway) returns the
  * original, unresized file rather than blocking the upload.
  */
 
