@@ -358,6 +358,19 @@ export async function getQuoteIdForAppointment(appointmentId: string): Promise<s
   return data.id as string;
 }
 
+/** The rep assigned to a quote (`quotes.representative_id`), or null if unassigned. */
+export async function getQuoteRepresentativeId(quoteId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("quotes")
+    .select("representative_id")
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return (data.representative_id as string | null) ?? null;
+}
+
 export interface QuoteSummaryForAppointment {
   id: string;
   reference: string;

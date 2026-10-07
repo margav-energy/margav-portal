@@ -31,6 +31,7 @@ import type { AppointmentStage } from "@/types/calendar-appointment";
 import {
   createQuoteForAppointment,
   getQuoteIdForAppointment,
+  getQuoteRepresentativeId,
   getQuoteSummaryForAppointment,
   relinkQuoteToRebookedAppointment,
 } from "@/components/quotes/actions";
@@ -244,6 +245,22 @@ export async function createAppointmentAction(
         date: input.date,
         time: input.time,
       }),
+      // The rep stays on the carried-forward quote, so their calendar silently swaps the old
+      // slot for the new one — tell them, otherwise they only find out by spotting it.
+      existingQuoteId
+        ? getQuoteRepresentativeId(existingQuoteId)
+            .then((repId) =>
+              repId && repId !== user.id
+                ? notifyUser({
+                    userId: repId,
+                    title: "Appointment rescheduled",
+                    body: `${customerName}'s appointment has been rebooked to ${formatDate(input.date)} at ${formatTimeOnly(`${input.date}T${input.time}`)}. Log in to Margav Portal to view it.`,
+                    link: `/quotes/${existingQuoteId}`,
+                  })
+                : undefined,
+            )
+            .catch((error) => console.error("rebook rep notification failed", error))
+        : Promise.resolve(),
     ]);
 
     revalidateAppointmentPaths();
