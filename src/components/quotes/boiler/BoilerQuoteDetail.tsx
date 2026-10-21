@@ -236,7 +236,7 @@ export function BoilerQuoteDetail({
     secondaryPortalLabel: "Warranty Registration",
     onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => {
-      window.open("https://www.myintergasregistration.co.uk/app/installer_login", "_blank", "noopener,noreferrer");
+      window.open("https://www.intergasinterpro.co.uk", "_blank", "noopener,noreferrer");
       void logWarrantyRegistration(detail.quoteId, customer.name);
     },
     onCancelApp: () => void handleCancelApp(),

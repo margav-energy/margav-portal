@@ -1615,7 +1615,7 @@ export async function sendCoolingOffWaiver(quoteId: string): Promise<SendQuoteRe
 /**
  * Logs the activity-history entry for the "Warranty Registration" button,
  * which opens the Intergas installer portal
- * (https://www.myintergasregistration.co.uk/app/installer_login) in a new
+ * (https://www.intergasinterpro.co.uk) in a new
  * tab — see `BoilerQuoteDetail.tsx`'s `onSecondaryPortalAction`.
  */
 export async function logWarrantyRegistration(quoteId: string, customerName: string): Promise<void> {
