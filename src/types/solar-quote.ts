@@ -26,6 +26,16 @@ export interface SolarPropertyDetails {
   estimatedReason: string;
   sprayFoam: "Yes" | "No";
   mpan: string;
+  /** The fields below are filled in from the customer's pre-installation survey when it's submitted (see `buildPropertyPatchFromSurvey`) — empty until then. */
+  propertyType?: string;
+  energySupplier?: string;
+  meterPhase?: string;
+  rearAccess?: string;
+  hasWifi?: string;
+  hasPets?: string;
+  existingEvCharger?: string;
+  existingSolarOrBattery?: string;
+  roofCount?: string;
 }
 
 export interface SolarArray {

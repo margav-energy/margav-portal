@@ -8,6 +8,7 @@ import { canViewCustomerPhone, getCurrentUser } from "@/data/current-user";
 import { getProfileById } from "@/data/profiles-service";
 import { allocateAppointment } from "@/data/appointments-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
+import { getOrCreateSolarSurveyToken } from "@/data/solar-survey-service";
 import { fetchStreetViewPhotoForQuote, refreshStreetViewPhotoForQuote } from "@/data/property-photo-service";
 import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest } from "@/data/signature-service";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
@@ -435,7 +436,7 @@ export async function relinkQuoteToRebookedAppointment(
  * Permanently deletes a quote — admin-only, and irreversible. Every
  * quote-owned child table (`boiler_units`, `solar_arrays`, `quote_line_items`,
  * `quote_notes`, `quote_history`, `quote_documents`, `boiler_surveys` and its
- * photos, `signature_requests`) is `on delete cascade` in the schema, so a
+ * photos, `solar_surveys` and its files, `signature_requests`) is `on delete cascade` in the schema, so a
  * plain delete here cleans all of it up automatically. Any appointment
  * linked via `appointment_id` is left alone (`on delete set null` runs the
  * other way — deleting the *appointment* nulls the quote's pointer, not the
@@ -1627,9 +1628,20 @@ export async function logStaxPortalAction(quoteId: string, customerName: string)
   await logExternalPortalAction(quoteId, customerName, "STAX Portal opened");
 }
 
-/** No survey-provider integration exists yet — this is that integration point. Kept for the solar vertical, which doesn't have its own survey form yet (see `requestBoilerSurvey` for boiler quotes). */
-export async function logSurveyAction(quoteId: string, customerName: string): Promise<void> {
-  await logExternalPortalAction(quoteId, customerName, "Survey requested");
+/**
+ * Backs the solar "Survey" button — creates (or reuses) the pre-installation
+ * survey record for this quote and returns its access token so the caller can
+ * build the `/survey/[token]` QR code / link. See
+ * `src/data/solar-survey-service.ts` and `supabase/migrations/0039_solar_surveys.sql`.
+ */
+export async function requestSolarSurvey(quoteId: string, customerName: string): Promise<{ accessToken: string }> {
+  const { accessToken, created } = await getOrCreateSolarSurveyToken(quoteId);
+
+  if (created) {
+    await logExternalPortalAction(quoteId, customerName, "Survey link generated");
+  }
+
+  return { accessToken };
 }
 
 /**

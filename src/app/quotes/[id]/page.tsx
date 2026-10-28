@@ -6,6 +6,7 @@ import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
 import { assertQuoteOwnedByUser, canViewCustomerPhone, requireStaffUser } from "@/data/current-user";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
+import { getSolarSurveyForQuote } from "@/data/solar-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
 import { getPropertyPhotoUrl } from "@/data/property-photo-service";
@@ -42,6 +43,7 @@ export default async function QuoteDetailPage({
     documents,
     propertyPhotoUrl,
     boilerCostSettings,
+    solarSurvey,
   ] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
@@ -57,6 +59,7 @@ export default async function QuoteDetailPage({
     // boiler units/extras change (see BoilerQuoteDetail.tsx) — it needs
     // these figures to do that with the same formula the server uses.
     isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
+    isBoiler ? Promise.resolve(undefined) : getSolarSurveyForQuote(id),
   ]);
 
   return (
@@ -97,6 +100,7 @@ export default async function QuoteDetailPage({
           documents={documents}
           isAdmin={user.role === "admin"}
           propertyPhotoUrl={propertyPhotoUrl}
+          survey={solarSurvey}
         />
       )}
     </div>

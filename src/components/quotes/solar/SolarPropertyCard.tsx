@@ -15,6 +15,30 @@ function formatUnitRate(rate: number): string {
   return `£${rate.toFixed(4)}`;
 }
 
+type SurveyFieldKey =
+  | "propertyType"
+  | "energySupplier"
+  | "meterPhase"
+  | "roofCount"
+  | "rearAccess"
+  | "hasWifi"
+  | "hasPets"
+  | "existingEvCharger"
+  | "existingSolarOrBattery";
+
+/** Property details the customer's survey fills in (see `buildPropertyPatchFromSurvey`) — shown read-only under the rep-entered ones. */
+const SURVEY_FIELDS: { key: SurveyFieldKey; label: string }[] = [
+  { key: "propertyType", label: "Property Type" },
+  { key: "energySupplier", label: "Energy Supplier" },
+  { key: "meterPhase", label: "Meter Phase" },
+  { key: "roofCount", label: "Roofs With Panels" },
+  { key: "rearAccess", label: "Rear Access" },
+  { key: "hasWifi", label: "Wi-Fi" },
+  { key: "hasPets", label: "Pets" },
+  { key: "existingEvCharger", label: "Existing EV Charger" },
+  { key: "existingSolarOrBattery", label: "Existing Solar / Battery" },
+];
+
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
@@ -187,6 +211,17 @@ export function SolarPropertyCard({
         <Field label="Spray Foam" value={property.sprayFoam} />
         <Field label="MPAN" value={property.mpan} />
       </div>
+
+      {SURVEY_FIELDS.some(({ key }) => property[key]) && (
+        <div className="mt-5 border-t border-slate-100 pt-4">
+          <p className="mb-3 text-xs font-semibold tracking-wide text-slate-400 uppercase">From the survey</p>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+            {SURVEY_FIELDS.map(({ key, label }) => (
+              <Field key={key} label={label} value={property[key] || "—"} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {isEditing && (
         <EditPropertyModal quoteId={quoteId} property={property} onClose={() => setIsEditing(false)} onSave={handleSave} />

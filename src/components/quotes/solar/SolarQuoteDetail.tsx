@@ -18,6 +18,8 @@ import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
 import { SendForSignatureModal } from "@/components/quotes/detail/SendForSignatureModal";
 import { SolarPropertyCard } from "@/components/quotes/solar/SolarPropertyCard";
 import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
+import { SolarSurveyCard } from "@/components/quotes/solar/SolarSurveyCard";
+import { SolarSurveyLaunchModal } from "@/components/quotes/solar/SolarSurveyLaunchModal";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
 import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
@@ -25,11 +27,11 @@ import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCar
 import {
   cancelQuoteAppointment,
   logStaxPortalAction,
-  logSurveyAction,
   recordPitchOutcome,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
+import type { SolarSurveyDetail } from "@/types/solar-survey";
 import type { SignatureRequestSummary } from "@/data/signature-service";
 import type {
   CustomerDetails,
@@ -50,6 +52,7 @@ export function SolarQuoteDetail({
   documents,
   isAdmin,
   propertyPhotoUrl,
+  survey,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
@@ -59,6 +62,7 @@ export function SolarQuoteDetail({
   documents: QuoteDocument[];
   isAdmin: boolean;
   propertyPhotoUrl: string | undefined;
+  survey: SolarSurveyDetail | undefined;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -68,6 +72,12 @@ export function SolarQuoteDetail({
   const [acceptanceStatus, setAcceptanceStatus] = useState(detail.installAcceptanceStatus);
   const [customer, setCustomer] = useState<CustomerDetails>(detail.customer);
   const [property, setProperty] = useState(detail.property);
+  // A survey submission rewrites the property details on the server — pick that up when the page data refreshes (the Survey modal refreshes on close).
+  const [propertySource, setPropertySource] = useState(JSON.stringify(detail.property));
+  if (JSON.stringify(detail.property) !== propertySource) {
+    setPropertySource(JSON.stringify(detail.property));
+    setProperty(detail.property);
+  }
   const [solarArrays, setSolarArrays] = useState(detail.solarArrays);
   const [extras, setExtras] = useState<LineItem[]>(detail.extras);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodOption>(
@@ -90,6 +100,7 @@ export function SolarQuoteDetail({
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
 
@@ -145,7 +156,7 @@ export function SolarQuoteDetail({
     onSendQuote: () => setIsSendModalOpen(true),
     onSecondaryPortalAction: () => void logStaxPortalAction(detail.quoteId, customer.name),
     onCancelApp: () => void handleCancelApp(),
-    onSurvey: () => void logSurveyAction(detail.quoteId, customer.name),
+    onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
   });
 
@@ -238,6 +249,7 @@ export function SolarQuoteDetail({
             onChangeTermYears={handleChangeTermYears}
             locked={locked}
           />
+          <SolarSurveyCard survey={survey} />
           <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
           <PricingCard items={detail.pricingBreakdown} extras={extras} />
           <PricingAdjustmentsCard
@@ -284,6 +296,17 @@ export function SolarQuoteDetail({
       </div>
 
       {isHistoryOpen && <HistoryModal history={detail.history} onClose={() => setIsHistoryOpen(false)} />}
+      {isSurveyModalOpen && (
+        <SolarSurveyLaunchModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          survey={survey}
+          onClose={() => {
+            setIsSurveyModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
       {isSendModalOpen && (
         <SendForSignatureModal
           quoteId={detail.quoteId}

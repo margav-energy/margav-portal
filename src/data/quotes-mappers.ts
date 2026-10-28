@@ -212,6 +212,15 @@ export function mapSolarPropertyDetails(raw: unknown): SolarPropertyDetails {
     estimatedReason: obj.estimatedReason ?? "",
     sprayFoam: (obj.sprayFoam as "Yes" | "No") ?? "No",
     mpan: obj.mpan ?? "",
+    propertyType: obj.propertyType ?? "",
+    energySupplier: obj.energySupplier ?? "",
+    meterPhase: obj.meterPhase ?? "",
+    rearAccess: obj.rearAccess ?? "",
+    hasWifi: obj.hasWifi ?? "",
+    hasPets: obj.hasPets ?? "",
+    existingEvCharger: obj.existingEvCharger ?? "",
+    existingSolarOrBattery: obj.existingSolarOrBattery ?? "",
+    roofCount: obj.roofCount ?? "",
   };
 }
 

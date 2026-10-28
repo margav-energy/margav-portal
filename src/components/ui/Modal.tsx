@@ -7,10 +7,13 @@ export function Modal({
   title,
   onClose,
   children,
+  maxWidthClassName = "max-w-2xl",
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** Tailwind max-width class for the dialog. */
+  maxWidthClassName?: string;
 }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -26,7 +29,7 @@ export function Modal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
+        className={`flex max-h-[85vh] w-full ${maxWidthClassName} flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
