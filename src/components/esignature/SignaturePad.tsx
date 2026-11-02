@@ -34,7 +34,7 @@ async function renderTypedSignature(text: string): Promise<string> {
   if (!ctx) throw new Error("Canvas 2D context unavailable.");
 
   ctx.font = `48px ${fontFamily}`;
-  ctx.fillStyle = "#0f172a";
+  ctx.fillStyle = "#000000";
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
   ctx.fillText(text, 16, CANVAS_HEIGHT / 2, CANVAS_WIDTH - 32);
@@ -73,7 +73,7 @@ function DrawPad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
     const { x, y } = getPoint(event);
     ctx.lineWidth = 2;
     ctx.lineCap = "round";
-    ctx.strokeStyle = "#0f172a";
+    ctx.strokeStyle = "#000000";
     ctx.lineTo(x, y);
     ctx.stroke();
   }
@@ -150,7 +150,7 @@ function TypePad({ onChange }: { onChange: (dataUrl: string | null) => void }) {
         className="flex h-40 w-full items-center rounded-lg border border-slate-300 bg-white px-4"
         style={{ height: CANVAS_HEIGHT }}
       >
-        <span className={signatureFont.className} style={{ fontSize: 40, color: "#0f172a" }}>
+        <span className={signatureFont.className} style={{ fontSize: 40, color: "#000000" }}>
           {text || <span className="text-base text-slate-300">Your signature preview</span>}
         </span>
       </div>

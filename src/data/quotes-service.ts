@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
 import { boilerCostBreakdown } from "@/lib/boiler-install-cost";
+import { computeMcsEstimate } from "@/lib/mcs/performance-estimate";
 import {
   buildPricingBreakdown,
   buildProfileMap,
@@ -169,7 +170,7 @@ export async function getQuoteDetail(
             .order("sort_order", { ascending: true })
         : supabase
             .from("solar_arrays")
-            .select("id, label, shade_factor, orientation, pitch_degrees, items, sort_order")
+            .select("id, label, shade_factor, orientation, orientation_degrees, pitch_degrees, module_wp, module_count, items, sort_order")
             .eq("quote_id", id)
             .order("sort_order", { ascending: true }),
       supabase
@@ -308,12 +309,33 @@ export async function getQuoteDetail(
   const arraysTotal = sumLineItems(solarArrays.flatMap((array) => array.items));
   const sellPrice = arraysTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal - discountAmount;
 
+  const property = mapSolarPropertyDetails(row.property_details);
+  const keyDetails = mapSolarKeyDetails(row.key_details);
+  const mcsEstimate = computeMcsEstimate({
+    postcode: row.postcode ?? "",
+    arrays: solarArrays.map((array) => ({
+      id: array.id,
+      label: array.label,
+      moduleWp: array.moduleWp,
+      moduleCount: array.moduleCount,
+      orientationDeg: array.orientationDegrees,
+      pitchDeg: array.pitchDegrees,
+      shadeFactor: array.shadeFactor,
+      derivedFrom: array.derivedFrom,
+    })),
+    occupancyText: property.occupancyArchetype,
+    annualConsumptionKwh: property.annualConsumptionKwh,
+    batteryCount: keyDetails.batteries,
+    batteryUsableKwh: keyDetails.batteryUsableKwh ?? 0,
+  });
+
   const detail: SolarQuoteDetail = {
     quoteId: row.id,
     ...shared,
-    property: mapSolarPropertyDetails(row.property_details),
+    property,
     solarArrays,
-    keyDetails: mapSolarKeyDetails(row.key_details),
+    keyDetails,
+    mcsEstimate,
     pricingBreakdown: buildPricingBreakdown([
       { name: "Solar array + install", total: arraysTotal, count: solarArrays.length },
       { name: "Extras", total: extrasTotal, count: extras.length },

@@ -104,7 +104,7 @@ export function PresenterDeckManager({ deck }: { deck: DeckSummary | null }) {
             accept=".pptx,.pdf"
             required
             disabled={isBusy}
-            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-blue file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-blue/90 disabled:opacity-60"
+            className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-green-gradient file:px-3 file:py-2 file:text-sm file:font-medium file:text-black hover:file:brightness-95 disabled:opacity-60"
           />
         </FormField>
 

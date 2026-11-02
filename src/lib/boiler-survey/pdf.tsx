@@ -18,24 +18,24 @@ import {
  */
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#0f172a" },
+  page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#000000" },
   brand: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
-  subBrand: { fontSize: 10, color: "#64748b", marginBottom: 4 },
-  meta: { fontSize: 9, color: "#94a3b8" },
+  subBrand: { fontSize: 10, color: "#737373", marginBottom: 4 },
+  meta: { fontSize: 9, color: "#a3a3a3" },
   sectionTitle: {
     fontSize: 11,
     fontWeight: 700,
     marginTop: 16,
     marginBottom: 6,
     textTransform: "uppercase",
-    color: "#334155",
+    color: "#404040",
     borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    borderBottomColor: "#e5e5e5",
     paddingBottom: 4,
   },
   fieldGrid: { flexDirection: "row", flexWrap: "wrap" },
   field: { width: "50%", paddingRight: 12, paddingVertical: 3 },
-  fieldLabel: { fontSize: 8, color: "#64748b" },
+  fieldLabel: { fontSize: 8, color: "#737373" },
   fieldValue: { fontSize: 10, fontWeight: 700, marginTop: 1 },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
   photoTile: { width: "33.33%", paddingRight: 8, paddingBottom: 12 },
@@ -43,14 +43,14 @@ const styles = StyleSheet.create({
   photoPlaceholder: {
     width: "100%",
     height: 110,
-    backgroundColor: "#f1f5f9",
+    backgroundColor: "#f5f5f5",
     borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
     padding: 6,
   },
-  photoPlaceholderText: { fontSize: 8, color: "#94a3b8", textAlign: "center" },
-  photoLabel: { fontSize: 8, color: "#475569", marginTop: 4 },
+  photoPlaceholderText: { fontSize: 8, color: "#a3a3a3", textAlign: "center" },
+  photoLabel: { fontSize: 8, color: "#525252", marginTop: 4 },
 });
 
 function displayValue(value: string | number | null): string {

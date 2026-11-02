@@ -267,7 +267,7 @@ export function SignForm({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="flex-1 rounded-lg bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-blue/90 disabled:opacity-50"
+              className="flex-1 rounded-lg bg-brand-green-gradient px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:brightness-95 disabled:opacity-50"
             >
               {status === "submitting" ? "Submitting…" : "Sign & submit"}
             </button>

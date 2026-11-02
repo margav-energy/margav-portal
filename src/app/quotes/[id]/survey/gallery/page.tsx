@@ -21,11 +21,21 @@ export default async function SolarSurveyGalleryPage({ params }: { params: Promi
         Back to quote
       </Link>
 
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Survey gallery</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          {job.customerName} · Ref {job.reference} · {survey.files.length} file{survey.files.length === 1 ? "" : "s"}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Pre-Installation Survey</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {[job.customerName, job.address.postcode].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+        {survey.files.length > 0 && (
+          <a
+            href={`/api/quotes/${id}/solar-survey/files`}
+            className="shrink-0 rounded-lg bg-brand-green-gradient px-5 py-3 text-sm font-semibold text-black hover:brightness-95"
+          >
+            Download all files
+          </a>
+        )}
       </div>
 
       <SolarSurveyGallery quoteId={id} files={survey.files} />

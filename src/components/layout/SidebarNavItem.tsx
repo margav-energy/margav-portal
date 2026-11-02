@@ -32,10 +32,10 @@ export function SidebarNavItem({
   const isActive = !onClick && pathname === href;
 
   const className = cn(
-    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+    "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
     isActive
-      ? "bg-white/10 text-white"
-      : "text-slate-300 hover:bg-white/5 hover:text-white",
+      ? "bg-white/15 text-white before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-brand-green-mid"
+      : "text-white/80 hover:bg-white/10 hover:text-white",
     isCollapsed && "lg:justify-center",
   );
 
@@ -46,7 +46,7 @@ export function SidebarNavItem({
       {comingSoon && (
         <span
           className={cn(
-            "rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300 uppercase",
+            "rounded-full bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase",
             isCollapsed && "lg:hidden",
           )}
         >

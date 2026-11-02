@@ -35,7 +35,7 @@ import type {
   QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { BoilerPropertyDetails, BoilerUnit } from "@/types/boiler-quote";
-import type { SolarArray, SolarPropertyDetails } from "@/types/solar-quote";
+import type { SapAssumptions, SolarArray, SolarPropertyDetails } from "@/types/solar-quote";
 import type { QuotePipelineStatus } from "@/types/quote";
 
 /**
@@ -224,7 +224,10 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
   // Best-effort — runs after the response is sent so it never adds latency
   // to quote creation, and is a no-op if Street View isn't configured or
   // has no coverage for this address (see `fetchStreetViewPhotoForQuote`).
-  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
+  // Boiler only: a solar quote's photo is the roof design an admin uploads.
+  if (input.productType === "boiler") {
+    after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
+  }
 
   await insertQuoteHistory({
     quoteId: data.id,
@@ -304,7 +307,9 @@ export async function createQuoteForAppointment(
   }
 
   // Best-effort — see the equivalent call in `createQuote` above.
-  after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
+  if (input.productType === "boiler") {
+    after(() => fetchStreetViewPhotoForQuote(data.id, `${input.address.trim()}, ${postcode}`));
+  }
 
   await insertQuoteHistory({
     quoteId: data.id,
@@ -768,7 +773,7 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
 
   const { data: previous } = await supabase
     .from("quotes")
-    .select("customer_address_lines")
+    .select("customer_address_lines, product_type")
     .eq("id", quoteId)
     .maybeSingle();
   const previousAddress = (previous?.customer_address_lines ?? []).join(", ");
@@ -796,7 +801,8 @@ export async function updateQuoteCustomer(quoteId: string, customer: CustomerDet
 
   // Awaited rather than `after()` so the refreshed photo arrives with this
   // action's revalidation — the rep is already looking at the page.
-  if (newAddress.trim() && newAddress !== previousAddress) {
+  // Solar quotes don't use Street View — their photo is an uploaded roof design.
+  if (previous?.product_type !== "solar" && newAddress.trim() && newAddress !== previousAddress) {
     await refreshStreetViewPhotoForQuote(quoteId, newAddress);
   }
 
@@ -847,6 +853,86 @@ export async function updateQuotePropertyDetails(
   ]);
   revalidateQuote(quoteId);
   return true;
+}
+
+function isValidSapAssumptions(a: SapAssumptions): boolean {
+  const nonNegative = [a.exportRatePerKwh, a.annualCosts, a.year1ExtraCost, a.replacementCost];
+  const percents = [a.electricityPriceGrowthPct, a.exportRateGrowthPct, a.outputDegradationPct];
+  const year1 = a.templateYear1 ? [a.templateYear1.outputKwh, a.templateYear1.solar, a.templateYear1.battery, a.templateYear1.exportIncome] : [];
+  return (
+    year1.every((value) => Number.isFinite(value) && value >= 0) &&
+    nonNegative.every((value) => Number.isFinite(value) && value >= 0) &&
+    percents.every((value) => Number.isFinite(value) && value >= -100 && value <= 100) &&
+    Number.isInteger(a.costTermYears) &&
+    a.costTermYears >= 0 &&
+    a.costTermYears <= 30 &&
+    Number.isInteger(a.replacementEveryYears) &&
+    a.replacementEveryYears >= 0 &&
+    a.replacementEveryYears <= 30
+  );
+}
+
+/** Merges `patch` into a solar quote's `key_details` jsonb (admin only, unlocked solar quotes) and records it in the history. Returns whether it saved. */
+async function patchSolarKeyDetails(
+  quoteId: string,
+  patch: Record<string, unknown>,
+  customerName: string,
+  historyDescription: string,
+): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") return false;
+
+  const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
+
+  const { data: quote } = await supabase.from("quotes").select("key_details, product_type").eq("id", quoteId).maybeSingle();
+  if (!quote || quote.product_type !== "solar") return false;
+
+  const current = quote.key_details && typeof quote.key_details === "object" ? (quote.key_details as Record<string, unknown>) : {};
+  const { error } = await supabase
+    .from("quotes")
+    .update({ key_details: { ...current, ...patch } })
+    .eq("id", quoteId);
+
+  if (error) {
+    console.error("patchSolarKeyDetails failed", error);
+    return false;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user.id, description: historyDescription }),
+    logActivity({
+      actorId: user.id,
+      customerName,
+      description: `${historyDescription} — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+  ]);
+  revalidateQuote(quoteId);
+  return true;
+}
+
+/** Admin-only: the assumptions behind the 25-year "Quote SAP table" projection (`computeSapTable`, src/lib/solar-sap.ts). */
+export async function updateQuoteSapAssumptions(
+  quoteId: string,
+  assumptions: SapAssumptions,
+  customerName: string,
+): Promise<boolean> {
+  if (!isValidSapAssumptions(assumptions)) return false;
+  return patchSolarKeyDetails(quoteId, { sapAssumptions: assumptions }, customerName, "Updated SAP table assumptions");
+}
+
+/** Admin-only: the battery's usable capacity (kWh) the MCS self-consumption estimate uses (MGD 003 §4.5). 0 clears it. */
+export async function updateQuoteBatteryUsableKwh(quoteId: string, kwh: number, customerName: string): Promise<boolean> {
+  if (!Number.isFinite(kwh) || kwh < 0 || kwh > 100) return false;
+  return patchSolarKeyDetails(
+    quoteId,
+    { batteryUsableKwh: kwh > 0 ? kwh : null },
+    customerName,
+    kwh > 0 ? `Set battery usable capacity to ${kwh} kWh` : "Cleared battery usable capacity",
+  );
 }
 
 /**
@@ -1138,7 +1224,10 @@ export async function createSolarArray(
       label: array.label,
       shade_factor: array.shadeFactor,
       orientation: array.orientation,
+      orientation_degrees: array.orientationDegrees ?? null,
       pitch_degrees: array.pitchDegrees,
+      module_wp: array.moduleWp,
+      module_count: array.moduleCount,
       items: serializeLineItems(array.items),
       sort_order: sortOrder,
     })
@@ -1177,7 +1266,10 @@ export async function updateSolarArray(quoteId: string, array: SolarArray, custo
       label: array.label,
       shade_factor: array.shadeFactor,
       orientation: array.orientation,
+      orientation_degrees: array.orientationDegrees ?? null,
       pitch_degrees: array.pitchDegrees,
+      module_wp: array.moduleWp,
+      module_count: array.moduleCount,
       items: serializeLineItems(array.items),
     })
     .eq("id", array.id);

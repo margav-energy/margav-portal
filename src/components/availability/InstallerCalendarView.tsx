@@ -363,7 +363,7 @@ export function InstallerCalendarView({
                           className={cn(
                             "flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold hover:bg-slate-100",
                             iso === todayISO
-                              ? "bg-brand-blue text-white hover:bg-brand-blue/90"
+                              ? "bg-brand-green-gradient text-black hover:brightness-95"
                               : isOutsideMonth
                                 ? "text-slate-400"
                                 : "text-slate-600",

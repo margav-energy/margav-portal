@@ -10,24 +10,24 @@ import type { DocumentSnapshot } from "@/lib/esignature/document";
  */
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 11, fontFamily: "Helvetica", color: "#0f172a" },
+  page: { padding: 40, fontSize: 11, fontFamily: "Helvetica", color: "#000000" },
   brand: { fontSize: 18, fontWeight: 700, marginBottom: 2 },
-  subBrand: { fontSize: 10, color: "#64748b", marginBottom: 20 },
+  subBrand: { fontSize: 10, color: "#737373", marginBottom: 20 },
   sectionTitle: { fontSize: 13, fontWeight: 700, marginBottom: 8, marginTop: 16 },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
-  label: { color: "#64748b" },
+  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: "#e5e5e5" },
+  label: { color: "#737373" },
   value: { fontWeight: 700 },
   lineItemRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTopWidth: 1, borderTopColor: "#0f172a" },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", paddingTop: 8, marginTop: 4, borderTopWidth: 1, borderTopColor: "#000000" },
   totalLabel: { fontSize: 12, fontWeight: 700 },
-  disclaimer: { fontSize: 9, color: "#64748b", marginTop: 16, lineHeight: 1.4 },
-  signatureBlockRow: { flexDirection: "row", marginTop: 28, borderTopWidth: 1, borderTopColor: "#e2e8f0", paddingTop: 16, gap: 24 },
+  disclaimer: { fontSize: 9, color: "#737373", marginTop: 16, lineHeight: 1.4 },
+  signatureBlockRow: { flexDirection: "row", marginTop: 28, borderTopWidth: 1, borderTopColor: "#e5e5e5", paddingTop: 16, gap: 24 },
   signatureBlock: { flex: 1 },
-  signatureRole: { fontSize: 9, color: "#94a3b8", textTransform: "uppercase", marginBottom: 4 },
+  signatureRole: { fontSize: 9, color: "#a3a3a3", textTransform: "uppercase", marginBottom: 4 },
   signatureImage: { width: 200, height: 70, objectFit: "contain", marginTop: 6, marginBottom: 6 },
-  signaturePlaceholder: { fontSize: 9, color: "#94a3b8", fontStyle: "italic", marginTop: 6, marginBottom: 6 },
-  auditBlock: { marginTop: 20, padding: 10, backgroundColor: "#f8fafc", borderRadius: 4 },
-  auditLine: { fontSize: 8, color: "#64748b", marginBottom: 2 },
+  signaturePlaceholder: { fontSize: 9, color: "#a3a3a3", fontStyle: "italic", marginTop: 6, marginBottom: 6 },
+  auditBlock: { marginTop: 20, padding: 10, backgroundColor: "#fafafa", borderRadius: 4 },
+  auditLine: { fontSize: 8, color: "#737373", marginBottom: 2 },
 });
 
 export interface SignedDocumentAudit {

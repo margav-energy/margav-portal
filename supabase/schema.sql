@@ -140,6 +140,9 @@ create table if not exists public.solar_arrays (
   shade_factor numeric(4, 3) not null default 1,
   orientation text not null default '',
   pitch_degrees numeric(5, 2) not null default 0,
+  module_wp integer not null default 0 check (module_wp >= 0),
+  module_count integer not null default 0 check (module_count >= 0),
+  orientation_degrees numeric(5, 1) check (orientation_degrees between 0 and 180),
   items jsonb not null default '[]'::jsonb,
   sort_order integer not null default 0,
   created_at timestamptz not null default now()

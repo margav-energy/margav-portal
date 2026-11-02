@@ -43,18 +43,18 @@ export async function notifyUser(entry: {
  */
 function notificationEmailHtml(params: { title: string; body: string; portalUrl: string }): string {
   return (
-    `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:480px;">` +
+    `<div style="font-family:Arial,Helvetica,sans-serif;color:#000000;max-width:480px;">` +
     `<p style="font-size:18px;font-weight:bold;margin:0 0 4px;">Margav Heating</p>` +
     `<p style="font-size:16px;font-weight:600;margin:20px 0 4px;">${params.title}</p>` +
     `<p style="margin:0 0 8px;">${params.body}</p>` +
     `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">` +
-    `<tr><td style="border-radius:8px;background-color:#2563eb;">` +
+    `<tr><td style="border-radius:8px;background-color:#3333cc;">` +
     `<a href="${params.portalUrl}" target="_blank" rel="noreferrer" ` +
     `style="display:inline-block;padding:12px 24px;font-family:Arial,Helvetica,sans-serif;font-size:15px;` +
     `font-weight:bold;color:#ffffff;text-decoration:none;border-radius:8px;">Open in Margav Portal</a>` +
     `</td></tr></table>` +
-    `<p style="font-size:13px;color:#64748b;">Or copy this link: <a href="${params.portalUrl}">${params.portalUrl}</a></p>` +
-    `<p style="font-size:12px;color:#94a3b8;margin-top:32px;">Margav Heating</p>` +
+    `<p style="font-size:13px;color:#737373;">Or copy this link: <a href="${params.portalUrl}">${params.portalUrl}</a></p>` +
+    `<p style="font-size:12px;color:#a3a3a3;margin-top:32px;">Margav Heating</p>` +
     `</div>`
   );
 }

@@ -1,10 +1,37 @@
+"use client";
+
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Collapsible } from "@/components/quotes/detail/Collapsible";
 import { KeyDetailField } from "@/components/quotes/detail/KeyDetailField";
 import { formatCurrency } from "@/lib/format";
+import { SolarSapTableModal } from "@/components/quotes/solar/SolarSapTableModal";
+import type { McsEstimate } from "@/lib/mcs/performance-estimate";
 import type { SolarKeyDetails } from "@/types/solar-quote";
 
-export function SolarKeyDetailsCard({ keyDetails }: { keyDetails: SolarKeyDetails }) {
+export function SolarKeyDetailsCard({
+  quoteId,
+  customerName,
+  keyDetails,
+  mcsEstimate,
+  electricUnitRate,
+  isAdmin,
+  locked = false,
+}: {
+  quoteId: string;
+  customerName: string;
+  keyDetails: SolarKeyDetails;
+  /** Built on the server — see `computeMcsEstimate`. */
+  mcsEstimate: McsEstimate;
+  /** £ per kWh from the property details, used for the 25-year projection's savings. */
+  electricUnitRate: number;
+  isAdmin: boolean;
+  /** Mirrors the quote's Lock/Unlock toggle — assumptions can't be edited while locked. */
+  locked?: boolean;
+}) {
+  const [sapOpen, setSapOpen] = useState(false);
+  const hasSap = Boolean(keyDetails.sapAssumptions);
+
   return (
     <Collapsible title="Key details">
       <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -19,19 +46,32 @@ export function SolarKeyDetailsCard({ keyDetails }: { keyDetails: SolarKeyDetail
         <KeyDetailField label="Grid Ind." value={`${keyDetails.gridIndependencePercent}%`} />
         <KeyDetailField label="Payback per." value={`${keyDetails.paybackYears} years`} />
       </div>
-      {keyDetails.sapTableUrl ? (
+      <Button variant="secondary" className="mt-4 w-full justify-center text-xs" onClick={() => setSapOpen(true)}>
+        {hasSap ? "View MCS estimate & SAP table" : "View MCS estimate"}
+      </Button>
+      {/* Quotes from before the computed table may still carry an uploaded file — keep it reachable until assumptions are added. */}
+      {!hasSap && keyDetails.sapTableUrl && (
         <Button
           variant="secondary"
-          className="mt-4 w-full justify-center text-xs"
+          className="mt-2 w-full justify-center text-xs"
           href={keyDetails.sapTableUrl}
           target="_blank"
         >
-          View SAP table
+          View uploaded SAP table
         </Button>
-      ) : (
-        <p className="mt-4 rounded-lg bg-slate-50 px-3 py-2 text-center text-xs text-slate-400">
-          No SAP table uploaded yet.
-        </p>
+      )}
+      {sapOpen && (
+        <SolarSapTableModal
+          quoteId={quoteId}
+          customerName={customerName}
+          estimate={mcsEstimate}
+          electricUnitRate={electricUnitRate}
+          batteryCount={keyDetails.batteries}
+          batteryUsableKwh={keyDetails.batteryUsableKwh ?? 0}
+          assumptions={keyDetails.sapAssumptions}
+          canEdit={isAdmin && !locked}
+          onClose={() => setSapOpen(false)}
+        />
       )}
     </Collapsible>
   );

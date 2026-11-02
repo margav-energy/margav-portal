@@ -62,6 +62,8 @@ export interface SolarSurveyFile {
   sizeBytes: number | null;
   /** Signed, short-lived — regenerate on every read, never persist it. */
   url: string;
+  /** Same object signed with a `Content-Disposition: attachment` header, so a link to it saves the file instead of opening it. Staff-side reads only. */
+  downloadUrl?: string;
   uploadedAt: string;
 }
 

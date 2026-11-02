@@ -11,6 +11,7 @@ import {
   type SolarSurveyFileItem,
   type SolarSurveyQuestion,
 } from "@/lib/solar-survey-fields";
+import { SolarVideoLink } from "@/components/quotes/solar/SolarVideoLink";
 import type {
   SolarSurveyAnswers as Answers,
   SolarSurveyFile,
@@ -74,30 +75,43 @@ function FileGrid({
               <p className="text-sm text-slate-400">—</p>
             ) : (
               <div className="mt-1 grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {itemFiles.map((file) => (
-                  <a
-                    key={file.id}
-                    href={file.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={file.fileName}
-                    className="block overflow-hidden rounded-md border border-slate-200"
-                  >
-                    {file.contentType.startsWith("image/") ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, refreshed on every server read rather than a static asset.
-                      <img
-                        src={file.url}
-                        alt={file.fileName}
-                        className="aspect-square w-full object-cover"
-                      />
-                    ) : (
+                {itemFiles.map((file) =>
+                  file.contentType.startsWith("video/") ? (
+                    <SolarVideoLink
+                      key={file.id}
+                      url={file.url}
+                      fileName={file.fileName}
+                      className="block overflow-hidden rounded-md border border-slate-200"
+                    >
                       <div className="flex aspect-square w-full items-center justify-center bg-slate-50 p-1 text-center text-[10px] break-all text-slate-500">
-                        {file.contentType.startsWith("video/") ? "▶ " : "📄 "}
-                        {file.fileName}
+                        ▶ {file.fileName}
                       </div>
-                    )}
-                  </a>
-                ))}
+                    </SolarVideoLink>
+                  ) : (
+                    <a
+                      key={file.id}
+                      href={file.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={file.fileName}
+                      className="block overflow-hidden rounded-md border border-slate-200"
+                    >
+                      {file.contentType.startsWith("image/") ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, refreshed on every server read rather than a static asset.
+                        <img
+                          src={file.url}
+                          alt={file.fileName}
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center bg-slate-50 p-1 text-center text-[10px] break-all text-slate-500">
+                          {file.contentType.startsWith("video/") ? "▶ " : "📄 "}
+                          {file.fileName}
+                        </div>
+                      )}
+                    </a>
+                  ),
+                )}
               </div>
             )}
           </div>

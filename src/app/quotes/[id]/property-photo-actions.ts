@@ -24,6 +24,22 @@ function extensionFor(file: File): string {
 }
 
 /**
+ * A solar quote's photo is the roof design, which only an admin uploads or
+ * removes (there is no Street View fetch for solar — see `PropertyPhotoCard`'s
+ * solar counterpart, `SolarDesignCard`). Boiler site photos stay open to reps.
+ * Returns an error message when this user may not change this quote's photo.
+ */
+async function photoEditBlockedReason(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  quoteId: string,
+  role: string,
+): Promise<string | undefined> {
+  const { data: quote } = await supabase.from("quotes").select("product_type").eq("id", quoteId).maybeSingle();
+  if (quote?.product_type === "solar" && role !== "admin") return "Only admins can upload the solar design.";
+  return undefined;
+}
+
+/**
  * Uploads (or replaces) this quote's one property photo — see
  * supabase/migrations/0023_quote_property_photo.sql. Deterministic path
  * (`${quoteId}/photo.<ext>`), upserted, so a re-upload just overwrites the
@@ -45,9 +61,12 @@ export async function uploadPropertyPhotoAction(
   if (!file.type.startsWith("image/")) return { error: "That doesn't look like an image file." };
   if (file.size > MAX_FILE_BYTES) return { error: "That photo is too large — 10MB max." };
 
+  const supabase = await createClient();
+  const blocked = await photoEditBlockedReason(supabase, quoteId, user.role);
+  if (blocked) return { error: blocked };
+
   await ensurePropertyPhotosBucketExists();
 
-  const supabase = await createClient();
   const storagePath = `${quoteId}/photo.${extensionFor(file)}`;
 
   const { error: uploadError } = await supabase.storage
@@ -88,6 +107,9 @@ export async function removePropertyPhotoAction(quoteId: string): Promise<Proper
   if (user.role === "installer") return { error: "Only admins and reps can remove the property photo." };
 
   const supabase = await createClient();
+  const blocked = await photoEditBlockedReason(supabase, quoteId, user.role);
+  if (blocked) return { error: blocked };
+
   const { data: existing, error: fetchError } = await supabase
     .from("quotes")
     .select("property_photo_path")
@@ -129,6 +151,10 @@ export async function fetchStreetViewPhotoAction(
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
   if (user.role === "installer") return { error: "Only admins and reps can fetch a property photo." };
+
+  const supabase = await createClient();
+  const { data: quote } = await supabase.from("quotes").select("product_type").eq("id", quoteId).maybeSingle();
+  if (quote?.product_type === "solar") return { error: "Solar quotes use an uploaded roof design, not Street View." };
 
   if (!isStreetViewConfigured()) {
     return { error: "Street View isn't set up yet — ask an admin to add a Google Maps API key." };

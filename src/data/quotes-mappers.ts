@@ -17,7 +17,8 @@ import type {
   QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { BoilerKeyDetails, BoilerPropertyDetails } from "@/types/boiler-quote";
-import type { SolarKeyDetails, SolarPropertyDetails } from "@/types/solar-quote";
+import { parseModuleFromItems, parseOrientationDegrees } from "@/lib/mcs/array-inputs";
+import type { SapAssumptions, SolarKeyDetails, SolarPropertyDetails, TemplateYear1 } from "@/types/solar-quote";
 import type { RepProfile } from "@/data/profiles-service";
 
 /**
@@ -184,6 +185,36 @@ export function mapSolarKeyDetails(raw: unknown): SolarKeyDetails {
     gridIndependencePercent: Number(obj.gridIndependencePercent ?? 0),
     paybackYears: Number(obj.paybackYears ?? 0),
     sapTableUrl: typeof obj.sapTableUrl === "string" && obj.sapTableUrl ? obj.sapTableUrl : undefined,
+    sapAssumptions: mapSapAssumptions(obj.sapAssumptions),
+    batteryUsableKwh: Number(obj.batteryUsableKwh) > 0 ? Number(obj.batteryUsableKwh) : undefined,
+  };
+}
+
+function mapSapAssumptions(raw: unknown): SapAssumptions | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const obj = raw as Record<string, unknown>;
+  const num = (key: Exclude<keyof SapAssumptions, "templateYear1">) => {
+    const value = Number(obj[key] ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  };
+  const year1 = obj.templateYear1 && typeof obj.templateYear1 === "object" ? (obj.templateYear1 as Record<string, unknown>) : undefined;
+  const year1Num = (key: keyof TemplateYear1) => {
+    const value = Number(year1?.[key] ?? 0);
+    return Number.isFinite(value) ? value : 0;
+  };
+  return {
+    exportRatePerKwh: num("exportRatePerKwh"),
+    electricityPriceGrowthPct: num("electricityPriceGrowthPct"),
+    exportRateGrowthPct: num("exportRateGrowthPct"),
+    outputDegradationPct: num("outputDegradationPct"),
+    annualCosts: num("annualCosts"),
+    year1ExtraCost: num("year1ExtraCost"),
+    costTermYears: num("costTermYears"),
+    replacementCost: num("replacementCost"),
+    replacementEveryYears: num("replacementEveryYears"),
+    templateYear1: year1
+      ? { outputKwh: year1Num("outputKwh"), solar: year1Num("solar"), battery: year1Num("battery"), exportIncome: year1Num("exportIncome") }
+      : undefined,
   };
 }
 
@@ -210,6 +241,8 @@ export function mapSolarPropertyDetails(raw: unknown): SolarPropertyDetails {
     electricUnitRate: Number(obj.electricUnitRate ?? 0),
     estimatedBill: (obj.estimatedBill as "Yes" | "No") ?? "No",
     estimatedReason: obj.estimatedReason ?? "",
+    tariffType: obj.tariffType ?? "Standard",
+    customEstimate: obj.customEstimate ?? true,
     sprayFoam: (obj.sprayFoam as "Yes" | "No") ?? "No",
     mpan: obj.mpan ?? "",
     propertyType: obj.propertyType ?? "",
@@ -296,19 +329,48 @@ export interface SolarArrayRow {
   label: string;
   shade_factor: number | string;
   orientation: string;
+  orientation_degrees: number | string | null;
   pitch_degrees: number | string;
+  module_wp: number;
+  module_count: number;
   items: unknown;
   sort_order: number;
 }
 
 export function mapSolarArrayRow(row: SolarArrayRow) {
+  const items = parseLineItems(row.items);
+  const derivedFrom: { module?: string; orientation?: string } = {};
+
+  // Quotes made before the MCS inputs existed: read the rating/count from the panel line item
+  // ("AIKO Neostar 3S 485w × 6") and the degrees from the orientation text ("90° South").
+  let moduleWp = Number(row.module_wp ?? 0);
+  let moduleCount = Number(row.module_count ?? 0);
+  if (!(moduleWp > 0 && moduleCount > 0)) {
+    const moduleItem = parseModuleFromItems(items);
+    if (moduleItem) {
+      moduleWp = moduleItem.wp;
+      moduleCount = moduleItem.count;
+      derivedFrom.module = `${moduleItem.itemName} × ${moduleItem.count}`;
+    }
+  }
+
+  let orientationDegrees = row.orientation_degrees != null ? Number(row.orientation_degrees) : undefined;
+  if (orientationDegrees === undefined) {
+    orientationDegrees = parseOrientationDegrees(row.orientation);
+    if (orientationDegrees !== undefined) derivedFrom.orientation = row.orientation;
+  }
+
   return {
     id: row.id,
     label: row.label,
     shadeFactor: Number(row.shade_factor),
     orientation: row.orientation,
+    orientationDegrees,
     pitchDegrees: Number(row.pitch_degrees),
-    items: parseLineItems(row.items),
+    moduleWp,
+    moduleCount,
+    derivedFrom: Object.keys(derivedFrom).length > 0 ? derivedFrom : undefined,
+    items,
   };
 }
 

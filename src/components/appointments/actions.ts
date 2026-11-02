@@ -65,17 +65,17 @@ function appointmentConfirmationEmailHtml(params: {
   address: string;
 }): string {
   return (
-    `<div style="font-family:Arial,Helvetica,sans-serif;color:#0f172a;max-width:480px;">` +
+    `<div style="font-family:Arial,Helvetica,sans-serif;color:#000000;max-width:480px;">` +
     `<p style="font-size:18px;font-weight:bold;margin:0 0 4px;">Margav Heating</p>` +
     `<p style="margin:20px 0 8px;">Hi ${params.customerName},</p>` +
     `<p style="margin:0 0 16px;">Your ${params.product} appointment is booked in — here are the details:</p>` +
     `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:0 0 16px;">` +
-    `<tr><td style="padding:6px 0;color:#64748b;width:90px;">Date</td><td style="padding:6px 0;font-weight:600;">${params.dateLabel}</td></tr>` +
-    `<tr><td style="padding:6px 0;color:#64748b;">Time</td><td style="padding:6px 0;font-weight:600;">${params.timeLabel}</td></tr>` +
-    `<tr><td style="padding:6px 0;color:#64748b;vertical-align:top;">Address</td><td style="padding:6px 0;font-weight:600;">${params.address}</td></tr>` +
+    `<tr><td style="padding:6px 0;color:#737373;width:90px;">Date</td><td style="padding:6px 0;font-weight:600;">${params.dateLabel}</td></tr>` +
+    `<tr><td style="padding:6px 0;color:#737373;">Time</td><td style="padding:6px 0;font-weight:600;">${params.timeLabel}</td></tr>` +
+    `<tr><td style="padding:6px 0;color:#737373;vertical-align:top;">Address</td><td style="padding:6px 0;font-weight:600;">${params.address}</td></tr>` +
     `</table>` +
     `<p style="margin:0 0 8px;">One of our team will see you then. If you need to change this appointment, just reply to this email and we&rsquo;ll sort it out.</p>` +
-    `<p style="font-size:12px;color:#94a3b8;margin-top:32px;">Margav Heating</p>` +
+    `<p style="font-size:12px;color:#a3a3a3;margin-top:32px;">Margav Heating</p>` +
     `</div>`
   );
 }

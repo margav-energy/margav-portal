@@ -70,7 +70,7 @@ export function CalendarToolbar({
           type="button"
           onClick={onPrev}
           aria-label="Previous"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue text-white hover:bg-brand-blue/90"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-green-gradient text-black hover:brightness-95"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -81,7 +81,7 @@ export function CalendarToolbar({
           type="button"
           onClick={onNext}
           aria-label="Next"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue text-white hover:bg-brand-blue/90"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-green-gradient text-black hover:brightness-95"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -120,7 +120,7 @@ export function CalendarToolbar({
             />
             <button
               type="submit"
-              className="rounded-lg bg-brand-blue px-2.5 py-1.5 text-sm font-medium text-white hover:bg-brand-blue/90"
+              className="rounded-lg bg-brand-green-gradient px-2.5 py-1.5 text-sm font-medium text-black hover:brightness-95"
             >
               Save
             </button>

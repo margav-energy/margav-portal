@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { FormField, inputClassName } from "@/components/ui/FormField";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { SolarPropertyDetails } from "@/types/solar-quote";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
@@ -48,6 +48,89 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+const OCCUPANCY_OPTIONS = ["In most of the day", "In half of the day", "Out most of the day"];
+const TARIFF_OPTIONS = ["Standard", "Economy7", "Fixed rate", "Commercial"];
+const ESTIMATED_REASON_OPTIONS = [
+  "Customer has just moved in",
+  "Customer has just added a high load item such as an EV charger or heat pump",
+  "Customer has no usable bills or meter readings",
+];
+
+/** The current value is kept as an option so a legacy free-text entry isn't lost when it isn't in the list. */
+function withCurrent(options: string[], current: string): string[] {
+  return current && !options.includes(current) ? [current, ...options] : options;
+}
+
+/** The average annual consumption used for an estimated bill (also MGD 003 §4.3.5's default). */
+const ESTIMATED_CONSUMPTION_KWH = 3500;
+
+/** An estimated bill without Custom is the average figure — keep consumption on it. */
+function withEstimatedConsumption(property: SolarPropertyDetails): SolarPropertyDetails {
+  if (property.estimatedBill !== "Yes" || (property.customEstimate ?? true)) return property;
+  return { ...property, annualConsumptionKwh: ESTIMATED_CONSUMPTION_KWH };
+}
+
+function FormRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[200px_1fr] sm:items-start sm:gap-6">
+      <label className="text-sm font-medium text-slate-600 sm:pt-2 sm:text-right">
+        {label} <span className="text-red-500">*</span>
+      </label>
+      <div className="flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+function Stepper({
+  id,
+  value,
+  step,
+  prefix,
+  suffix,
+  decimals = 0,
+  disabled = false,
+  onChange,
+}: {
+  id: string;
+  value: number;
+  step: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+  disabled?: boolean;
+  onChange: (value: number) => void;
+}) {
+  function bump(direction: 1 | -1) {
+    onChange(Math.max(0, Number((value + direction * step).toFixed(decimals))));
+  }
+  const buttonClassName = "px-2 text-lg leading-none text-slate-400 hover:text-slate-700";
+  return (
+    <div className={`flex w-fit items-center gap-1 rounded-lg bg-slate-100 px-2 py-2 ${disabled ? "opacity-60" : ""}`}>
+      <button type="button" aria-label="Decrease" className={buttonClassName} disabled={disabled} onClick={() => bump(-1)}>
+        −
+      </button>
+      {prefix && <span className="text-sm text-slate-500">{prefix}</span>}
+      <input
+        id={id}
+        type="number"
+        step="any"
+        min={0}
+        disabled={disabled}
+        className="w-24 [appearance:textfield] bg-transparent text-center text-sm font-medium text-slate-900 outline-none [&::-webkit-inner-spin-button]:appearance-none"
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      {suffix && <span className="text-sm text-slate-500">{suffix}</span>}
+      <button type="button" aria-label="Increase" className={buttonClassName} disabled={disabled} onClick={() => bump(1)}>
+        +
+      </button>
+    </div>
+  );
+}
+
+const selectClassName =
+  "w-full max-w-md rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-1 focus:ring-brand-blue";
+
 function EditPropertyModal({
   quoteId,
   property,
@@ -62,12 +145,15 @@ function EditPropertyModal({
   // Autosaved locally so an in-progress edit survives a crash/restart before Save is clicked.
   const draftKey = `solar-property-draft-${quoteId}`;
   const [form, setForm] = useState(property);
-  const draftRestored = useDraftRestore<SolarPropertyDetails>(draftKey, setForm);
+  // Merged over the current values so a draft saved before a field existed can't leave it undefined.
+  const draftRestored = useDraftRestore<SolarPropertyDetails>(draftKey, (draft) =>
+    setForm((current) => ({ ...current, ...draft })),
+  );
 
   useAutosaveDraft(draftKey, form);
 
   function set<K extends keyof SolarPropertyDetails>(key: K, value: SolarPropertyDetails[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
+    setForm((current) => withEstimatedConsumption({ ...current, [key]: value }));
   }
 
   function handleClose() {
@@ -81,86 +167,126 @@ function EditPropertyModal({
     onClose();
   }
 
+  const estimated = form.estimatedBill === "Yes";
+  // The Custom toggle only exists for estimated bills; otherwise the figures are always editable.
+  const custom = estimated ? (form.customEstimate ?? true) : true;
+
   return (
-    <Modal title="Edit property details" onClose={handleClose}>
-      <div className="flex flex-col gap-4 px-5 py-5">
+    <Modal title="Update quote property details" onClose={handleClose} maxWidthClassName="max-w-3xl">
+      <div className="flex flex-col gap-5 px-5 py-6 sm:px-8">
         {draftRestored && (
           <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Unsaved changes from your last session were restored.
           </div>
         )}
-        <FormField label="Occupancy Archetype" htmlFor="occupancyArchetype">
-          <input
-            id="occupancyArchetype"
-            className={inputClassName}
+
+        <div className="sm:pl-[224px]">
+          <ToggleSwitch
+            checked={estimated}
+            onChange={(value) => {
+              set("estimatedBill", value ? "Yes" : "No");
+              if (value) set("customEstimate", false);
+            }}
+            label="Estimated electric bill"
+          />
+        </div>
+
+        <FormRow label="Occupancy archetype">
+          <select
+            className={selectClassName}
             value={form.occupancyArchetype}
             onChange={(event) => set("occupancyArchetype", event.target.value)}
-          />
-        </FormField>
-        <FormField label="Annual Consumption (kWh)" htmlFor="annualConsumptionKwh">
-          <input
+          >
+            {!form.occupancyArchetype && <option value="">Select…</option>}
+            {withCurrent(OCCUPANCY_OPTIONS, form.occupancyArchetype).map((option) => (
+              <option key={option}>{option}</option>
+            ))}
+          </select>
+        </FormRow>
+
+        <hr className="border-slate-100" />
+
+        <FormRow label="Annual electric consumption">
+          <Stepper
             id="annualConsumptionKwh"
-            type="number"
-            className={inputClassName}
             value={form.annualConsumptionKwh}
-            onChange={(event) => set("annualConsumptionKwh", Number(event.target.value))}
+            step={100}
+            suffix="kWh"
+            disabled={!custom}
+            onChange={(value) => set("annualConsumptionKwh", value)}
           />
-        </FormField>
-        <FormField label="Electric Unit Rate (£)" htmlFor="electricUnitRate">
-          <input
+          {estimated && (
+            <ToggleSwitch checked={custom} onChange={(value) => set("customEstimate", value)} label="Custom" />
+          )}
+          {!custom && (
+            <p className="text-xs text-slate-500">Average figure of {ESTIMATED_CONSUMPTION_KWH.toLocaleString()} kWh. Turn on Custom to enter kWh yourself.</p>
+          )}
+        </FormRow>
+
+        <FormRow label="Tariff type">
+          <select
+            className={selectClassName}
+            value={form.tariffType ?? "Standard"}
+            onChange={(event) => set("tariffType", event.target.value)}
+          >
+            {withCurrent(TARIFF_OPTIONS, form.tariffType ?? "").map((option) => (
+              <option key={option}>{option}</option>
+            ))}
+          </select>
+        </FormRow>
+
+        <FormRow label="Electric unit rate">
+          <Stepper
             id="electricUnitRate"
-            type="number"
-            step="0.0001"
-            className={inputClassName}
             value={form.electricUnitRate}
-            onChange={(event) => set("electricUnitRate", Number(event.target.value))}
+            step={0.01}
+            decimals={4}
+            prefix="£"
+            onChange={(value) => set("electricUnitRate", value)}
           />
-        </FormField>
-        <FormField label="Estimated Bill" htmlFor="estimatedBill">
-          <select
-            id="estimatedBill"
-            className={inputClassName}
-            value={form.estimatedBill}
-            onChange={(event) => set("estimatedBill", event.target.value as "Yes" | "No")}
-          >
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </FormField>
-        <FormField label="Estimated Reason" htmlFor="estimatedReason">
-          <input
-            id="estimatedReason"
-            className={inputClassName}
-            value={form.estimatedReason}
-            onChange={(event) => set("estimatedReason", event.target.value)}
-          />
-        </FormField>
-        <FormField label="Spray Foam" htmlFor="sprayFoam">
-          <select
-            id="sprayFoam"
-            className={inputClassName}
-            value={form.sprayFoam}
-            onChange={(event) => set("sprayFoam", event.target.value as "Yes" | "No")}
-          >
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </FormField>
-        <FormField label="MPAN" htmlFor="mpan">
+        </FormRow>
+
+        {estimated && (
+          <FormRow label="Estimated reason">
+            <select
+              className={`${selectClassName} max-w-xl`}
+              value={form.estimatedReason}
+              onChange={(event) => set("estimatedReason", event.target.value)}
+            >
+              {!form.estimatedReason && <option value="">Select…</option>}
+              {withCurrent(ESTIMATED_REASON_OPTIONS, form.estimatedReason).map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </FormRow>
+        )}
+
+        <hr className="border-slate-100" />
+
+        <FormRow label="MPAN">
           <input
             id="mpan"
-            className={inputClassName}
+            className="w-full max-w-xl rounded-lg bg-slate-100 px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-1 focus:ring-brand-blue"
             value={form.mpan}
             onChange={(event) => set("mpan", event.target.value)}
           />
-        </FormField>
+          <p className="text-sm text-slate-500">This is mandatory as there is an inverter requiring an LOA</p>
+        </FormRow>
+
+        <div className="sm:pl-[224px]">
+          <ToggleSwitch
+            checked={form.sprayFoam === "Yes"}
+            onChange={(value) => set("sprayFoam", value ? "Yes" : "No")}
+            label="Spray foam"
+          />
+        </div>
       </div>
-      <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+      <div className="flex justify-end gap-2 px-5 pb-6 sm:px-8">
         <Button variant="secondary" onClick={handleClose}>
           Cancel
         </Button>
         <Button variant="success" onClick={handleSave}>
-          Save
+          Save these details
         </Button>
       </div>
     </Modal>
@@ -207,6 +333,7 @@ export function SolarPropertyCard({
         <Field label="Annual Electric Consumption" value={`${property.annualConsumptionKwh.toLocaleString()} kWh`} />
         <Field label="Electric Unit Rate" value={formatUnitRate(property.electricUnitRate)} />
         <Field label="Estimated Bill" value={property.estimatedBill} />
+        <Field label="Tariff Type" value={property.tariffType || "Standard"} />
         <Field label="Estimated Reason" value={property.estimatedReason} />
         <Field label="Spray Foam" value={property.sprayFoam} />
         <Field label="MPAN" value={property.mpan} />

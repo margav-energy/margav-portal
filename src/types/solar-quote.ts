@@ -1,3 +1,4 @@
+import type { McsEstimate } from "@/lib/mcs/performance-estimate";
 import type {
   CustomerDetails,
   FreeTextExtra,
@@ -24,6 +25,10 @@ export interface SolarPropertyDetails {
   electricUnitRate: number;
   estimatedBill: "Yes" | "No";
   estimatedReason: string;
+  /** e.g. "Standard" — informational, doesn't feed the MCS estimate. */
+  tariffType?: string;
+  /** Only relevant while `estimatedBill` is "Yes": true = the consumption is entered by hand; false = it's the 3,500 kWh average. Treated as true when absent. */
+  customEstimate?: boolean;
   sprayFoam: "Yes" | "No";
   mpan: string;
   /** The fields below are filled in from the customer's pre-installation survey when it's submitted (see `buildPropertyPatchFromSurvey`) — empty until then. */
@@ -43,9 +48,70 @@ export interface SolarArray {
   label: string;
   /** Shading factor as a fraction of unshaded irradiance, e.g. 1 = no shade, 0.92 = 8% shaded. */
   shadeFactor: number;
+  /** Display label, e.g. "South-East". The number the MCS estimate uses is `orientationDegrees`. */
   orientation: string;
+  /** Degrees from due south (0 south, 90 east/west, 180 north). Absent until entered. */
+  orientationDegrees?: number;
   pitchDegrees: number;
+  /** Module label rating in watts at STC; kWp = moduleWp × moduleCount / 1000. */
+  moduleWp: number;
+  moduleCount: number;
+  /** Set when a value wasn't entered but read from the array's existing text or line items — shown for confirmation on the MCS estimate. */
+  derivedFrom?: { module?: string; orientation?: string };
   items: LineItem[];
+}
+
+/**
+ * Admin-entered assumptions for the 25-year "Quote SAP table" projection
+ * (see `computeSapTable`, src/lib/solar-sap.ts) — stored inside
+ * `quotes.key_details`. The year-1 generation and self-consumption come from
+ * the MCS estimate, so only what MCS doesn't specify is entered here.
+ */
+export interface SapAssumptions {
+  /** £ per kWh paid for exported electricity (e.g. the Smart Export Guarantee tariff). */
+  exportRatePerKwh: number;
+  /** Yearly rise in the electricity unit rate, %. */
+  electricityPriceGrowthPct: number;
+  /** Yearly change in the export rate, % (negative for a fall). */
+  exportRateGrowthPct: number;
+  /** Straight-line fall in output per year, as a % of year 1 output (module degradation). */
+  outputDegradationPct: number;
+  /** Yearly finance repayment (or other running cost). */
+  annualCosts: number;
+  /** One-off added to the year 1 costs only. */
+  year1ExtraCost: number;
+  /** Number of years `annualCosts` is paid; later years cost nothing. */
+  costTermYears: number;
+  /** A recurring one-off cost (e.g. an inverter replacement) paid in every `replacementEveryYears`th year. 0 = none. */
+  replacementCost: number;
+  replacementEveryYears: number;
+  /**
+   * Hand-entered year 1 figures for systems outside the MCS self-consumption range (consumption of 6,000 kWh or
+   * more, or generation of 6,000 kWh or more), where MCS gives no figures to start from. Only used in that case.
+   */
+  templateYear1?: TemplateYear1;
+}
+
+export interface TemplateYear1 {
+  outputKwh: number;
+  /** £ saved by electricity the solar panels supply directly. */
+  solar: number;
+  /** £ saved by the extra electricity the battery supplies. */
+  battery: number;
+  /** £ earned from exported electricity. */
+  exportIncome: number;
+}
+
+export interface SapRow {
+  year: number;
+  outputKwh: number;
+  solar: number;
+  battery: number;
+  export: number;
+  savings: number;
+  costs: number;
+  /** Cumulative: previous net position + this year's savings − costs. */
+  netPosition: number;
 }
 
 export interface SolarKeyDetails {
@@ -61,6 +127,10 @@ export interface SolarKeyDetails {
   paybackYears: number;
   /** Optional external URL, stored in `quotes.key_details`. No upload UI — set manually/by another integration. */
   sapTableUrl?: string;
+  /** Assumptions for the 25-year projection; absent until an admin enters them. */
+  sapAssumptions?: SapAssumptions;
+  /** Battery's usable capacity (kWh) for MCS self-consumption — after depth of discharge / reserved backup (MGD 003 §4.5). */
+  batteryUsableKwh?: number;
 }
 
 export interface SolarQuoteDetail {
@@ -113,6 +183,8 @@ export interface SolarQuoteDetail {
   /** Only meaningful when `selectedPaymentMethod === "monthly_plan"`. */
   monthlyPlanTermYears?: number;
   keyDetails: SolarKeyDetails;
+  /** The MCS performance estimate, built on the server from the quote's arrays, postcode and property details. */
+  mcsEstimate: McsEstimate;
   pricingBreakdown: LineItem[];
   profitBreakdown: ProfitBreakdown;
   notes: QuoteNote[];

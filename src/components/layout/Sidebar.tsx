@@ -52,13 +52,13 @@ export function Sidebar({
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-slate-950 px-3 py-5 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:transition-[width]",
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col bg-brand-blue px-3 py-5 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 lg:transition-[width]",
           isOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed && "lg:w-16",
         )}
       >
         <div className={cn("flex items-center gap-2 px-3 pb-6", isCollapsed && "lg:justify-center lg:px-0")}>
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-brand-green-gradient" />
+          <span className="h-3 w-3 shrink-0 rounded-full bg-brand-green-gradient" />
           <span className={cn("text-lg font-semibold tracking-tight text-white", isCollapsed && "lg:hidden")}>
             {APP_NAME}
           </span>
@@ -67,7 +67,7 @@ export function Sidebar({
             onClick={onToggleCollapsed}
             aria-label={isCollapsed ? "Expand navigation" : "Collapse navigation"}
             className={cn(
-              "ml-auto hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white lg:flex",
+              "ml-auto hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg text-white/70 hover:bg-white/10 hover:text-white lg:flex",
               isCollapsed && "lg:ml-0",
             )}
           >
@@ -101,7 +101,7 @@ export function Sidebar({
             );
           })}
         </nav>
-        <p className={cn("px-3 pt-4 text-xs text-slate-500", isCollapsed && "lg:hidden")}>v{APP_VERSION}</p>
+        <p className={cn("px-3 pt-4 text-xs text-white/60", isCollapsed && "lg:hidden")}>v{APP_VERSION}</p>
       </aside>
       {isFinanceCalculatorOpen && (
         <FinanceCalculatorModal onClose={() => setIsFinanceCalculatorOpen(false)} />

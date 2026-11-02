@@ -117,7 +117,10 @@ async function loadSignedFiles(
 
   const files = await Promise.all(
     rows.map(async (row): Promise<SolarSurveyFile | null> => {
-      const signedUrl = await signSolarSurveyFileUrl(supabase, row.storage_path);
+      const [signedUrl, downloadUrl] = await Promise.all([
+        signSolarSurveyFileUrl(supabase, row.storage_path),
+        signSolarSurveyFileUrl(supabase, row.storage_path, row.file_name || true),
+      ]);
       if (!signedUrl) return null;
       return {
         id: row.id,
@@ -126,6 +129,7 @@ async function loadSignedFiles(
         contentType: row.content_type,
         sizeBytes: row.size_bytes,
         url: signedUrl,
+        downloadUrl,
         uploadedAt: row.uploaded_at,
       };
     }),
@@ -138,8 +142,12 @@ export async function signSolarSurveyFileUrl(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see `loadSignedFiles`'s note above.
   supabase: SupabaseClient<any>,
   storagePath: string,
+  /** A file name (or `true` to keep the stored one) makes the URL download instead of display. */
+  download?: string | boolean,
 ): Promise<string | undefined> {
-  const { data, error } = await supabase.storage.from(SOLAR_SURVEY_BUCKET).createSignedUrl(storagePath, 60 * 60);
+  const { data, error } = await supabase.storage
+    .from(SOLAR_SURVEY_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60, download ? { download } : undefined);
   if (error || !data) {
     console.error("signSolarSurveyFileUrl failed", storagePath, error);
     return undefined;

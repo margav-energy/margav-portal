@@ -6,7 +6,7 @@ import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
 import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
-import { PropertyPhotoCard } from "@/components/quotes/detail/PropertyPhotoCard";
+import { SolarDesignCard } from "@/components/quotes/solar/SolarDesignCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
 import { PricingCard } from "@/components/quotes/detail/PricingCard";
@@ -191,11 +191,11 @@ export function SolarQuoteDetail({
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <div className="flex flex-col gap-6 md:col-span-2">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <PropertyPhotoCard
+            <SolarDesignCard
               quoteId={detail.quoteId}
               customerName={customer.name}
-              address={customer.addressLines.join(", ")}
               photoUrl={propertyPhotoUrl}
+              canEdit={isAdmin}
             />
             <CustomerCard
               quoteId={detail.quoteId}
@@ -250,7 +250,15 @@ export function SolarQuoteDetail({
             locked={locked}
           />
           <SolarSurveyCard survey={survey} />
-          <SolarKeyDetailsCard keyDetails={detail.keyDetails} />
+          <SolarKeyDetailsCard
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            keyDetails={detail.keyDetails}
+            mcsEstimate={detail.mcsEstimate}
+            electricUnitRate={property.electricUnitRate}
+            isAdmin={isAdmin}
+            locked={locked}
+          />
           <PricingCard items={detail.pricingBreakdown} extras={extras} />
           <PricingAdjustmentsCard
             quoteId={detail.quoteId}

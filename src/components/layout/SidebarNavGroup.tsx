@@ -48,8 +48,8 @@ export function SidebarNavGroup({
         className={cn(
           "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           isChildActive
-            ? "bg-white/10 text-white"
-            : "text-slate-300 hover:bg-white/5 hover:text-white",
+            ? "bg-white/15 text-white"
+            : "text-white/80 hover:bg-white/10 hover:text-white",
           isCollapsed && "lg:justify-center",
         )}
       >
@@ -58,7 +58,7 @@ export function SidebarNavGroup({
         {comingSoon && (
           <span
             className={cn(
-              "rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300 uppercase",
+              "rounded-full bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase",
               isCollapsed && "lg:hidden",
             )}
           >
@@ -67,7 +67,7 @@ export function SidebarNavGroup({
         )}
         <ChevronDown
           className={cn(
-            "h-4 w-4 shrink-0 text-slate-400 transition-transform",
+            "h-4 w-4 shrink-0 text-white/70 transition-transform",
             isOpen && "rotate-180",
             isCollapsed && "lg:hidden",
           )}
@@ -76,7 +76,7 @@ export function SidebarNavGroup({
       {isOpen && (
         <div
           className={cn(
-            "mt-1 ml-7 flex flex-col gap-0.5 border-l border-white/10 pl-3",
+            "mt-1 ml-7 flex flex-col gap-0.5 border-l border-white/20 pl-3",
             isCollapsed && "lg:hidden",
           )}
         >
@@ -90,8 +90,8 @@ export function SidebarNavGroup({
                 className={cn(
                   "rounded-md px-2 py-1.5 text-sm transition-colors",
                   isActive
-                    ? "text-white"
-                    : "text-slate-400 hover:text-white",
+                    ? "font-semibold text-white"
+                    : "text-white/70 hover:text-white",
                 )}
               >
                 {child.label}

@@ -17,10 +17,34 @@
   --font-poppins: "Poppins", ui-sans-serif, system-ui, sans-serif;
   --font-myriad: "Myriad Pro", "Poppins", ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-poppins);
+
+  /* Neutrals. The app is built on Tailwind's "slate" utilities; remapping the
+     scale to true greys (no blue tint) keeps every existing slate-* class on
+     brand. slate-950 is brand black. */
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f5f5f5;
+  --color-slate-200: #e5e5e5;
+  --color-slate-300: #d4d4d4;
+  --color-slate-400: #a3a3a3;
+  --color-slate-500: #737373;
+  --color-slate-600: #525252;
+  --color-slate-700: #404040;
+  --color-slate-800: #262626;
+  --color-slate-900: #171717;
+  --color-slate-950: #000000;
 }
 
 /* Reusable evenly-distributed 3-stop brand gradient. Explicit 0%/50%/100%
    stops keep the middle green centered regardless of gradient direction. */
+@utility bg-brand-green-gradient-vertical {
+  background-image: linear-gradient(
+    180deg,
+    var(--color-brand-green-start) 0%,
+    var(--color-brand-green-mid) 50%,
+    var(--color-brand-green-end) 100%
+  );
+}
+
 @utility bg-brand-green-gradient {
   background-image: linear-gradient(
     90deg,
@@ -31,6 +55,6 @@
 }
 
 body {
-  background-color: #f8fafc;
+  background-color: var(--color-slate-50);
   color: var(--color-brand-black);
 }
