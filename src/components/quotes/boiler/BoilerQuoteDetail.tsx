@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
+import { StickyColumn } from "@/components/ui/StickyColumn";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
 import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
 import { PropertyPhotoCard } from "@/components/quotes/detail/PropertyPhotoCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
-import { PricingCard } from "@/components/quotes/detail/PricingCard";
-import { PricingAdjustmentsCard } from "@/components/quotes/detail/PricingAdjustmentsCard";
+import { PricingSummaryCard } from "@/components/quotes/detail/PricingSummaryCard";
 import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
@@ -106,6 +106,7 @@ export function BoilerQuoteDetail({
   const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
     vatAmount: detail.vatAmount,
     discountAmount: detail.discountAmount,
+    discountReason: detail.discountReason,
     depositAmount: detail.depositAmount,
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -274,8 +275,8 @@ export function BoilerQuoteDetail({
         installAcceptanceStatus={acceptanceStatus}
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="flex flex-col gap-6 md:col-span-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <PropertyPhotoCard
               quoteId={detail.quoteId}
@@ -323,11 +324,11 @@ export function BoilerQuoteDetail({
             quoteId={detail.quoteId}
             customerName={customer.name}
             notes={notes}
-            onNoteAdded={(note) => setNotes((current) => [note, ...current])}
+            onNotesChange={setNotes}
           />
         </div>
 
-        <div className="flex flex-col gap-4">
+        <StickyColumn className="flex flex-col gap-4 md:sticky md:self-start">
           <ActionButtonGrid buttons={actionButtons} />
           <PaymentMethodCard
             selected={selectedPaymentMethod}
@@ -338,13 +339,15 @@ export function BoilerQuoteDetail({
             locked={locked}
           />
           {primaryUnit && <BoilerKeyDetailsCard unit={primaryUnit} keyDetails={detail.keyDetails} profit={profit} />}
-          <PricingCard items={pricingBreakdown} extras={extras} />
-          <PricingAdjustmentsCard
+          <PricingSummaryCard
             quoteId={detail.quoteId}
             customerName={customer.name}
-            subtotal={totalCost}
+            items={pricingBreakdown}
+            extras={extras}
             adjustments={pricingAdjustments}
             onUpdated={setPricingAdjustments}
+            selectedMethod={selectedPaymentMethod}
+            termYears={monthlyPlanTermYears}
             locked={locked}
           />
           <ProfitCard
@@ -399,7 +402,7 @@ export function BoilerQuoteDetail({
             readLabel="Read the waiver"
           />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
-        </div>
+        </StickyColumn>
       </div>
 
       {isHistoryOpen && <HistoryModal history={detail.history} onClose={() => setIsHistoryOpen(false)} />}

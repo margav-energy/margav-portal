@@ -78,6 +78,7 @@ create table if not exists public.quotes (
   -- this business quotes VAT-inclusive prices, so it's never added on top.
   vat_amount numeric(12, 2) not null default 0,
   discount_amount numeric(12, 2) not null default 0,
+  discount_reason text not null default '',
   deposit_amount numeric(12, 2) not null default 0,
   payment_type text not null default 'cash' check (payment_type in ('cash', 'finance', 'card', 'bacs')),
   selected_payment_method text check (
@@ -148,6 +149,18 @@ create table if not exists public.solar_arrays (
   created_at timestamptz not null default now()
 );
 
+-- Optimisers / inverters / batteries / EV chargers / gateways on a solar quote — see
+-- supabase/migrations/0041_solar_equipment.sql.
+create table if not exists public.solar_equipment (
+  id uuid primary key default gen_random_uuid(),
+  quote_id uuid not null references public.quotes (id) on delete cascade,
+  kind text not null check (kind in ('optimiser', 'inverter', 'battery', 'ev_charger', 'gateway')),
+  label text not null default '',
+  items jsonb not null default '[]'::jsonb,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.quote_line_items (
   id uuid primary key default gen_random_uuid(),
   quote_id uuid not null references public.quotes (id) on delete cascade,
@@ -165,6 +178,19 @@ create table if not exists public.quote_notes (
   quote_id uuid not null references public.quotes (id) on delete cascade,
   author_id uuid references public.profiles (id),
   body text not null,
+  parent_id uuid references public.quote_notes (id) on delete cascade,
+  edited_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+-- PDFs / images / videos on a note — see supabase/migrations/0042_quote_note_threads.sql.
+create table if not exists public.quote_note_attachments (
+  id uuid primary key default gen_random_uuid(),
+  note_id uuid not null references public.quote_notes (id) on delete cascade,
+  storage_path text not null,
+  original_filename text not null,
+  content_type text not null default 'application/octet-stream',
+  size_bytes bigint not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -354,8 +380,10 @@ alter table public.profiles enable row level security;
 alter table public.quotes enable row level security;
 alter table public.boiler_units enable row level security;
 alter table public.solar_arrays enable row level security;
+alter table public.solar_equipment enable row level security;
 alter table public.quote_line_items enable row level security;
 alter table public.quote_notes enable row level security;
+alter table public.quote_note_attachments enable row level security;
 alter table public.quote_history enable row level security;
 alter table public.quote_documents enable row level security;
 alter table public.appointments enable row level security;
@@ -422,7 +450,7 @@ declare
   t text;
 begin
   foreach t in array array[
-    'quotes', 'boiler_units', 'solar_arrays', 'quote_line_items', 'quote_notes',
+    'quotes', 'boiler_units', 'solar_arrays', 'solar_equipment', 'quote_line_items', 'quote_notes', 'quote_note_attachments',
     'quote_history', 'quote_documents', 'appointments', 'calendar_saved_views', 'holidays',
     'installer_availability', 'activities', 'notifications'
   ]
@@ -445,6 +473,15 @@ create policy "quote_documents_bucket_all_authenticated"
   to authenticated
   using (bucket_id = 'quote-documents')
   with check (bucket_id = 'quote-documents');
+
+-- Storage access for the `quote-note-attachments` bucket — see
+-- supabase/migrations/0042_quote_note_threads.sql.
+drop policy if exists "quote_note_attachments_bucket_all_authenticated" on storage.objects;
+create policy "quote_note_attachments_bucket_all_authenticated"
+  on storage.objects for all
+  to authenticated
+  using (bucket_id = 'quote-note-attachments')
+  with check (bucket_id = 'quote-note-attachments');
 
 -- Storage access for the `property-photos` bucket, see
 -- supabase/migrations/0023_quote_property_photo.sql.

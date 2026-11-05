@@ -16,11 +16,12 @@ export function parseOrientationDegrees(text: string): number | undefined {
   const value = text.trim().toLowerCase();
   if (!value) return undefined;
 
-  const withDegrees = /(\d+(?:\.\d+)?)\s*°?\s*(south|north|east|west)?/.exec(value);
-  if (withDegrees && /\d/.test(value) && /°|south|north|east|west|deg/.test(value)) {
+  // The direction word may come before or after the number ("45° North", "North 45°").
+  const withDegrees = /(\d+(?:\.\d+)?)/.exec(value);
+  if (withDegrees && /°|south|north|east|west|deg/.test(value)) {
     const degrees = Number(withDegrees[1]);
     if (Number.isFinite(degrees) && degrees <= 360) {
-      const fromSouth = withDegrees[2] === "north" ? 180 - degrees : degrees;
+      const fromSouth = /\bnorth\b/.test(value) ? 180 - degrees : degrees;
       return Math.min(180, Math.max(0, fromSouth));
     }
   }
@@ -35,6 +36,8 @@ export function parseOrientationDegrees(text: string): number | undefined {
   return compass.find(([pattern]) => pattern.test(value))?.[1];
 }
 
+const NOT_A_MODULE = /inverter|optimi[sz]er|battery|charger|micro/i;
+
 /**
  * Finds the module line item — a name ending in a watt rating like
  * "AIKO Neostar 3S 485w" — and returns its rating and quantity. "5kw"
@@ -43,6 +46,7 @@ export function parseOrientationDegrees(text: string): number | undefined {
  */
 export function parseModuleFromItems(items: LineItem[]): { wp: number; count: number; itemName: string } | undefined {
   for (const item of items) {
+    if (NOT_A_MODULE.test(item.name)) continue;
     const match = /(?:^|[^\d.])(\d{3,4})\s?w(?:p|att|atts)?\b/i.exec(item.name);
     if (match && item.quantity > 0) return { wp: Number(match[1]), count: Math.round(item.quantity), itemName: item.name };
   }

@@ -28,7 +28,7 @@ export function InstallerNotesPanel({
       quoteId={quoteId}
       customerName={customerName}
       notes={currentNotes}
-      onNoteAdded={(note) => setCurrentNotes((current) => [note, ...current])}
+      onNotesChange={setCurrentNotes}
     />
   );
 }

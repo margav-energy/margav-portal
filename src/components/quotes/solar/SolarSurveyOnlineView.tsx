@@ -163,9 +163,9 @@ export function SolarSurveyOnlineView({
   submittedAtLabel: string;
 }) {
   const roofCount = Math.min(Math.max(Number(answers.roofCount) || 0, 0), 3);
-  const fullAddress = [...job.addressLines, job.address.postcode]
-    .filter((part) => part && part.trim())
-    .join(", ");
+  const addressParts = [...job.addressLines.flatMap((line) => line.split(",")), job.address.postcode]
+    .map((part) => part.trim())
+    .filter(Boolean);
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
@@ -192,7 +192,15 @@ export function SolarSurveyOnlineView({
           <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
             Address
           </p>
-          <p className="mt-1 text-sm text-slate-900">{fullAddress || "—"}</p>
+          <p className="mt-1 text-sm text-slate-900">
+            {addressParts.length > 0
+              ? addressParts.map((part, index) => (
+                  <span key={index} className="block">
+                    {part}
+                  </span>
+                ))
+              : "—"}
+          </p>
         </div>
       </div>
 

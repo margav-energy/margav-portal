@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { usePersistedToggle } from "@/hooks/usePersistedToggle";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -8,6 +11,7 @@ import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { updateQuotePropertyDetails } from "@/components/quotes/actions";
 import type { SolarPropertyDetails } from "@/types/solar-quote";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 // Electric unit rates carry more precision than `formatCurrency` shows
 // (which rounds to 2dp) — e.g. "£0.2467" rather than "£0.25".
@@ -308,6 +312,7 @@ export function SolarPropertyCard({
   locked?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isOpen, setIsOpen] = usePersistedToggle("quote-property-details-open", true);
 
   function handleSave(updated: SolarPropertyDetails) {
     onUpdated(updated);
@@ -316,18 +321,20 @@ export function SolarPropertyCard({
 
   return (
     <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Property details</h3>
-        <Button
-          variant="secondary"
-          className="px-3 py-1.5 text-xs"
-          onClick={() => setIsEditing(true)}
-          disabled={locked}
-          title={locked ? "Unlock this quote to make changes" : undefined}
+      <div className={cn("flex items-center justify-between", isOpen && "mb-4")}>
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+          className="flex items-center gap-2"
         >
-          Edit
-        </Button>
+          <h3 className="text-sm font-semibold text-slate-900">Property details</h3>
+          <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
+        </button>
+        <ActionIcon action="edit" onClick={() => setIsEditing(true)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
       </div>
+      {isOpen && (
+        <>
       <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
         <Field label="Occupancy Archetype" value={property.occupancyArchetype} />
         <Field label="Annual Electric Consumption" value={`${property.annualConsumptionKwh.toLocaleString()} kWh`} />
@@ -348,6 +355,8 @@ export function SolarPropertyCard({
             ))}
           </div>
         </div>
+      )}
+        </>
       )}
 
       {isEditing && (

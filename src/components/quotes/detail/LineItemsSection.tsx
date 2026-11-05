@@ -5,10 +5,12 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
+import { LineItemRows } from "@/components/quotes/detail/LineItemRows";
 import { formatCurrency } from "@/lib/format";
 import { createQuoteLineItem, deleteQuoteLineItem, updateQuoteLineItem } from "@/components/quotes/actions";
 import { findCatalogEntry, type ExtraCatalogEntry } from "@/lib/extras-catalog";
 import type { LineItemSection } from "@/types/quote-detail-shared";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 interface DisplayItem {
   id: string;
@@ -214,43 +216,23 @@ export function LineItemsSection({
         const catalogEntry = catalog ? findCatalogEntry(item.name) : undefined;
         return (
           <Card key={item.id} className="overflow-hidden p-0">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
+            <div className="flex items-center justify-between gap-3 bg-slate-50 px-5 py-3">
               <p className="text-sm font-semibold text-slate-900">
                 {title.replace(/s$/, "")} #{index + 1}
               </p>
               <div className="flex shrink-0 gap-2">
-                <Button
-                  variant="primary"
-                  className="px-3 py-1.5 text-xs"
-                  onClick={() => setEditingItem(item)}
-                  disabled={locked}
-                  title={locked ? "Unlock this quote to make changes" : undefined}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  className="px-3 py-1.5 text-xs"
-                  onClick={() => handleRemove(item)}
-                  disabled={locked}
-                  title={locked ? "Unlock this quote to make changes" : undefined}
-                >
-                  Remove
-                </Button>
+                <ActionIcon action="edit" onClick={() => setEditingItem(item)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
+                <ActionIcon action="delete" label="Remove" onClick={() => handleRemove(item)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
               </div>
             </div>
-            <div className="flex items-center justify-between gap-3 px-5 py-3 text-sm text-slate-700">
-              <span>
-                {item.name} <span className="text-slate-400">&times; {item.quantity}</span>
-              </span>
-              {catalogEntry?.lockedPrice ? (
-                <span className="font-medium text-brand-green-mid">Included — £0.00</span>
-              ) : (
-                <span className="font-medium text-slate-900">
-                  {formatCurrency(item.unitPrice * item.quantity)}
-                </span>
-              )}
-            </div>
+            <LineItemRows
+              items={[item]}
+              priceFor={() =>
+                catalogEntry?.lockedPrice ? (
+                  <span className="font-medium text-brand-green-mid">Included — £0.00</span>
+                ) : undefined
+              }
+            />
           </Card>
         );
       })}

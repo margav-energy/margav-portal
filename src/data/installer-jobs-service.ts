@@ -1,7 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getQuoteNotes } from "@/data/quote-notes-service";
 import { getAllProfiles } from "@/data/profiles-service";
-import { buildProfileMap, mapBoilerPropertyDetails, mapNoteRow, mapSolarPropertyDetails } from "@/data/quotes-mappers";
+import { buildProfileMap, mapBoilerPropertyDetails, mapSolarPropertyDetails } from "@/data/quotes-mappers";
 import type { InstallAcceptanceStatus } from "@/types/installer-availability";
 import type { CustomerDetails, QuoteNote } from "@/types/quote-detail-shared";
 import type { BoilerPropertyDetails } from "@/types/boiler-quote";
@@ -210,23 +211,17 @@ export async function getInstallerJobDetail(
   // Same three "what's included beyond the unit/array itself" sections the
   // admin/rep detail page shows (Extras/Standard Additionals/Free-text
   // Extras) — quantities and names only, no `unit_price` column selected.
-  const [{ data: lineItemRows, error: lineItemsError }, { data: noteRows, error: notesError }, profiles] =
+  const [{ data: lineItemRows, error: lineItemsError }, profiles] =
     await Promise.all([
       supabase
         .from("quote_line_items")
         .select("id, section, name, description, quantity, sort_order")
         .eq("quote_id", quoteId)
         .order("sort_order", { ascending: true }),
-      supabase
-        .from("quote_notes")
-        .select("id, author_id, body, created_at")
-        .eq("quote_id", quoteId)
-        .order("created_at", { ascending: false }),
       getAllProfiles(),
     ]);
 
   if (lineItemsError) console.error("getInstallerJobDetail: line items failed", lineItemsError);
-  if (notesError) console.error("getInstallerJobDetail: notes failed", notesError);
 
   const lineItemRowsTyped = (lineItemRows ?? []) as LineItemRow[];
   const extras = lineItemRowsTyped.filter((item) => item.section === "extra").map(mapInstallerLineItemRow);
@@ -236,9 +231,7 @@ export async function getInstallerJobDetail(
   const freeTextExtras = lineItemRowsTyped.filter((item) => item.section === "free_text").map(mapInstallerLineItemRow);
 
   const profileMap = buildProfileMap(profiles);
-  const notes = (noteRows ?? []).map((noteRow) =>
-    mapNoteRow(noteRow as { id: string; author_id: string | null; body: string; created_at: string }, profileMap),
-  );
+  const notes = await getQuoteNotes(quoteId, profileMap);
 
   const shared = { customer, property, extras, standardAdditionals, freeTextExtras, notes };
 

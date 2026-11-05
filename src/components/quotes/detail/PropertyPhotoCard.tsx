@@ -94,10 +94,9 @@ export function PropertyPhotoCard({
             type="button"
             onClick={handleRemove}
             disabled={isPending}
-            className="flex items-center gap-1 text-xs font-medium text-white hover:underline disabled:opacity-50"
+            aria-label="Remove" title="Remove" className="flex items-center text-white hover:opacity-80 disabled:opacity-50"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            Remove
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
         <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChosen} className="hidden" />

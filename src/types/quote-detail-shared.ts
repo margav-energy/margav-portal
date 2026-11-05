@@ -32,8 +32,24 @@ export interface CustomerDetails {
   addressLines: string[];
 }
 
+export interface NoteAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  /** Short-lived signed URL — absent if the file couldn't be signed. */
+  url?: string;
+}
+
 export interface QuoteNote {
   id: string;
+  /** Set when this note is a reply to another note. */
+  parentId?: string;
+  /** ISO datetime — set once the note's text has been edited. */
+  editedAt?: string;
+  /** True when the signed-in user may edit or delete it (its author, or an admin). The server re-checks. */
+  canModify?: boolean;
+  attachments?: NoteAttachment[];
   authorName: string;
   authorInitials: string;
   /** ISO datetime, e.g. "2026-06-11T14:13:00" */

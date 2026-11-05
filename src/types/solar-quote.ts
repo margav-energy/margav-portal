@@ -43,6 +43,17 @@ export interface SolarPropertyDetails {
   roofCount?: string;
 }
 
+/** Matches `solar_equipment.kind` in `supabase/schema.sql`. */
+export type SolarEquipmentKind = "optimiser" | "inverter" | "battery" | "ev_charger" | "gateway";
+
+/** One inverter / battery / … entry: the main product first, then its accessory lines. */
+export interface SolarEquipment {
+  id: string;
+  kind: SolarEquipmentKind;
+  label: string;
+  items: LineItem[];
+}
+
 export interface SolarArray {
   id: string;
   label: string;
@@ -170,12 +181,14 @@ export interface SolarQuoteDetail {
    *  (this business quotes VAT-inclusive prices). */
   vatAmount: number;
   discountAmount: number;
+  discountReason: string;
   depositAmount: number;
   isFavourite: boolean;
   locked: boolean;
   customer: CustomerDetails;
   property: SolarPropertyDetails;
   solarArrays: SolarArray[];
+  equipment: SolarEquipment[];
   extras: LineItem[];
   standardAdditionals: LineItem[];
   freeTextExtras: FreeTextExtra[];

@@ -5,6 +5,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SignaturePad } from "@/components/esignature/SignaturePad";
 import { saveMySignatureAction, clearMySignatureAction } from "@/app/settings/actions";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 /**
  * "My signature" — drawn/typed once here, then stamped automatically onto
@@ -79,9 +80,7 @@ export function SignatureSettingsCard({ signatureUrl }: { signatureUrl: string |
           {isSaving ? "Saving…" : "Save signature"}
         </Button>
         {hasSaved && (
-          <Button type="button" variant="secondary" onClick={handleRemove} disabled={isSaving}>
-            Remove
-          </Button>
+          <ActionIcon action="delete" label="Remove" onClick={handleRemove} disabled={isSaving} />
         )}
       </div>
     </div>

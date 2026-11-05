@@ -16,9 +16,9 @@ import {
   mapFreeTextRow,
   mapHistoryRow,
   mapLineItemRow,
-  mapNoteRow,
   mapQuoteRow,
   mapSolarArrayRow,
+  mapSolarEquipmentRow,
   mapSolarKeyDetails,
   mapSolarPropertyDetails,
   monthlyPlanTermYearsFor,
@@ -30,12 +30,13 @@ import {
   type LineItemRow,
   type ProfileMap,
   type QuoteHistoryRow,
-  type QuoteNoteRow,
   type QuoteRow,
   type SolarArrayRow,
+  type SolarEquipmentRow,
 } from "@/data/quotes-mappers";
 import type { InstallStatus, Quote, QuotePipelineStatus, QuoteStage, UnassignedInstallJob } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
+import { getQuoteNotes } from "@/data/quote-notes-service";
 import type { SolarQuoteDetail } from "@/types/solar-quote";
 
 /**
@@ -45,7 +46,7 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  */
 
 const QUOTE_COLUMNS =
-  "id, appointment_id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, deposit_amount, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
+  "id, appointment_id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, discount_reason, deposit_amount, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
 
 const ARCHIVE_AFTER_YEARS = 5;
 
@@ -160,7 +161,7 @@ export async function getQuoteDetail(
   const row = quoteRow as QuoteRow;
   const isBoiler = row.product_type === "boiler";
 
-  const [unitsResult, lineItemsResult, notesResult, historyResult, boilerCostSettings, appointmentResult] =
+  const [unitsResult, lineItemsResult, notesResult, historyResult, boilerCostSettings, appointmentResult, equipmentResult] =
     await Promise.all([
       isBoiler
         ? supabase
@@ -178,11 +179,7 @@ export async function getQuoteDetail(
         .select("id, section, name, description, quantity, unit_price, sort_order")
         .eq("quote_id", id)
         .order("sort_order", { ascending: true }),
-      supabase
-        .from("quote_notes")
-        .select("id, author_id, body, created_at")
-        .eq("quote_id", id)
-        .order("created_at", { ascending: false }),
+      getQuoteNotes(id, profiles),
       supabase
         .from("quote_history")
         .select("id, actor_id, is_system, description, created_at")
@@ -195,12 +192,20 @@ export async function getQuoteDetail(
       row.appointment_id
         ? supabase.from("appointments").select("appointment_date, start_time, end_time").eq("id", row.appointment_id).maybeSingle()
         : Promise.resolve({ data: null, error: null }),
+      // Solar-only: inverter / battery / … entries.
+      isBoiler
+        ? Promise.resolve({ data: null, error: null })
+        : supabase
+            .from("solar_equipment")
+            .select("id, kind, label, items, sort_order")
+            .eq("quote_id", id)
+            .order("sort_order", { ascending: true }),
     ]);
 
   if (unitsResult.error) console.error("getQuoteDetail units failed", unitsResult.error);
   if (lineItemsResult.error) console.error("getQuoteDetail line items failed", lineItemsResult.error);
-  if (notesResult.error) console.error("getQuoteDetail notes failed", notesResult.error);
   if (historyResult.error) console.error("getQuoteDetail history failed", historyResult.error);
+  if (equipmentResult.error) console.error("getQuoteDetail equipment failed", equipmentResult.error);
   if (appointmentResult.error) console.error("getQuoteDetail appointment failed", appointmentResult.error);
 
   const lineItemRows = (lineItemsResult.data ?? []) as LineItemRow[];
@@ -210,7 +215,7 @@ export async function getQuoteDetail(
     .map(mapLineItemRow);
   const freeTextExtras = lineItemRows.filter((item) => item.section === "free_text").map(mapFreeTextRow);
 
-  const notes = (notesResult.data ?? []).map((noteRow) => mapNoteRow(noteRow as QuoteNoteRow, profiles));
+  const notes = notesResult;
   const history = (historyResult.data ?? []).map((historyRow) =>
     mapHistoryRow(historyRow as QuoteHistoryRow, profiles),
   );
@@ -223,6 +228,7 @@ export async function getQuoteDetail(
   const installAcceptanceStatus = row.install_acceptance_status ?? undefined;
   const vatAmount = Number(row.vat_amount ?? 0);
   const discountAmount = Number(row.discount_amount ?? 0);
+  const discountReason = row.discount_reason ?? "";
   const depositAmount = Number(row.deposit_amount ?? 0);
 
   const appointmentRow = appointmentResult.data as { appointment_date: string; start_time: string; end_time: string | null } | null;
@@ -247,6 +253,7 @@ export async function getQuoteDetail(
     installAcceptanceStatus,
     vatAmount,
     discountAmount,
+    discountReason,
     depositAmount,
     isFavourite: row.is_favourite,
     locked: row.is_locked,
@@ -307,10 +314,16 @@ export async function getQuoteDetail(
   const arrayRows = (unitsResult.data ?? []) as SolarArrayRow[];
   const solarArrays = arrayRows.map(mapSolarArrayRow);
   const arraysTotal = sumLineItems(solarArrays.flatMap((array) => array.items));
-  const sellPrice = arraysTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal - discountAmount;
+  const equipment = ((equipmentResult.data ?? []) as SolarEquipmentRow[]).map(mapSolarEquipmentRow);
+  const equipmentTotal = sumLineItems(equipment.flatMap((entry) => entry.items));
+  const sellPrice = arraysTotal + equipmentTotal + extrasTotal + standardAdditionalsTotal + freeTextTotal - discountAmount;
 
   const property = mapSolarPropertyDetails(row.property_details);
-  const keyDetails = mapSolarKeyDetails(row.key_details);
+  // Batteries come from the Battery section (its entries' main product lines), not a stored count that outlives them.
+  const batteryCount = equipment
+    .filter((entry) => entry.kind === "battery")
+    .reduce((sum, entry) => sum + (entry.items[0]?.quantity ?? 0), 0);
+  const keyDetails = { ...mapSolarKeyDetails(row.key_details), batteries: batteryCount };
   const mcsEstimate = computeMcsEstimate({
     postcode: row.postcode ?? "",
     arrays: solarArrays.map((array) => ({
@@ -334,10 +347,12 @@ export async function getQuoteDetail(
     ...shared,
     property,
     solarArrays,
+    equipment,
     keyDetails,
     mcsEstimate,
     pricingBreakdown: buildPricingBreakdown([
       { name: "Solar array + install", total: arraysTotal, count: solarArrays.length },
+      { name: "Equipment", total: equipmentTotal, count: equipment.length },
       { name: "Extras", total: extrasTotal, count: extras.length },
       { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
       { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },

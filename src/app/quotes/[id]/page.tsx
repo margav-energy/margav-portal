@@ -63,7 +63,7 @@ export default async function QuoteDetailPage({
   ]);
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
+    <div className="mx-auto flex max-w-[90rem] flex-col gap-4">
       <Link
         href="/quotes"
         className="flex w-fit items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"

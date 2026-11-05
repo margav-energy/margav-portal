@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
+import { LineItemRows } from "@/components/quotes/detail/LineItemRows";
 import { createSolarArray, deleteSolarArray, updateSolarArray } from "@/components/quotes/actions";
 import type { SolarArray } from "@/types/solar-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
 import { parseModuleFromItems } from "@/lib/mcs/array-inputs";
 import { findSolarPanel, SOLAR_PANELS } from "@/lib/solar-catalog";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 let localIdCounter = 0;
 
@@ -22,6 +24,15 @@ function specLine(array: SolarArray): string {
 }
 
 const OTHER_PRODUCT = "__other__";
+
+/** "Solar Array #N" with N one above the highest in use, so deleting an array never causes a duplicate label. */
+function nextArrayLabel(arrays: SolarArray[]): string {
+  const highest = arrays.reduce((max, array) => {
+    const n = Number(/#(\d+)\s*$/.exec(array.label)?.[1]);
+    return Number.isFinite(n) ? Math.max(max, n) : max;
+  }, 0);
+  return `Solar Array #${Math.max(highest, arrays.length) + 1}`;
+}
 
 /** Roof details and product shown one section each, like Spark's "Manage a solar array" page. */
 type ArrayForm = {
@@ -45,11 +56,13 @@ function toForm(array?: SolarArray): ArrayForm {
     pitchDegrees: array ? String(array.pitchDegrees) : "",
     orientationDegrees: array?.orientationDegrees != null ? String(array.orientationDegrees) : "",
     shadeFactor: array ? String(array.shadeFactor) : "1",
-    product: !moduleItem ? (SOLAR_PANELS[0]?.name ?? OTHER_PRODUCT) : catalogPanel ? catalogPanel.name : OTHER_PRODUCT,
+    // An existing array with no recognisable panel line makes the user choose one, rather than silently adding a priced default.
+    product: !moduleItem ? (array ? "" : (SOLAR_PANELS[0]?.name ?? OTHER_PRODUCT)) : catalogPanel ? catalogPanel.name : OTHER_PRODUCT,
     otherName: moduleItem && !catalogPanel ? moduleItem.name : "",
     otherWp: moduleItem && !catalogPanel ? String(parseModuleFromItems([moduleItem])?.wp ?? "") : "",
-    otherUnitPrice: moduleItem && !catalogPanel ? String(moduleItem.unitPrice) : "",
-    quantity: moduleItem ? String(moduleItem.quantity) : "1",
+    // The panel's unit price, editable for any panel; a new array starts from the catalogue price.
+    otherUnitPrice: moduleItem ? String(moduleItem.unitPrice) : array ? "" : String(SOLAR_PANELS[0]?.unitPrice ?? ""),
+    quantity: moduleItem ? String(moduleItem.quantity) : array ? "" : "1",
     otherItems: array ? array.items.filter((item) => item !== moduleItem) : [],
   };
 }
@@ -98,6 +111,12 @@ function ArrayFormModal({
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function selectProduct(product: string) {
+    const panel = findSolarPanel(product);
+    // Choosing a catalogue panel fills in its price; the price stays editable.
+    setForm((current) => ({ ...current, product, ...(panel ? { otherUnitPrice: String(panel.unitPrice) } : {}) }));
+  }
+
   function handleClose() {
     clearDraft(draftKey);
     onClose();
@@ -135,14 +154,19 @@ function ArrayFormModal({
     }
     if (form.shadeFactor.trim() === "" || !Number.isFinite(shade) || shade <= 0 || shade > 1) next.shade = "Shading factor must be above 0 and no more than 1.";
     if (!Number.isInteger(quantity) || quantity < 1) next.quantity = "Quantity must be a whole number, 1 or more.";
-    if (!catalogPanel && (form.otherName.trim() === "" || !(Number(form.otherWp) > 0))) next.product = "Enter the panel name and its rating in watts.";
+    if (form.product === "") next.product = "Choose the panel for this array.";
+    else if (!catalogPanel && (form.otherName.trim() === "" || !(Number(form.otherWp) > 0))) next.product = "Enter the panel name and its rating in watts.";
 
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
-    const panelItem: LineItem = catalogPanel
-      ? { id: `local-${localIdCounter++}`, name: catalogPanel.name, quantity, unitPrice: catalogPanel.unitPrice }
-      : { id: `local-${localIdCounter++}`, name: form.otherName.trim(), quantity, unitPrice: Number(form.otherUnitPrice) || 0 };
+    const unitPrice = Number(form.otherUnitPrice) || 0;
+    const panelItem: LineItem = {
+      id: `local-${localIdCounter++}`,
+      name: catalogPanel ? catalogPanel.name : form.otherName.trim(),
+      quantity,
+      unitPrice,
+    };
 
     onSave({
       label: initial?.label ?? nextLabel,
@@ -218,8 +242,13 @@ function ArrayFormModal({
               id="array-product"
               className={inputClassName}
               value={form.product}
-              onChange={(event) => set("product", event.target.value)}
+              onChange={(event) => selectProduct(event.target.value)}
             >
+              {form.product === "" && (
+                <option value="" disabled>
+                  Choose a panel…
+                </option>
+              )}
               {SOLAR_PANELS.map((panel) => (
                 <option key={panel.name} value={panel.name}>
                   {panel.name}
@@ -244,18 +273,24 @@ function ArrayFormModal({
                   placeholder="Label watts at STC, e.g. 440"
                 />
               </FormField>
-              <FormField label="Unit price (£)" htmlFor="array-other-price">
-                <input
-                  id="array-other-price"
-                  type="number"
-                  step="0.01"
-                  className={inputClassName}
-                  value={form.otherUnitPrice}
-                  onChange={(event) => set("otherUnitPrice", event.target.value)}
-                />
-              </FormField>
             </>
           )}
+          <FormField label="Unit price (£)" htmlFor="array-other-price">
+            <input
+              id="array-other-price"
+              type="number"
+              min="0"
+              step="0.01"
+              className={inputClassName}
+              value={form.otherUnitPrice}
+              onChange={(event) => set("otherUnitPrice", event.target.value)}
+            />
+            {Number(form.quantity) > 0 && Number(form.otherUnitPrice) > 0 && (
+              <p className="text-xs text-slate-500">
+                Panels total: {formatCurrency(Number(form.otherUnitPrice) * Number(form.quantity))}
+              </p>
+            )}
+          </FormField>
           <FormField label="Quantity" htmlFor="array-quantity" required error={errors.quantity}>
             <input
               id="array-quantity"
@@ -370,45 +405,17 @@ export function SolarArraySection({
 
       {arrays.map((array) => (
         <Card key={array.id} className="overflow-hidden p-0">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-            <div>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm font-semibold text-slate-900">{array.label}</p>
-              <p className="text-sm text-slate-500">{specLine(array)}</p>
+              <p className="rounded-md bg-white px-3 py-1 text-xs text-slate-600">{specLine(array)}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <Button
-                variant="primary"
-                className="px-3 py-1.5 text-xs"
-                onClick={() => setEditingArray(array)}
-                disabled={locked}
-                title={locked ? "Unlock this quote to make changes" : undefined}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                className="px-3 py-1.5 text-xs"
-                onClick={() => handleRemove(array)}
-                disabled={locked}
-                title={locked ? "Unlock this quote to make changes" : undefined}
-              >
-                Remove
-              </Button>
+              <ActionIcon action="edit" onClick={() => setEditingArray(array)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
+              <ActionIcon action="delete" label="Remove" onClick={() => handleRemove(array)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
             </div>
           </div>
-          {array.items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-3 px-5 py-3 text-sm text-slate-700"
-            >
-              <span>
-                {item.name} <span className="text-slate-400">&times; {item.quantity}</span>
-              </span>
-              <span className="font-medium text-slate-900">
-                {formatCurrency(item.unitPrice * item.quantity)}
-              </span>
-            </div>
-          ))}
+          <LineItemRows items={array.items} foldable />
         </Card>
       ))}
 
@@ -426,7 +433,7 @@ export function SolarArraySection({
         <ArrayFormModal
           quoteId={quoteId}
           title="Add solar array"
-          nextLabel={`Solar Array #${arrays.length + 1}`}
+          nextLabel={nextArrayLabel(arrays)}
           onClose={() => setIsAdding(false)}
           onSave={handleAdd}
         />

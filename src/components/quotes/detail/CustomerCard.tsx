@@ -11,6 +11,7 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { updateQuoteCustomer } from "@/components/quotes/actions";
 import { formatUkPhone, isValidEmail, isValidUkPhone, normalizeEmail, toTitleCase } from "@/lib/utils";
 import type { CustomerDetails } from "@/types/quote-detail-shared";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 function Row({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -37,7 +38,7 @@ function EditCustomerModal({
   const [name, setName] = useState(customer.name);
   const [email, setEmail] = useState(customer.email);
   const [phone, setPhone] = useState(customer.phone);
-  const [address, setAddress] = useState(customer.addressLines.join("\n"));
+  const [address, setAddress] = useState(splitAddressLines(customer.addressLines).join("\n"));
   const [error, setError] = useState<string | null>(null);
 
   function handleSave() {
@@ -127,6 +128,14 @@ function EditCustomerModal({
   );
 }
 
+/** Addresses are often stored as one comma-separated line; show each part on its own line. */
+function splitAddressLines(lines: string[]): string[] {
+  return lines
+    .flatMap((line) => line.split(","))
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export function CustomerCard({
   quoteId,
   customer,
@@ -143,7 +152,7 @@ export function CustomerCard({
   locked?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
-  const address = customer.addressLines.join("\n");
+  const address = splitAddressLines(customer.addressLines).join("\n");
 
   function handleSave(updated: CustomerDetails) {
     onUpdated(updated);
@@ -154,15 +163,7 @@ export function CustomerCard({
     <Card className="p-5">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">Customer details</h3>
-        <Button
-          variant="secondary"
-          className="px-3 py-1.5 text-xs"
-          onClick={() => setIsEditing(true)}
-          disabled={locked}
-          title={locked ? "Unlock this quote to make changes" : undefined}
-        >
-          Edit
-        </Button>
+        <ActionIcon action="edit" onClick={() => setIsEditing(true)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
       </div>
       <div className="flex flex-col gap-3">
         <Row icon={<User className="h-4 w-4" />}>

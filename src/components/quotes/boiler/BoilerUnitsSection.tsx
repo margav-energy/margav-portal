@@ -13,6 +13,7 @@ import { DEFAULT_BOILER_SELL_PRICE } from "@/lib/boiler-install-cost";
 import type { BoilerUnit, FuelType, FlueType, BoilerInstallType } from "@/types/boiler-quote";
 import type { LineItem } from "@/types/quote-detail-shared";
 import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosaveDraft";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 const FUEL_TYPES: FuelType[] = ["Mains Gas", "LPG", "Oil"];
 const FLUE_TYPES: FlueType[] = ["Horizontal", "Vertical"];
@@ -518,24 +519,8 @@ export function BoilerUnitsSection({
             <div className="flex shrink-0 items-center gap-3">
               <p className="text-sm font-semibold text-slate-900">{formatCurrency(unit.price)}</p>
               <div className="flex shrink-0 gap-2">
-                <Button
-                  variant="primary"
-                  className="px-3 py-1.5 text-xs"
-                  onClick={() => setEditingUnit(unit)}
-                  disabled={locked}
-                  title={locked ? "Unlock this quote to make changes" : undefined}
-                >
-                  Edit
-                </Button>
-                <Button
-                  variant="danger"
-                  className="px-3 py-1.5 text-xs"
-                  onClick={() => handleRemove(unit)}
-                  disabled={locked}
-                  title={locked ? "Unlock this quote to make changes" : undefined}
-                >
-                  Remove
-                </Button>
+                <ActionIcon action="edit" onClick={() => setEditingUnit(unit)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
+                <ActionIcon action="delete" label="Remove" onClick={() => handleRemove(unit)} disabled={locked} title={locked ? "Unlock this quote to make changes" : undefined} />
               </div>
             </div>
           </div>

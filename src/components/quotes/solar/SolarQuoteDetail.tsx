@@ -3,14 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { QuoteHeader } from "@/components/quotes/detail/QuoteHeader";
+import { StickyColumn } from "@/components/ui/StickyColumn";
 import { ActionButtonGrid } from "@/components/quotes/detail/ActionButtonGrid";
 import { buildActionButtons } from "@/components/quotes/detail/build-action-buttons";
 import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
 import { SolarDesignCard } from "@/components/quotes/solar/SolarDesignCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
-import { PricingCard } from "@/components/quotes/detail/PricingCard";
-import { PricingAdjustmentsCard } from "@/components/quotes/detail/PricingAdjustmentsCard";
+import { PricingSummaryCard } from "@/components/quotes/detail/PricingSummaryCard";
 import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
 import { NotesPanel } from "@/components/quotes/detail/NotesPanel";
@@ -18,6 +18,8 @@ import { HistoryModal } from "@/components/quotes/detail/HistoryModal";
 import { SendForSignatureModal } from "@/components/quotes/detail/SendForSignatureModal";
 import { SolarPropertyCard } from "@/components/quotes/solar/SolarPropertyCard";
 import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
+import { SolarEquipmentSection } from "@/components/quotes/solar/SolarEquipmentSection";
+import { SOLAR_EQUIPMENT_KINDS } from "@/lib/solar-catalog";
 import { SolarSurveyCard } from "@/components/quotes/solar/SolarSurveyCard";
 import { SolarSurveyLaunchModal } from "@/components/quotes/solar/SolarSurveyLaunchModal";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
@@ -79,7 +81,13 @@ export function SolarQuoteDetail({
     setProperty(detail.property);
   }
   const [solarArrays, setSolarArrays] = useState(detail.solarArrays);
+  const [equipment, setEquipment] = useState(detail.equipment);
   const [extras, setExtras] = useState<LineItem[]>(detail.extras);
+  const [standardAdditionals, setStandardAdditionals] = useState<LineItem[]>(detail.standardAdditionals);
+  const [freeTextExtras, setFreeTextExtras] = useState<LineItem[]>(
+    // Free-text extras store their text as `description`; the shared section edits it as `name`.
+    detail.freeTextExtras.map((item) => ({ id: item.id, name: item.description, quantity: item.quantity, unitPrice: item.unitPrice })),
+  );
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodOption>(
     detail.selectedPaymentMethod,
   );
@@ -96,6 +104,7 @@ export function SolarQuoteDetail({
   const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
     vatAmount: detail.vatAmount,
     discountAmount: detail.discountAmount,
+    discountReason: detail.discountReason,
     depositAmount: detail.depositAmount,
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -188,9 +197,9 @@ export function SolarQuoteDetail({
         installAcceptanceStatus={acceptanceStatus}
       />
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        <div className="flex flex-col gap-6 md:col-span-2">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
             <SolarDesignCard
               quoteId={detail.quoteId}
               customerName={customer.name}
@@ -221,6 +230,18 @@ export function SolarQuoteDetail({
             locked={locked}
           />
 
+          {SOLAR_EQUIPMENT_KINDS.map((config) => (
+            <SolarEquipmentSection
+              key={config.kind}
+              quoteId={detail.quoteId}
+              customerName={customer.name}
+              config={config}
+              equipment={equipment}
+              onEquipmentChange={setEquipment}
+              locked={locked}
+            />
+          ))}
+
           <LineItemsSection
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -231,15 +252,38 @@ export function SolarQuoteDetail({
             onItemsChange={setExtras}
             locked={locked}
           />
+
+          <LineItemsSection
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            section="standard_additional"
+            title="Standard additionals"
+            items={standardAdditionals}
+            addLabel="Add standard additional"
+            onItemsChange={setStandardAdditionals}
+            locked={locked}
+          />
+
+          <LineItemsSection
+            quoteId={detail.quoteId}
+            customerName={customer.name}
+            section="free_text"
+            title="Free-text extras"
+            items={freeTextExtras}
+            addLabel="Add free-text extra"
+            onItemsChange={setFreeTextExtras}
+            isFreeText
+            locked={locked}
+          />
           <NotesPanel
             quoteId={detail.quoteId}
             customerName={customer.name}
             notes={notes}
-            onNoteAdded={(note) => setNotes((current) => [note, ...current])}
+            onNotesChange={setNotes}
           />
         </div>
 
-        <div className="flex flex-col gap-4">
+        <StickyColumn className="flex flex-col gap-4 xl:sticky xl:self-start">
           <ActionButtonGrid buttons={actionButtons} />
           <PaymentMethodCard
             selected={selectedPaymentMethod}
@@ -256,16 +300,20 @@ export function SolarQuoteDetail({
             keyDetails={detail.keyDetails}
             mcsEstimate={detail.mcsEstimate}
             electricUnitRate={property.electricUnitRate}
+            totalCost={totalAfterDiscount}
+            panelCount={detail.solarArrays.reduce((sum, array) => sum + array.moduleCount, 0)}
             isAdmin={isAdmin}
             locked={locked}
           />
-          <PricingCard items={detail.pricingBreakdown} extras={extras} />
-          <PricingAdjustmentsCard
+          <PricingSummaryCard
             quoteId={detail.quoteId}
             customerName={customer.name}
-            subtotal={totalCost}
+            items={detail.pricingBreakdown}
+            extras={extras}
             adjustments={pricingAdjustments}
             onUpdated={setPricingAdjustments}
+            selectedMethod={selectedPaymentMethod}
+            termYears={monthlyPlanTermYears}
             locked={locked}
           />
           <ProfitCard
@@ -300,7 +348,7 @@ export function SolarQuoteDetail({
             readLabel="Read the quote"
           />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
-        </div>
+        </StickyColumn>
       </div>
 
       {isHistoryOpen && <HistoryModal history={detail.history} onClose={() => setIsHistoryOpen(false)} />}

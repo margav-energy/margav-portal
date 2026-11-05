@@ -34,8 +34,10 @@ async function photoEditBlockedReason(
   quoteId: string,
   role: string,
 ): Promise<string | undefined> {
-  const { data: quote } = await supabase.from("quotes").select("product_type").eq("id", quoteId).maybeSingle();
-  if (quote?.product_type === "solar" && role !== "admin") return "Only admins can upload the solar design.";
+  if (role === "admin") return undefined;
+  const { data: quote, error } = await supabase.from("quotes").select("product_type").eq("id", quoteId).maybeSingle();
+  if (error || !quote) return "Could not check this quote. Please try again.";
+  if (quote.product_type === "solar") return "Only admins can upload the solar design.";
   return undefined;
 }
 

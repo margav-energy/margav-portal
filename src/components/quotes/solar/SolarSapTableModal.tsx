@@ -18,6 +18,7 @@ import {
 } from "@/lib/solar-sap";
 import type { McsEstimate } from "@/lib/mcs/performance-estimate";
 import type { SapAssumptions, TemplateYear1 } from "@/types/solar-quote";
+import { ActionIcon } from "@/components/ui/ActionIcon";
 
 type FieldKey = Exclude<keyof SapAssumptions, "templateYear1">;
 
@@ -347,13 +348,7 @@ export function SolarSapTableModal({
                 {batteryUsableKwh > 0 ? `${batteryUsableKwh} kWh` : "not set"}
               </strong>
             </span>
-            <Button
-              variant="secondary"
-              className="px-3 py-1.5 text-xs"
-              onClick={() => setView("battery")}
-            >
-              Edit
-            </Button>
+            <ActionIcon action="edit" onClick={() => setView("battery")} />
           </div>
         )}
 

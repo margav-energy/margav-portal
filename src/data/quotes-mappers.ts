@@ -14,11 +14,10 @@ import type {
   PaymentMethodOption,
   ProfitBreakdown,
   QuoteHistoryEntry,
-  QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { BoilerKeyDetails, BoilerPropertyDetails } from "@/types/boiler-quote";
 import { parseModuleFromItems, parseOrientationDegrees } from "@/lib/mcs/array-inputs";
-import type { SapAssumptions, SolarKeyDetails, SolarPropertyDetails, TemplateYear1 } from "@/types/solar-quote";
+import type { SapAssumptions, SolarEquipment, SolarEquipmentKind, SolarKeyDetails, SolarPropertyDetails, TemplateYear1 } from "@/types/solar-quote";
 import type { RepProfile } from "@/data/profiles-service";
 
 /**
@@ -70,6 +69,7 @@ export interface QuoteRow {
   install_acceptance_status: "pending" | "accepted" | "rejected" | null;
   vat_amount: number | string;
   discount_amount: number | string;
+  discount_reason?: string | null;
   deposit_amount: number | string;
   is_favourite: boolean;
   is_locked: boolean;
@@ -374,6 +374,23 @@ export function mapSolarArrayRow(row: SolarArrayRow) {
   };
 }
 
+export interface SolarEquipmentRow {
+  id: string;
+  kind: string;
+  label: string;
+  items: unknown;
+  sort_order: number;
+}
+
+export function mapSolarEquipmentRow(row: SolarEquipmentRow): SolarEquipment {
+  return {
+    id: row.id,
+    kind: row.kind as SolarEquipmentKind,
+    label: row.label,
+    items: parseLineItems(row.items),
+  };
+}
+
 // ───────────────────────────────────────────────────────────────────────
 // quote_line_items
 // ───────────────────────────────────────────────────────────────────────
@@ -409,24 +426,6 @@ export function mapFreeTextRow(row: LineItemRow): FreeTextExtra {
 // ───────────────────────────────────────────────────────────────────────
 // quote_notes / quote_history
 // ───────────────────────────────────────────────────────────────────────
-
-export interface QuoteNoteRow {
-  id: string;
-  author_id: string | null;
-  body: string;
-  created_at: string;
-}
-
-export function mapNoteRow(row: QuoteNoteRow, profiles: ProfileMap): QuoteNote {
-  const author = row.author_id ? profiles.get(row.author_id) : undefined;
-  return {
-    id: row.id,
-    authorName: author?.fullName ?? "Unknown",
-    authorInitials: author?.initials ?? "?",
-    timestamp: row.created_at,
-    body: row.body,
-  };
-}
 
 export interface QuoteHistoryRow {
   id: string;

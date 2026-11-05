@@ -94,6 +94,8 @@ export interface BoilerQuoteDetail {
    *  (this business quotes VAT-inclusive prices). */
   vatAmount: number;
   discountAmount: number;
+  /** Why the discount was given — one of `DISCOUNT_REASONS`, or empty. */
+  discountReason: string;
   depositAmount: number;
   isFavourite: boolean;
   locked: boolean;

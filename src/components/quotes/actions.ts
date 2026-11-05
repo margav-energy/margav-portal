@@ -35,7 +35,7 @@ import type {
   QuoteNote,
 } from "@/types/quote-detail-shared";
 import type { BoilerPropertyDetails, BoilerUnit } from "@/types/boiler-quote";
-import type { SapAssumptions, SolarArray, SolarPropertyDetails } from "@/types/solar-quote";
+import type { SapAssumptions, SolarArray, SolarEquipment, SolarPropertyDetails } from "@/types/solar-quote";
 import type { QuotePipelineStatus } from "@/types/quote";
 
 /**
@@ -113,9 +113,10 @@ async function isQuoteLocked(
  */
 async function syncQuoteAmount(quoteId: string): Promise<void> {
   const supabase = await createClient();
-  const [unitsResult, arraysResult, lineItemsResult] = await Promise.all([
+  const [unitsResult, arraysResult, equipmentResult, lineItemsResult] = await Promise.all([
     supabase.from("boiler_units").select("price, items").eq("quote_id", quoteId),
     supabase.from("solar_arrays").select("items").eq("quote_id", quoteId),
+    supabase.from("solar_equipment").select("items").eq("quote_id", quoteId),
     supabase.from("quote_line_items").select("quantity, unit_price").eq("quote_id", quoteId),
   ]);
 
@@ -127,6 +128,10 @@ async function syncQuoteAmount(quoteId: string): Promise<void> {
     (sum, array) => sum + sumLineItems(parseLineItems(array.items)),
     0,
   );
+  const equipmentTotal = (equipmentResult.data ?? []).reduce(
+    (sum, entry) => sum + sumLineItems(parseLineItems(entry.items)),
+    0,
+  );
   const lineItemsTotal = sumLineItems(
     (lineItemsResult.data ?? []).map((row) => ({
       quantity: Number(row.quantity),
@@ -136,13 +141,13 @@ async function syncQuoteAmount(quoteId: string): Promise<void> {
 
   const { error } = await supabase
     .from("quotes")
-    .update({ amount: unitsTotal + arraysTotal + lineItemsTotal })
+    .update({ amount: unitsTotal + arraysTotal + equipmentTotal + lineItemsTotal })
     .eq("id", quoteId);
   if (error) console.error("syncQuoteAmount failed", error);
 }
 
 async function nextSortOrder(
-  table: "boiler_units" | "solar_arrays" | "quote_line_items",
+  table: "boiler_units" | "solar_arrays" | "solar_equipment" | "quote_line_items",
   quoteId: string,
   extraFilter?: { column: string; value: string },
 ): Promise<number> {
@@ -977,6 +982,7 @@ export async function updateQuoteCostPrice(
 export interface PricingAdjustments {
   vatAmount: number;
   discountAmount: number;
+  discountReason: string;
   depositAmount: number;
 }
 
@@ -1001,6 +1007,7 @@ export async function updatePricingAdjustments(
     .update({
       vat_amount: adjustments.vatAmount,
       discount_amount: adjustments.discountAmount,
+      discount_reason: adjustments.discountReason,
       deposit_amount: adjustments.depositAmount,
     })
     .eq("id", quoteId);
@@ -1017,7 +1024,7 @@ export async function updatePricingAdjustments(
       // VAT isn't editable from PricingAdjustmentsCard for now (see its
       // comment), so it's left out here too — otherwise every discount/
       // deposit edit would misleadingly log "Set VAT" alongside them.
-      description: `Set discount ${formatCurrency(adjustments.discountAmount)}, deposit ${formatCurrency(adjustments.depositAmount)}`,
+      description: `Set discount ${formatCurrency(adjustments.discountAmount)}${adjustments.discountReason ? ` (${adjustments.discountReason})` : ""}, deposit ${formatCurrency(adjustments.depositAmount)}`,
     }),
     logActivity({
       actorId: user?.id,
@@ -1328,6 +1335,110 @@ export async function deleteSolarArray(
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Solar equipment — optimisers, inverters, batteries, EV chargers, gateways
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function createSolarEquipment(
+  quoteId: string,
+  entry: Omit<SolarEquipment, "id">,
+  customerName: string,
+): Promise<SolarEquipment | null> {
+  const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return null;
+  const user = await getCurrentUser();
+  const sortOrder = await nextSortOrder("solar_equipment", quoteId);
+
+  const { data, error } = await supabase
+    .from("solar_equipment")
+    .insert({ quote_id: quoteId, kind: entry.kind, label: entry.label, items: serializeLineItems(entry.items), sort_order: sortOrder })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    console.error("createSolarEquipment failed", error);
+    return null;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: `Added "${entry.label}"` }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Added "${entry.label}" — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+    syncQuoteAmount(quoteId),
+  ]);
+  revalidateQuote(quoteId);
+  return { ...entry, id: data.id as string };
+}
+
+export async function updateSolarEquipment(quoteId: string, entry: SolarEquipment, customerName: string): Promise<boolean> {
+  const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
+  const user = await getCurrentUser();
+
+  const { error } = await supabase
+    .from("solar_equipment")
+    .update({ label: entry.label, items: serializeLineItems(entry.items) })
+    .eq("id", entry.id);
+
+  if (error) {
+    console.error("updateSolarEquipment failed", error);
+    return false;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: `Updated "${entry.label}"` }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Updated "${entry.label}" — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+    syncQuoteAmount(quoteId),
+  ]);
+  revalidateQuote(quoteId);
+  return true;
+}
+
+export async function deleteSolarEquipment(
+  quoteId: string,
+  entryId: string,
+  entryLabel: string,
+  customerName: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  if (await isQuoteLocked(supabase, quoteId)) return false;
+  const user = await getCurrentUser();
+
+  const { error } = await supabase.from("solar_equipment").delete().eq("id", entryId);
+  if (error) {
+    console.error("deleteSolarEquipment failed", error);
+    return false;
+  }
+
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: `Removed "${entryLabel}"` }),
+    logActivity({
+      actorId: user?.id,
+      customerName,
+      description: `Removed "${entryLabel}" — ${customerName}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+    syncQuoteAmount(quoteId),
+  ]);
+  revalidateQuote(quoteId);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // Line items — quote_line_items, shared by Extras / Standard Additionals /
 // Free-text Extras across both product verticals.
 // ─────────────────────────────────────────────────────────────────────────
@@ -1517,6 +1628,8 @@ export async function addQuoteNote(quoteId: string, body: string, customerName: 
     authorInitials: user.initials,
     timestamp: data.created_at as string,
     body: trimmed,
+    canModify: true,
+    attachments: [],
   };
 }
 
