@@ -12,7 +12,11 @@ function boilerSpecLine(unit: InstallerBoilerUnit): string {
 }
 
 function solarSpecLine(array: InstallerSolarArray): string {
-  return `${array.orientation} · ${array.pitchDegrees}° Pitch`;
+  const parts = [array.orientation, `${array.pitchDegrees}° Pitch`];
+  if (array.moduleCount > 0 && array.moduleWp > 0) {
+    parts.push(`${array.moduleCount} × ${array.moduleWp}W (${((array.moduleCount * array.moduleWp) / 1000).toFixed(2)} kWp)`);
+  }
+  return parts.filter(Boolean).join(" · ");
 }
 
 /** One of the three `quote_line_items` sections (Extras/Standard
@@ -41,7 +45,8 @@ function ExtrasList({ title, items }: { title: string; items: InstallerLineItem[
 /** "What's being installed" — the equipment side of a job, on the main
  *  column of /jobs/[id] (the survey card sits in the sidebar instead). */
 export function InstallerEquipmentCard({ job }: { job: InstallerJobDetail }) {
-  const hasEquipment = (job.boilerUnits?.length ?? 0) > 0 || (job.solarArrays?.length ?? 0) > 0;
+  const hasEquipment =
+    (job.boilerUnits?.length ?? 0) > 0 || (job.solarArrays?.length ?? 0) > 0 || (job.solarEquipment?.length ?? 0) > 0;
 
   return (
     <Card className="flex flex-col gap-4 p-5">
@@ -75,6 +80,21 @@ export function InstallerEquipmentCard({ job }: { job: InstallerJobDetail }) {
           {array.items.length > 0 && (
             <ul className="mt-1 flex flex-col gap-0.5 text-xs text-slate-500">
               {array.items.map((item, index) => (
+                <li key={index}>
+                  {item.quantity}× {item.name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+
+      {job.solarEquipment?.map((entry) => (
+        <div key={entry.id} className="flex flex-col gap-1.5 border-t border-slate-100 pt-4 first:border-t-0 first:pt-0">
+          <p className="text-sm font-medium text-slate-900">{entry.label || "Equipment"}</p>
+          {entry.items.length > 0 && (
+            <ul className="mt-1 flex flex-col gap-0.5 text-xs text-slate-500">
+              {entry.items.map((item, index) => (
                 <li key={index}>
                   {item.quantity}× {item.name}
                 </li>

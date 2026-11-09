@@ -24,13 +24,44 @@
 const MAX_DIMENSION = 1920;
 const JPEG_QUALITY = 0.82;
 
-export async function compressPhoto(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
+function isHeic(file: File): boolean {
+  return /^image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+}
+
+/**
+ * HEIC/HEIF (an iPhone photo, or a Mac screenshot saved as HEIC) can't be
+ * displayed by Chrome, Edge or Firefox — a stored one would just download
+ * when someone clicked it. So it's converted to JPEG here, before upload.
+ * `heic2any` is loaded on demand (it's large) and only for these files.
+ * Returns null if the conversion fails, leaving the caller to carry on with
+ * whatever else it can do.
+ */
+async function convertHeicToJpeg(file: File): Promise<File | null> {
+  try {
+    const { default: heic2any } = await import("heic2any");
+    const result = await heic2any({ blob: file, toType: "image/jpeg", quality: JPEG_QUALITY });
+    const blob = Array.isArray(result) ? result[0] : result;
+    if (!blob) return null;
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+export async function compressPhoto(inputFile: File): Promise<File> {
+  if (!inputFile.type.startsWith("image/") && !isHeic(inputFile)) return inputFile;
+
+  let file = inputFile;
+  if (isHeic(file)) {
+    const converted = await convertHeicToJpeg(file);
+    if (converted) file = converted;
+  }
+  const stillHeic = isHeic(file);
 
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
-    if (scale >= 1) {
+    if (scale >= 1 && !stillHeic) {
       bitmap.close();
       return file; // already small enough — resizing further would only lose quality
     }
@@ -47,7 +78,8 @@ export async function compressPhoto(file: File): Promise<File> {
     bitmap.close();
 
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
-    if (!blob || blob.size >= file.size) return file; // re-encoding didn't actually help — keep the original
+    // Re-encoding didn't actually help — keep the original (unless it's a HEIC that other browsers can't show).
+    if (!blob || (blob.size >= file.size && !stillHeic)) return file;
 
     const jpegName = file.name.replace(/\.\w+$/, "") + ".jpg";
     return new File([blob], jpegName, { type: "image/jpeg" });

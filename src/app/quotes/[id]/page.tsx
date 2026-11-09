@@ -7,6 +7,7 @@ import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
 import { assertQuoteOwnedByUser, canViewCustomerPhone, requireStaffUser } from "@/data/current-user";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getSolarSurveyForQuote } from "@/data/solar-survey-service";
+import { getSolarInstallChecklist } from "@/data/solar-install-checklist-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
 import { getPropertyPhotoUrl } from "@/data/property-photo-service";
@@ -44,6 +45,7 @@ export default async function QuoteDetailPage({
     propertyPhotoUrl,
     boilerCostSettings,
     solarSurvey,
+    installChecklist,
   ] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
@@ -60,6 +62,7 @@ export default async function QuoteDetailPage({
     // these figures to do that with the same formula the server uses.
     isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
     isBoiler ? Promise.resolve(undefined) : getSolarSurveyForQuote(id),
+    isBoiler ? Promise.resolve(undefined) : getSolarInstallChecklist(id),
   ]);
 
   return (
@@ -94,13 +97,13 @@ export default async function QuoteDetailPage({
         <SolarQuoteDetail
           detail={detail as SolarQuoteDetailData}
           reps={reps}
-          todayISO={toISODate(new Date())}
           signatureRequest={signatureRequest}
           signedDocumentUrl={signedDocumentUrl}
           documents={documents}
           isAdmin={user.role === "admin"}
           propertyPhotoUrl={propertyPhotoUrl}
           survey={solarSurvey}
+          installChecklist={installChecklist!}
         />
       )}
     </div>

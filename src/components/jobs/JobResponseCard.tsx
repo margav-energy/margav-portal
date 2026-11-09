@@ -19,12 +19,16 @@ export function JobResponseCard({
   acceptanceStatus,
   productLabel,
   reference,
+  awaitingSurvey = false,
 }: {
   quoteId: string;
-  installDate: string;
+  /** Null for a solar job — it's assigned for survey, with no install date booked yet. */
+  installDate: string | null;
   acceptanceStatus: InstallAcceptanceStatus | null;
   productLabel: string;
   reference: string | null;
+  /** Solar only: the survey hasn't been submitted yet, so Accept/Decline isn't offered (the server enforces this too — see `respondToJob`). */
+  awaitingSurvey?: boolean;
 }) {
   const [status, setStatus] = useState(acceptanceStatus);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +54,20 @@ export function JobResponseCard({
           {reference && <span className="text-xs text-slate-400">{reference}</span>}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-brand-blue">{formatDate(installDate)}</span>
+          {installDate && <span className="text-sm font-semibold text-brand-blue">{formatDate(installDate)}</span>}
           {statusStyle && <Pill label={statusStyle.label} className={statusStyle.className} />}
         </div>
       </div>
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      {status === "pending" && (
+      {status === "pending" && awaitingSurvey && (
+        <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+          Complete the survey below first — you&rsquo;ll then be able to accept or decline this job.
+        </p>
+      )}
+
+      {status === "pending" && !awaitingSurvey && (
         <div className="flex gap-2">
           <Button variant="success" disabled={isPending} onClick={() => handleRespond("accepted")} className="gap-1.5">
             <Check className="h-4 w-4" />

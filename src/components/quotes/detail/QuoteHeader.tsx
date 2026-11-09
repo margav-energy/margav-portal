@@ -19,10 +19,13 @@ import {
   setQuoteLocked,
   toggleQuoteFavourite,
   assignQuoteRepresentative,
+  assignQuoteInstaller,
 } from "@/components/quotes/actions";
 import type { RepProfile } from "@/data/profiles-service";
 import type { QuotePipelineStatus } from "@/types/quote";
 import type { InstallAcceptanceStatus } from "@/types/installer-availability";
+
+const UNASSIGN_INSTALLER_OPTION = "No installer";
 
 function initialsFor(name: string): string {
   return name
@@ -38,9 +41,12 @@ function DropdownButton({
   options,
   optionDescriptions,
   onSelect,
+  statusDot,
 }: {
   label: string;
   icon: React.ReactNode;
+  /** A small coloured dot after the label (e.g. the installer's response) — `className` sets its colour via text colour, `title` is the hover text. */
+  statusDot?: { className: string; title: string };
   options: string[];
   optionDescriptions?: Record<string, string>;
   onSelect: (option: string) => void;
@@ -63,10 +69,18 @@ function DropdownButton({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
       >
         {icon}
-        {label}
+        <span className="max-w-[8rem] truncate">{label}</span>
+        {statusDot && (
+          <span
+            role="img"
+            aria-label={statusDot.title}
+            title={statusDot.title}
+            className={cn("h-2 w-2 shrink-0 rounded-full bg-current", statusDot.className)}
+          />
+        )}
         <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
       </button>
       {isOpen && (
@@ -207,6 +221,8 @@ export function QuoteHeader({
   appointmentEndTime,
   installerName,
   installAcceptanceStatus,
+  installers,
+  onChangeInstaller,
 }: {
   quoteId: string;
   customerName: string;
@@ -239,6 +255,10 @@ export function QuoteHeader({
    *  assigned installer is visible at a glance without scrolling to the sidebar. */
   installerName?: string;
   installAcceptanceStatus?: InstallAcceptanceStatus;
+  /** Solar only: the installers an admin can pick from, shown as a dropdown beside the rep. Absent for boiler, whose installer is booked by date from the sidebar card instead. */
+  installers?: RepProfile[];
+  /** Called optimistically with the new installer (or `null` when unassigned). */
+  onChangeInstaller?: (installer: { id: string; name: string } | null) => void;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -269,6 +289,23 @@ export function QuoteHeader({
     });
   }
 
+  function handleChangeInstaller(option: string) {
+    if (!onChangeInstaller) return;
+    if (option === UNASSIGN_INSTALLER_OPTION) {
+      onChangeInstaller(null);
+      startTransition(() => {
+        void assignQuoteInstaller(quoteId, null, customerName);
+      });
+      return;
+    }
+    const installer = installers?.find((candidate) => candidate.fullName === option);
+    if (!installer) return;
+    onChangeInstaller({ id: installer.id, name: installer.fullName });
+    startTransition(() => {
+      void assignQuoteInstaller(quoteId, installer.id, customerName);
+    });
+  }
+
   function handleOpenCommunications() {
     setIsCommsOpen(true);
     startTransition(() => {
@@ -278,15 +315,15 @@ export function QuoteHeader({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2 [&>*:not(span)]:shrink-0">
           <h1 className="text-lg font-semibold text-slate-900">{reference}</h1>
           <Pill label={`V${version}`} className="bg-slate-100 text-slate-500" />
           <Pill label={statusLabel} className="bg-brand-green-mid/10 text-brand-green-mid" />
           <LeadStatusPill quoteId={quoteId} customerName={customerName} status={pipelineStatus} isAdmin={isAdmin} />
           {appointmentCancelled && <Pill label="Appointment Cancelled" className="bg-red-50 text-red-600" />}
           {appointmentDate && (
-            <span className="text-xs text-slate-500">
+            <span className="min-w-0 truncate text-xs text-slate-500">
               Appointment: {formatDate(appointmentDate)}
               {appointmentStartTime &&
                 ` · ${appointmentStartTime.slice(0, 5)}${appointmentEndTime ? `–${appointmentEndTime.slice(0, 5)}` : ""}`}
@@ -294,7 +331,7 @@ export function QuoteHeader({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={handleToggleFavorite}
@@ -304,13 +341,13 @@ export function QuoteHeader({
           >
             <Star className={cn("h-4 w-4", favorite && "fill-amber-400 text-amber-400")} />
           </button>
-          <Button variant="secondary" className="gap-1.5" onClick={handleOpenCommunications}>
+          <Button variant="secondary" className="gap-1.5" onClick={handleOpenCommunications} aria-label="Communications" title="Communications">
             <Mail className="h-4 w-4" />
-            Communications
+            <span className="hidden 2xl:inline">Communications</span>
           </Button>
-          <Button variant="secondary" className="gap-1.5" onClick={onOpenHistory}>
+          <Button variant="secondary" className="gap-1.5" onClick={onOpenHistory} aria-label="History" title="History">
             <HistoryIcon className="h-4 w-4" />
-            History
+            <span className="hidden 2xl:inline">History</span>
           </Button>
           <DropdownButton
             label={locked ? "Locked" : "Unlocked"}
@@ -328,7 +365,37 @@ export function QuoteHeader({
             }}
             onSelect={(option) => handleToggleLocked(option === "Lock")}
           />
-          {installerName && (
+          {installers && isAdmin ? (
+            <DropdownButton
+              label={installerName ?? "Assign installer"}
+              icon={
+                installerName ? (
+                  <InitialsAvatar
+                    name={installerName}
+                    initials={getInitials(installerName) || installerName[0]?.toUpperCase() || "?"}
+                    className="h-5 w-5 text-[10px]"
+                  />
+                ) : (
+                  <Wrench className="h-3.5 w-3.5 text-slate-400" />
+                )
+              }
+              statusDot={
+                installerName && installAcceptanceStatus
+                  ? {
+                      title: `Installer: ${INSTALL_ACCEPTANCE_STATUS_STYLES[installAcceptanceStatus].label}`,
+                      // The pill's text colour (amber / green / red) doubles as the dot's colour; its background class is dropped.
+                      className: INSTALL_ACCEPTANCE_STATUS_STYLES[installAcceptanceStatus].className
+                        .split(" ")
+                        .filter((cls) => cls.startsWith("text-"))
+                        .join(" "),
+                    }
+                  : undefined
+              }
+              options={[...installers.map((installer) => installer.fullName), ...(installerName ? [UNASSIGN_INSTALLER_OPTION] : [])]}
+              optionDescriptions={{ [UNASSIGN_INSTALLER_OPTION]: "Remove the installer from this quote" }}
+              onSelect={handleChangeInstaller}
+            />
+          ) : installerName && (
             <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
               <Wrench className="h-3.5 w-3.5 text-slate-400" />
               <InitialsAvatar

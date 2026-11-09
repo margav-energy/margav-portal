@@ -21,10 +21,10 @@ import { SolarArraySection } from "@/components/quotes/solar/SolarArraySection";
 import { SolarEquipmentSection } from "@/components/quotes/solar/SolarEquipmentSection";
 import { SOLAR_EQUIPMENT_KINDS } from "@/lib/solar-catalog";
 import { SolarSurveyCard } from "@/components/quotes/solar/SolarSurveyCard";
+import { SolarInstallChecklistCard } from "@/components/quotes/solar/SolarInstallChecklistCard";
 import { SolarSurveyLaunchModal } from "@/components/quotes/solar/SolarSurveyLaunchModal";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
-import { InstallerAssignmentCard } from "@/components/quotes/detail/InstallerAssignmentCard";
 import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
 import {
   cancelQuoteAppointment,
@@ -34,6 +34,7 @@ import {
 } from "@/components/quotes/actions";
 import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
 import type { SolarSurveyDetail } from "@/types/solar-survey";
+import type { SolarInstallChecklist } from "@/data/solar-install-checklist-service";
 import type { SignatureRequestSummary } from "@/data/signature-service";
 import type {
   CustomerDetails,
@@ -48,29 +49,28 @@ import type { QuoteDocument } from "@/data/quote-documents-service";
 export function SolarQuoteDetail({
   detail,
   reps,
-  todayISO,
   signatureRequest,
   signedDocumentUrl,
   documents,
   isAdmin,
   propertyPhotoUrl,
   survey,
+  installChecklist,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
-  todayISO: string;
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
   isAdmin: boolean;
   propertyPhotoUrl: string | undefined;
   survey: SolarSurveyDetail | undefined;
+  installChecklist: SolarInstallChecklist;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
   const [installerName, setInstallerName] = useState(detail.installerName);
-  const [installDate, setInstallDate] = useState(detail.installDate);
   const [acceptanceStatus, setAcceptanceStatus] = useState(detail.installAcceptanceStatus);
   const [customer, setCustomer] = useState<CustomerDetails>(detail.customer);
   const [property, setProperty] = useState(detail.property);
@@ -195,6 +195,11 @@ export function SolarQuoteDetail({
         appointmentEndTime={detail.appointmentEndTime}
         installerName={installerName}
         installAcceptanceStatus={acceptanceStatus}
+        installers={reps.filter((profile) => profile.role === "installer")}
+        onChangeInstaller={(installer) => {
+          setInstallerName(installer?.name);
+          setAcceptanceStatus(installer ? "pending" : undefined);
+        }}
       />
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -294,6 +299,7 @@ export function SolarQuoteDetail({
             locked={locked}
           />
           <SolarSurveyCard survey={survey} />
+          <SolarInstallChecklistCard checklist={installChecklist} hasInstaller={Boolean(installerName)} />
           <SolarKeyDetailsCard
             quoteId={detail.quoteId}
             customerName={customer.name}
@@ -322,24 +328,6 @@ export function SolarQuoteDetail({
             profit={profit}
             onUpdated={(nextProfit) => setCostPrice(nextProfit.costPrice)}
             locked={locked}
-          />
-          <InstallerAssignmentCard
-            quoteId={detail.quoteId}
-            customerName={customer.name}
-            installerName={installerName}
-            installDate={installDate}
-            acceptanceStatus={acceptanceStatus}
-            todayISO={todayISO}
-            onAssigned={(nextInstallerName, nextInstallDate) => {
-              setInstallerName(nextInstallerName);
-              setInstallDate(nextInstallDate);
-              setAcceptanceStatus("pending");
-            }}
-            onUnassigned={() => {
-              setInstallerName(undefined);
-              setAcceptanceStatus(undefined);
-              setInstallDate(undefined);
-            }}
           />
           <SignatureStatusCard
             request={signatureRequest}

@@ -4,10 +4,13 @@ import { ArrowLeft, MapPin } from "lucide-react";
 import { requireInstallerUser } from "@/data/current-user";
 import { getInstallerJobDetail } from "@/data/installer-jobs-service";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
+import { getSolarSurveyForQuote } from "@/data/solar-survey-service";
+import { getSolarInstallChecklist } from "@/data/solar-install-checklist-service";
 import { getPropertyPhotoUrl } from "@/data/property-photo-service";
 import { PRODUCT_TYPE_LABELS } from "@/lib/status-colors";
-import { Card } from "@/components/ui/Card";
 import { BoilerSurveyCard } from "@/components/quotes/boiler/BoilerSurveyCard";
+import { InstallerChecklistGalleryCard } from "@/components/jobs/InstallerChecklistGalleryCard";
+import { InstallerSolarSurveyCard } from "@/components/jobs/InstallerSolarSurveyCard";
 import { JobResponseCard } from "@/components/jobs/JobResponseCard";
 import { InstallerEquipmentCard } from "@/components/jobs/InstallerEquipmentCard";
 import { InstallerCustomerCard } from "@/components/jobs/InstallerCustomerCard";
@@ -25,9 +28,14 @@ export default async function JobDetailPage({
   if (!job) notFound();
 
   const isBoiler = job.productType === "boiler";
-  const [survey, surveyDocumentUrl, propertyPhotoUrl] = await Promise.all([
+  // The photo checklist is for the install itself, so a solar job only gets it once the installer has accepted.
+  const showChecklist = !isBoiler && job.acceptanceStatus === "accepted";
+  const [survey, surveyDocumentUrl, solarSurvey, checklist, propertyPhotoUrl] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
+    // Ownership was already checked by getInstallerJobDetail above.
+    isBoiler ? Promise.resolve(undefined) : getSolarSurveyForQuote(id),
+    showChecklist ? getSolarInstallChecklist(id) : Promise.resolve(undefined),
     getPropertyPhotoUrl(id),
   ]);
 
@@ -71,11 +79,15 @@ export default async function JobDetailPage({
             acceptanceStatus={job.acceptanceStatus}
             productLabel={PRODUCT_TYPE_LABELS[job.productType]}
             reference={job.reference}
+            awaitingSurvey={!isBoiler && solarSurvey?.status !== "submitted"}
           />
           {isBoiler ? (
             <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />
           ) : (
-            <Card className="p-5 text-sm text-slate-500">Solar installs have no on-site survey step.</Card>
+            <>
+              <InstallerSolarSurveyCard quoteId={job.quoteId} survey={solarSurvey} />
+              {checklist && <InstallerChecklistGalleryCard quoteId={job.quoteId} checklist={checklist} />}
+            </>
           )}
         </div>
       </div>

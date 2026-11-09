@@ -38,7 +38,7 @@ export default async function JobsPage() {
           >
             <span>Customer</span>
             <span>Product</span>
-            <span>Install date</span>
+            <span>Date</span>
             <span>Status</span>
           </div>
           <div className="divide-y divide-slate-100">
@@ -58,7 +58,7 @@ export default async function JobsPage() {
                     </p>
                   </div>
                   <span className="text-sm text-slate-600">{PRODUCT_TYPE_LABELS[job.productType]}</span>
-                  <span className="text-sm text-slate-600">{formatDate(job.installDate)}</span>
+                  <span className="text-sm text-slate-600">{job.installDate ? formatDate(job.installDate) : "Survey"}</span>
                   <div>{statusStyle && <Pill label={statusStyle.label} className={statusStyle.className} />}</div>
                 </Link>
               );

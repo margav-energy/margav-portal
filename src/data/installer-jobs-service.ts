@@ -27,7 +27,8 @@ export interface InstallerJob {
   postcode: string;
   productType: "solar" | "boiler";
   reference: string | null;
-  installDate: string;
+  /** Null for a solar job — its installer is assigned to survey it with no date booked (see `assignQuoteInstaller`, src/components/quotes/actions.ts). */
+  installDate: string | null;
   acceptanceStatus: InstallAcceptanceStatus | null;
 }
 
@@ -38,7 +39,7 @@ interface InstallerJobDbRow {
   postcode: string;
   product_type: "solar" | "boiler";
   reference: string | null;
-  install_date: string;
+  install_date: string | null;
   install_acceptance_status: InstallAcceptanceStatus | null;
 }
 
@@ -54,8 +55,9 @@ export async function getInstallerJobs(installerId: string, fromDate: string, li
     .from("quotes")
     .select("id, customer_name, address, postcode, product_type, reference, install_date, install_acceptance_status")
     .eq("installer_id", installerId)
-    .gte("install_date", fromDate)
-    .order("install_date", { ascending: true })
+    // A dated (boiler) job from `fromDate` on, or any undated one — a solar job assigned for survey.
+    .or(`install_date.gte.${fromDate},install_date.is.null`)
+    .order("install_date", { ascending: true, nullsFirst: true })
     .limit(limit);
 
   if (error) {
@@ -101,6 +103,16 @@ export interface InstallerSolarArray {
   shadeFactor: number;
   orientation: string;
   pitchDegrees: number;
+  moduleWp: number;
+  moduleCount: number;
+  items: { name: string; quantity: number }[];
+}
+
+/** An inverter / battery / … entry on a solar quote (`solar_equipment`) — name and quantity only, no pricing. */
+export interface InstallerSolarEquipment {
+  id: string;
+  kind: string;
+  label: string;
   items: { name: string; quantity: number }[];
 }
 
@@ -121,6 +133,7 @@ export interface InstallerJobDetail extends InstallerJob {
   property: BoilerPropertyDetails | SolarPropertyDetails;
   boilerUnits?: InstallerBoilerUnit[];
   solarArrays?: InstallerSolarArray[];
+  solarEquipment?: InstallerSolarEquipment[];
   /** `quote_line_items` sections, pricing stripped — mirrors the admin/rep
    *  detail page's Extras/Standard Additionals/Free-text Extras sections. */
   extras: InstallerLineItem[];
@@ -185,7 +198,9 @@ export async function getInstallerJobDetail(
     console.error("getInstallerJobDetail failed", error);
     return undefined;
   }
-  if (!row || row.installer_id !== installerId || !row.install_date) return undefined;
+  if (!row || row.installer_id !== installerId) return undefined;
+  // A boiler job only exists for its installer once it's booked on a date; a solar one is just assigned (no date).
+  if (row.product_type === "boiler" && !row.install_date) return undefined;
 
   const job: InstallerJob = {
     quoteId: row.id,
@@ -194,7 +209,7 @@ export async function getInstallerJobDetail(
     postcode: row.postcode,
     productType: row.product_type,
     reference: row.reference,
-    installDate: row.install_date,
+    installDate: row.install_date ?? null,
     acceptanceStatus: row.install_acceptance_status,
   };
 
@@ -261,13 +276,21 @@ export async function getInstallerJobDetail(
     return { ...job, ...shared, boilerUnits };
   }
 
-  const { data: arrayRows, error: arraysError } = await supabase
-    .from("solar_arrays")
-    .select("id, label, shade_factor, orientation, pitch_degrees, items, sort_order")
-    .eq("quote_id", quoteId)
-    .order("sort_order", { ascending: true });
+  const [{ data: arrayRows, error: arraysError }, { data: equipmentRows, error: equipmentError }] = await Promise.all([
+    supabase
+      .from("solar_arrays")
+      .select("id, label, shade_factor, orientation, pitch_degrees, module_wp, module_count, items, sort_order")
+      .eq("quote_id", quoteId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("solar_equipment")
+      .select("id, kind, label, items, sort_order")
+      .eq("quote_id", quoteId)
+      .order("sort_order", { ascending: true }),
+  ]);
 
   if (arraysError) console.error("getInstallerJobDetail: solar arrays failed", arraysError);
+  if (equipmentError) console.error("getInstallerJobDetail: solar equipment failed", equipmentError);
 
   const solarArrays: InstallerSolarArray[] = (arrayRows ?? []).map((array) => ({
     id: array.id,
@@ -275,8 +298,17 @@ export async function getInstallerJobDetail(
     shadeFactor: Number(array.shade_factor),
     orientation: array.orientation,
     pitchDegrees: Number(array.pitch_degrees),
+    moduleWp: Number(array.module_wp ?? 0),
+    moduleCount: Number(array.module_count ?? 0),
     items: stripPricing(array.items),
   }));
 
-  return { ...job, ...shared, solarArrays };
+  const solarEquipment: InstallerSolarEquipment[] = (equipmentRows ?? []).map((entry) => ({
+    id: entry.id,
+    kind: entry.kind,
+    label: entry.label,
+    items: stripPricing(entry.items),
+  }));
+
+  return { ...job, ...shared, solarArrays, solarEquipment };
 }

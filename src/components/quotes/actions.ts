@@ -645,6 +645,78 @@ export async function assignQuoteRepresentative(
   return { repId, repName: rep.fullName };
 }
 
+/**
+ * Assigns (or, with `installerId === null`, unassigns) the installer who'll
+ * survey a SOLAR quote — the dropdown next to the rep in QuoteHeader.tsx.
+ * Unlike boiler jobs (`assignInstallerToJobAction`, which books a date the
+ * installer has marked themselves available for), a solar installer is just
+ * picked, the same way a rep is: no date, no availability check. So
+ * `install_date` stays null and `install_acceptance_status` goes back to
+ * "pending" — the installer answers Accept/Decline from /jobs/[id] once
+ * they've done the survey (see `respondToJob`, src/app/jobs/actions.ts).
+ * Admin-only, same as `assignQuoteRepresentative`.
+ */
+export async function assignQuoteInstaller(
+  quoteId: string,
+  installerId: string | null,
+  customerName: string,
+): Promise<{ installerId: string | null; installerName: string | null } | null> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") return null;
+
+  const installer = installerId ? await getProfileById(installerId) : null;
+  if (installerId && (!installer || installer.role !== "installer")) return null;
+
+  const { data: existing } = await supabase
+    .from("quotes")
+    .select("product_type, installer_id")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (!existing || existing.product_type !== "solar") return null;
+  if ((existing.installer_id ?? null) === installerId) {
+    return { installerId, installerName: installer?.fullName ?? null };
+  }
+
+  const { error } = await supabase
+    .from("quotes")
+    .update({
+      installer_id: installerId,
+      install_date: null,
+      // Fresh assignment, fresh answer — never inherit a previous installer's accept/decline.
+      install_acceptance_status: installerId ? "pending" : null,
+    })
+    .eq("id", quoteId);
+  if (error) {
+    console.error("assignQuoteInstaller failed", error);
+    return null;
+  }
+
+  const description = installer ? `Installer ${installer.fullName} assigned to survey` : "Installer unassigned";
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user.id, description }),
+    logActivity({
+      actorId: user.id,
+      customerName,
+      description: `${description} — ${customerName}`,
+      status: installer ? "allocated" : "unallocated",
+      entityType: "quote_installer_assignment",
+      entityId: quoteId,
+    }),
+    installer
+      ? notifyUser({
+          userId: installer.id,
+          title: "New solar survey assigned to you",
+          body: `You've been assigned to survey ${customerName}'s solar job. Log in to Margav Portal to view it.`,
+          link: `/jobs/${quoteId}`,
+        })
+      : Promise.resolve(),
+  ]);
+  revalidateQuote(quoteId);
+  revalidatePath("/jobs");
+  return { installerId, installerName: installer?.fullName ?? null };
+}
+
 export interface SyncAppointmentRepsResult {
   ok: boolean;
   syncedCount: number;
