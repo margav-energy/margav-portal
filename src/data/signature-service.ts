@@ -13,6 +13,7 @@ import { frontPageCount, renderSignedDocumentPdf, type RepSignature } from "@/li
 import { lockQuoteDesignImage, readLockedDesignImage } from "@/data/quote-design-image-service";
 import { lockEasyPvProposal, readLockedProposal } from "@/data/easypv-proposal-service";
 import { composeProposalPdf } from "@/lib/esignature/compose-proposal";
+import { brandNameForProduct } from "@/lib/brand";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
@@ -686,7 +687,7 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
       if (snapshot.proposalPdf) {
         const proposal = await readLockedProposal(snapshot.proposalPdf);
         if (!proposal) throw new Error("The locked proposal PDF is missing or no longer matches its hash.");
-        pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot));
+        pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot), 1);
       }
     }
   } catch (error) {
@@ -725,17 +726,22 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   // failed confirmation email shouldn't fail the signing.
   if (isResendConfigured()) {
     const documentLabel = documentLabelFor(row.document_type);
+    // Only a quote snapshot carries a product type — agreements and waivers are boiler-only, so Heating.
+    const productTypeLabel = (row.document_snapshot as { productTypeLabel?: string }).productTypeLabel;
+    const brand = brandNameForProduct(productTypeLabel);
     try {
       await sendEmail({
         to: row.signer_email,
-        subject: `Your signed Margav Heating ${documentLabel} (${row.document_snapshot.reference})`,
+        fromName: brand,
+        subject: `Your signed ${brand} ${documentLabel} (${row.document_snapshot.reference})`,
         text:
           `Hi ${row.signer_name},\n\nThanks for signing ${documentLabel} ${row.document_snapshot.reference}. ` +
-          `Your signed copy is attached to this email for your records.\n\nMargav Heating`,
+          `Your signed copy is attached to this email for your records.\n\n${brand}`,
         html: signedConfirmationEmailHtml({
           customerName: row.signer_name,
           reference: row.document_snapshot.reference,
           documentLabel,
+          productTypeLabel,
         }),
         attachments: [
           { filename: `Margav-Energy-${row.document_type}-${row.document_snapshot.reference}.pdf`, content: pdfBuffer },

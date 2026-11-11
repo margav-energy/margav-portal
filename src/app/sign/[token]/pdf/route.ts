@@ -33,7 +33,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
     // The Easy PV proposal locked at send-time, with the portal's quote sheet in place of its Quote page.
     const proposal = await readLockedProposal(snapshot.proposalPdf);
     if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot));
+    pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot), 1);
   }
 
   return new NextResponse(new Uint8Array(pdfBuffer), {

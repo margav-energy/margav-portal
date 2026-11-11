@@ -326,6 +326,25 @@ export async function renderUnsignedQuotePdf(snapshot: DocumentSnapshot, designI
       <Page size="A4" style={styles.page}>
         <QuoteDocumentBody snapshot={snapshot} />
       </Page>
+      {hasCover(snapshot) && (
+        <Page size="A4" style={styles.page}>
+          <Text style={styles.sectionTitle}>Acceptance</Text>
+          <Text style={styles.value}>
+            To accept this quote, sign online using the secure link we emailed you. Your signed copy, including the
+            signatures below, will be sent to you once you have signed.
+          </Text>
+          <View style={styles.signatureBlockRow}>
+            <View style={styles.signatureBlock}>
+              <Text style={styles.signatureRole}>Customer</Text>
+              <Text style={styles.signaturePlaceholder}>Signed online by the customer</Text>
+            </View>
+            <View style={styles.signatureBlock}>
+              <Text style={styles.signatureRole}>For {brandNameFor(snapshot)}</Text>
+              <Text style={styles.signaturePlaceholder}>Added when the quote is signed</Text>
+            </View>
+          </View>
+        </Page>
+      )}
     </Document>
   );
 
@@ -344,7 +363,8 @@ export async function renderSignedDocumentPdf(
       {snapshot.proposalPage && <ProposalIntroPage snapshot={snapshot} />}
       <Page size="A4" style={styles.page}>
         <QuoteDocumentBody snapshot={snapshot} />
-
+      </Page>
+      <Page size="A4" style={styles.page}>
         <Text style={styles.sectionTitle}>Signatures</Text>
         <View style={styles.signatureBlockRow}>
           <View style={styles.signatureBlock}>

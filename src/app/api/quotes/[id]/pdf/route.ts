@@ -36,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   // The cover page carries the design image.
   const designImage = isBoiler ? undefined : (await readLiveDesignImage(id))?.bytes;
   let pdfBuffer = isBoiler ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot, designImage);
-  if (proposal) pdfBuffer = await composeProposalPdf(proposal.bytes, pdfBuffer, await getProposalSkipPages(id), frontPageCount(snapshot));
+  if (proposal) pdfBuffer = await composeProposalPdf(proposal.bytes, pdfBuffer, await getProposalSkipPages(id), frontPageCount(snapshot), 1);
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

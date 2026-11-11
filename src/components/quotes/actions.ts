@@ -39,6 +39,7 @@ import type { SapAssumptions, SolarArray, SolarEquipment, SolarPropertyDetails }
 import type { QuotePipelineStatus } from "@/types/quote";
 import type { EasyPvSummary } from "@/types/easypv";
 import { buildImportPlan } from "@/lib/easypv-import";
+import { brandNameForProduct } from "@/lib/brand";
 import { minimumDeposit, MIN_DEPOSIT_PERCENT } from "@/lib/finance";
 
 /**
@@ -1762,13 +1763,14 @@ export async function sendQuote(quoteId: string): Promise<SendQuoteResult> {
   try {
     await sendEmail({
       to: signerEmail,
-      subject: `Your Margav Heating quote (${snapshot.reference}) is ready to sign`,
+      fromName: brandNameForProduct(snapshot.productTypeLabel),
+      subject: `Your ${brandNameForProduct(snapshot.productTypeLabel)} quote (${snapshot.reference}) is ready to sign`,
       text:
         `Hi ${snapshot.customerName},\n\n` +
         `Your ${snapshot.productTypeLabel} quote (${snapshot.reference}, ${snapshot.totalPriceLabel}) is ready to review and sign:\n\n` +
         `${signLink}\n\n` +
         `This link is unique to you — please don't share it.\n\n` +
-        `Margav Heating`,
+        brandNameForProduct(snapshot.productTypeLabel),
       html: signQuoteEmailHtml({
         customerName: snapshot.customerName,
         reference: snapshot.reference,

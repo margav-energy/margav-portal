@@ -46,6 +46,8 @@ export interface SendEmailParams {
   /** Optional rich version (e.g. the "Sign your quote" button) — the Communications modal doesn't use this, only a plain message. */
   html?: string;
   attachments?: SendEmailAttachment[];
+  /** Display name on the From line (the address stays lucy@margav.energy). Defaults to Margav Heating. */
+  fromName?: string;
 }
 
 /** Returns the provider's message id (for audit/support lookup). */
@@ -53,7 +55,7 @@ export async function sendEmail(params: SendEmailParams): Promise<string> {
   const resend = getClient();
 
   const { data, error } = await resend.emails.send({
-    from: EMAIL_FROM,
+    from: params.fromName ? `${params.fromName} <lucy@margav.energy>` : EMAIL_FROM,
     to: params.to,
     subject: params.subject,
     text: params.text,

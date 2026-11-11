@@ -26,6 +26,7 @@ export async function composeProposalPdf(
   quoteSheet: Buffer,
   skipPages: number[],
   coverPages = 0,
+  endPages = 0,
 ): Promise<Buffer> {
   const out = await PDFDocument.create();
   const source = await PDFDocument.load(proposal);
@@ -45,8 +46,10 @@ export async function composeProposalPdf(
   if (coverPages > 0) {
     for (const page of await out.copyPages(sheet, sheetIndices.slice(0, coverPages))) out.addPage(page);
   }
+  // The last `endPages` pages (the signature / acceptance page) close the document, after every Easy PV page.
+  const tailStart = sheetIndices.length - Math.min(endPages, Math.max(0, sheetIndices.length - coverPages));
   const addSheet = async () => {
-    for (const page of await out.copyPages(sheet, sheetIndices.slice(coverPages))) out.addPage(page);
+    for (const page of await out.copyPages(sheet, sheetIndices.slice(coverPages, tailStart))) out.addPage(page);
     sheetInserted = true;
   };
 
@@ -58,6 +61,7 @@ export async function composeProposalPdf(
     coverPageNumber(page);
   }
   if (!sheetInserted) await addSheet();
+  for (const page of await out.copyPages(sheet, sheetIndices.slice(tailStart))) out.addPage(page);
 
   return Buffer.from(await out.save());
 }

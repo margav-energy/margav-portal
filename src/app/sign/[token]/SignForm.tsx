@@ -8,6 +8,7 @@ import { QuoteDocumentPreview } from "@/components/esignature/QuoteDocumentPrevi
 import { RelatedDocumentsCard, type RelatedDocumentLink } from "@/components/esignature/RelatedDocumentsCard";
 import type { PublicRelatedDocument, PublicSignatureRequest } from "@/data/signature-service";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
+import { brandNameForProduct } from "@/lib/brand";
 import type { WaiverSnapshot } from "@/lib/esignature/waiver-document";
 
 const inputClassName =
@@ -71,6 +72,10 @@ export function SignForm({
   const staticTemplate = isStaticTemplateType(request.documentType) ? DOCUMENT_META[request.documentType] : undefined;
   const documentLabel = staticTemplate?.label ?? "quote";
   const isWaiver = request.documentType === "cooling_off_waiver";
+  // Agreements and waivers are boiler-only; a quote is Solar or Boiler by its snapshot.
+  const brand = staticTemplate
+    ? "Margav Heating"
+    : brandNameForProduct((request.snapshot as DocumentSnapshot).productTypeLabel);
   const [typedName, setTypedName] = useState("");
   // Pre-filled from whatever the quote already had (e.g. an installer's
   // already been assigned a date) but editable — whatever's in the box at
@@ -91,7 +96,7 @@ export function SignForm({
       <StatusScreen
         icon={<CheckCircle2 className="h-10 w-10 text-brand-green-mid" />}
         title="Signed — thank you"
-        body={`This ${documentLabel} has been signed and Margav Heating has been notified. You'll receive a copy for your records.`}
+        body={`This ${documentLabel} has been signed and ${brand} has been notified. You'll receive a copy for your records.`}
       />
     );
   }
@@ -101,7 +106,7 @@ export function SignForm({
       <StatusScreen
         icon={<XCircle className="h-10 w-10 text-slate-400" />}
         title="Signature declined"
-        body={`You've declined to sign this ${documentLabel}. Margav Heating has been notified — get in touch if you'd like to discuss it further.`}
+        body={`You've declined to sign this ${documentLabel}. ${brand} has been notified — get in touch if you'd like to discuss it further.`}
       />
     );
   }
@@ -162,7 +167,7 @@ export function SignForm({
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto flex max-w-4xl flex-col gap-6">
         <div className="text-center">
-          <p className="text-lg font-bold text-slate-900">Margav Heating</p>
+          <p className="text-lg font-bold text-slate-900">{brand}</p>
           <p className="text-sm text-slate-500">
             {staticTemplate?.bannerTitle ?? `Quote ${request.snapshot.reference}`}
             {!staticTemplate && " — " + (request.snapshot as DocumentSnapshot).productTypeLabel}
