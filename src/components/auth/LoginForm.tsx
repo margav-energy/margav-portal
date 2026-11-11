@@ -66,7 +66,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       </form>
 
       <p className="mt-6 text-center text-xs text-slate-400">
-        Access is invite-only — contact an admin if you need an account.
+        
       </p>
     </Card>
   );

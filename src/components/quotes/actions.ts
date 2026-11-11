@@ -37,6 +37,9 @@ import type {
 import type { BoilerPropertyDetails, BoilerUnit } from "@/types/boiler-quote";
 import type { SapAssumptions, SolarArray, SolarEquipment, SolarPropertyDetails } from "@/types/solar-quote";
 import type { QuotePipelineStatus } from "@/types/quote";
+import type { EasyPvSummary } from "@/types/easypv";
+import { buildImportPlan } from "@/lib/easypv-import";
+import { minimumDeposit, MIN_DEPOSIT_PERCENT } from "@/lib/finance";
 
 /**
  * All mutations for the Quotes module. Reads live in
@@ -1056,6 +1059,8 @@ export interface PricingAdjustments {
   discountAmount: number;
   discountReason: string;
   depositAmount: number;
+  /** See `financedAmount` (src/lib/finance.ts). */
+  depositPaidUpfront: boolean;
 }
 
 /**
@@ -1074,6 +1079,18 @@ export async function updatePricingAdjustments(
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
+  // The deposit must be at least MIN_DEPOSIT_PERCENT of the price after discount. Checked only when the deposit
+  // or discount is actually changing, so saving something else (the discount reason) never trips it on an older quote.
+  const { data: current } = await supabase.from("quotes").select("amount, discount_amount, deposit_amount").eq("id", quoteId).maybeSingle();
+  const changingMoney =
+    Number(current?.deposit_amount ?? 0) !== adjustments.depositAmount ||
+    Number(current?.discount_amount ?? 0) !== adjustments.discountAmount;
+  const netTotal = Number(current?.amount ?? 0) - adjustments.discountAmount;
+  if (changingMoney && netTotal > 0 && adjustments.depositAmount < minimumDeposit(netTotal)) {
+    console.error(`updatePricingAdjustments: deposit below ${MIN_DEPOSIT_PERCENT}% of the quote`);
+    return false;
+  }
+
   const { error } = await supabase
     .from("quotes")
     .update({
@@ -1081,6 +1098,7 @@ export async function updatePricingAdjustments(
       discount_amount: adjustments.discountAmount,
       discount_reason: adjustments.discountReason,
       deposit_amount: adjustments.depositAmount,
+      deposit_paid_upfront: adjustments.depositPaidUpfront,
     })
     .eq("id", quoteId);
 
@@ -1900,9 +1918,9 @@ export async function logWarrantyRegistration(quoteId: string, customerName: str
   await logExternalPortalAction(quoteId, customerName, "Warranty registration submitted");
 }
 
-/** No STAX portal integration exists yet — this is that integration point. */
+/** Logs the solar "Finance Portal" button, which opens the Ideal4Finance application page in a new tab (see `SolarQuoteDetail.tsx`). */
 export async function logStaxPortalAction(quoteId: string, customerName: string): Promise<void> {
-  await logExternalPortalAction(quoteId, customerName, "STAX Portal opened");
+  await logExternalPortalAction(quoteId, customerName, "Finance portal opened");
 }
 
 /**
@@ -1990,3 +2008,175 @@ export async function recordPitchOutcome(
 ): Promise<QuoteNote | null> {
   return addQuoteNote(quoteId, `Pitch outcome: ${outcome}`, customerName);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Easy PV → quote items
+// ─────────────────────────────────────────────────────────────────────────
+
+export type ImportEasyPvItemsResult =
+  | { ok: true; arrays: number; equipment: number; extras: number; costTotal: number; sellTotal: number; warnings: string[] }
+  | { ok: false; error: string };
+
+/**
+ * "Import items from Easy PV" on the solar quote's Easy PV card. Replaces the
+ * quote's solar arrays, equipment and "extra" line items with the cart from
+ * its linked Easy PV project (one array per roof, one equipment entry per
+ * inverter/battery/optimiser, the rest as extras), priced at Midsummer's cost
+ * plus `markupPct`. Standard additionals and free-text extras are left alone,
+ * and everything stays editable afterwards — reps add or remove items as
+ * normal. Also sets the Profit card's cost price to the Midsummer cost.
+ * Needs a refreshed Easy PV summary (older saved summaries have no cart).
+ *
+ * Staff only (admin any solar quote, a rep their own) and refused on a
+ * locked quote, same as every other mutation here. New rows are written
+ * before the old ones are deleted, so a failure part-way never leaves the
+ * quote empty.
+ */
+export async function importEasyPvItems(quoteId: string, markupPct: number): Promise<ImportEasyPvItemsResult> {
+  const user = await getCurrentUser();
+  if (!user || user.role === "installer") return { ok: false, error: "Not allowed." };
+  if (!Number.isFinite(markupPct) || markupPct < 0 || markupPct > 500) {
+    return { ok: false, error: "Enter a markup between 0% and 500%." };
+  }
+
+  const supabase = await createClient();
+  const { data: quote } = await supabase
+    .from("quotes")
+    .select("id, customer_name, product_type, representative_id, is_locked, easypv_summary")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (!quote || quote.product_type !== "solar") return { ok: false, error: "Quote not found." };
+  if (user.role === "rep" && quote.representative_id !== user.id) return { ok: false, error: "Quote not found." };
+  if (quote.is_locked) return { ok: false, error: "This quote is locked. Unlock it to import items." };
+
+  const summary = quote.easypv_summary as EasyPvSummary | null;
+  if (!summary?.cart || summary.cart.length === 0) {
+    return { ok: false, error: "No Easy PV items to import yet — click \"Refresh from Easy PV\" first." };
+  }
+
+  const plan = buildImportPlan(summary, markupPct);
+  const withIds = (items: { name: string; quantity: number; unitPrice: number }[]) =>
+    serializeLineItems(items.map((item) => ({ ...item, id: crypto.randomUUID() })));
+
+  const [oldArrays, oldEquipment, oldExtras] = await Promise.all([
+    supabase.from("solar_arrays").select("id").eq("quote_id", quoteId),
+    supabase.from("solar_equipment").select("id").eq("quote_id", quoteId),
+    supabase.from("quote_line_items").select("id").eq("quote_id", quoteId).eq("section", "extra"),
+  ]);
+  const oldArrayIds = (oldArrays.data ?? []).map((row) => row.id as string);
+  const oldEquipmentIds = (oldEquipment.data ?? []).map((row) => row.id as string);
+  const oldExtraIds = (oldExtras.data ?? []).map((row) => row.id as string);
+  const sortBase = oldArrayIds.length; // new rows sort after the ones about to be removed, then the old ones go.
+
+  const [newArrays, newEquipment, newExtras] = await Promise.all([
+    plan.arrays.length
+      ? supabase
+          .from("solar_arrays")
+          .insert(
+            plan.arrays.map((array, index) => ({
+              quote_id: quoteId,
+              label: array.label,
+              shade_factor: 1,
+              orientation: array.orientation,
+              orientation_degrees: array.orientationDegrees ?? null,
+              pitch_degrees: array.pitchDegrees,
+              module_wp: array.moduleWp,
+              module_count: array.moduleCount,
+              items: withIds(array.items),
+              sort_order: sortBase + index,
+            })),
+          )
+          .select("id")
+      : Promise.resolve({ data: [], error: null }),
+    plan.equipment.length
+      ? supabase
+          .from("solar_equipment")
+          .insert(
+            plan.equipment.map((entry, index) => ({
+              quote_id: quoteId,
+              kind: entry.kind,
+              label: entry.label,
+              items: withIds(entry.items),
+              sort_order: oldEquipmentIds.length + index,
+            })),
+          )
+          .select("id")
+      : Promise.resolve({ data: [], error: null }),
+    plan.extras.length
+      ? supabase
+          .from("quote_line_items")
+          .insert(
+            plan.extras.map((item, index) => ({
+              quote_id: quoteId,
+              section: "extra" as const,
+              name: item.name,
+              description: null,
+              quantity: item.quantity,
+              unit_price: item.unitPrice,
+              sort_order: oldExtraIds.length + index,
+            })),
+          )
+          .select("id")
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (newArrays.error || newEquipment.error || newExtras.error) {
+    console.error("importEasyPvItems insert failed", newArrays.error, newEquipment.error, newExtras.error);
+    // Roll back whatever did get written so the quote is exactly as it was.
+    await Promise.all([
+      supabase.from("solar_arrays").delete().in("id", (newArrays.data ?? []).map((row) => row.id as string)),
+      supabase.from("solar_equipment").delete().in("id", (newEquipment.data ?? []).map((row) => row.id as string)),
+      supabase.from("quote_line_items").delete().in("id", (newExtras.data ?? []).map((row) => row.id as string)),
+    ]);
+    return { ok: false, error: "Couldn't import the items. Nothing was changed." };
+  }
+
+  await Promise.all([
+    oldArrayIds.length ? supabase.from("solar_arrays").delete().in("id", oldArrayIds) : null,
+    oldEquipmentIds.length ? supabase.from("solar_equipment").delete().in("id", oldEquipmentIds) : null,
+    oldExtraIds.length ? supabase.from("quote_line_items").delete().in("id", oldExtraIds) : null,
+  ]);
+
+  const sellTotal =
+    plan.arrays.reduce((sum, array) => sum + sumLineItems(array.items), 0) +
+    plan.equipment.reduce((sum, entry) => sum + sumLineItems(entry.items), 0) +
+    sumLineItems(plan.extras);
+
+  await supabase
+    .from("quotes")
+    .update({
+      profit_breakdown: { costPrice: plan.costTotal },
+      easypv_items_imported_at: new Date().toISOString(),
+      easypv_markup_pct: markupPct,
+    })
+    .eq("id", quoteId);
+
+  const description = `Imported ${plan.arrays.length} array${plan.arrays.length === 1 ? "" : "s"}, ${plan.equipment.length} equipment and ${plan.extras.length} extras from Easy PV (${markupPct}% markup)`;
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user.id, description }),
+    logActivity({
+      actorId: user.id,
+      customerName: quote.customer_name,
+      description: `${description} — ${quote.customer_name}`,
+      status: "allocated",
+      entityType: "quote",
+      entityId: quoteId,
+    }),
+    syncQuoteAmount(quoteId),
+  ]);
+  revalidateQuote(quoteId);
+
+  const warnings = plan.unmatchedRoofItems.length
+    ? [`${plan.unmatchedRoofItems.length} panel/mounting line(s) weren't on any roof, so they're in Extras: ${plan.unmatchedRoofItems.join(", ")}`]
+    : [];
+  return {
+    ok: true,
+    arrays: plan.arrays.length,
+    equipment: plan.equipment.length,
+    extras: plan.extras.length,
+    costTotal: plan.costTotal,
+    sellTotal: Math.round(sellTotal * 100) / 100,
+    warnings,
+  };
+}
+

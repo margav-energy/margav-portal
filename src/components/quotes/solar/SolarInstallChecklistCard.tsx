@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ImageIcon } from "lucide-react";
+import { ChevronDown, Download, ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import { CHECKLIST_ITEMS, CHECKLIST_STAGES, countCompleted } from "@/lib/solar-install-checklist";
+import { CHECKLIST_ITEMS, CHECKLIST_STAGES, countCompleted, getChecklistItem } from "@/lib/solar-install-checklist";
 import type { SolarInstallChecklist } from "@/data/solar-install-checklist-service";
 
 /**
@@ -17,9 +17,11 @@ import type { SolarInstallChecklist } from "@/data/solar-install-checklist-servi
  * missing so gaps are obvious at a glance.
  */
 export function SolarInstallChecklistCard({
+  quoteId,
   checklist,
   hasInstaller,
 }: {
+  quoteId: string;
   checklist: SolarInstallChecklist;
   hasInstaller: boolean;
 }) {
@@ -67,9 +69,29 @@ export function SolarInstallChecklistCard({
 
       {isOpen && (
         <div className="flex flex-col gap-5 border-t border-slate-100 px-5 py-4">
+          {checklist.photos.length > 0 && (
+            <a
+              href={`/api/quotes/${quoteId}/install-checklist/files`}
+              className="flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-brand-blue hover:bg-slate-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download all photos (ZIP)
+            </a>
+          )}
           {CHECKLIST_STAGES.map((stage) => (
             <section key={stage.stage} className="flex flex-col gap-1">
-              <h4 className="border-b border-slate-100 pb-1.5 text-xs font-semibold tracking-wide text-slate-900 uppercase">{stage.title}</h4>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <h4 className="text-xs font-semibold tracking-wide text-slate-900 uppercase">{stage.title}</h4>
+                {checklist.photos.some((photo) => getChecklistItem(photo.itemKey)?.stage === stage.stage) && (
+                  <a
+                    href={`/api/quotes/${quoteId}/install-checklist/files?stage=${stage.stage}`}
+                    className="flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline"
+                  >
+                    <Download className="h-3 w-3" />
+                    Download folder
+                  </a>
+                )}
+              </div>
               <ul className="divide-y divide-slate-100">
                 {CHECKLIST_ITEMS.filter((item) => item.stage === stage.stage).map((item) => {
                   const photos = checklist.photos.filter((photo) => photo.itemKey === item.key);

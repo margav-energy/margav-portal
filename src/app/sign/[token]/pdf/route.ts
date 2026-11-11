@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getPublicSignatureRequest } from "@/data/signature-service";
-import { renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
+import { frontPageCount, renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
+import { readLockedDesignImage } from "@/data/quote-design-image-service";
+import { readLockedProposal } from "@/data/easypv-proposal-service";
+import { composeProposalPdf } from "@/lib/esignature/compose-proposal";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
 
 /**
@@ -23,7 +26,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tok
   }
 
   const snapshot = request.snapshot as DocumentSnapshot;
-  const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);
+  const designImage = snapshot.designImage ? (await readLockedDesignImage(snapshot.designImage))?.bytes : undefined;
+  let pdfBuffer =
+    snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot, designImage);
+  if (snapshot.proposalPdf) {
+    // The Easy PV proposal locked at send-time, with the portal's quote sheet in place of its Quote page.
+    const proposal = await readLockedProposal(snapshot.proposalPdf);
+    if (!proposal) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot));
+  }
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

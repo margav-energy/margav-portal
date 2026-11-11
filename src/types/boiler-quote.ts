@@ -97,6 +97,8 @@ export interface BoilerQuoteDetail {
   /** Why the discount was given — one of `DISCOUNT_REASONS`, or empty. */
   discountReason: string;
   depositAmount: number;
+  /** True: the deposit is paid up front and the Monthly Plan finances only the rest. False: the plan finances the whole price. */
+  depositPaidUpfront: boolean;
   isFavourite: boolean;
   locked: boolean;
   customer: CustomerDetails;

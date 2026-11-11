@@ -21,10 +21,9 @@ export function PaymentMethodCard({
   selected: PaymentMethodOption;
   /** Only meaningful when `selected === "monthly_plan"`. */
   termYears: number | undefined;
-  /** The amount actually owed — subtotal minus discount, same figure the
-   *  signed document's own monthly plan is based on (see
-   *  `buildDocumentSnapshot` in src/lib/esignature/document.ts) — the
-   *  principal the monthly repayment is calculated on. */
+  /** The amount the Monthly Plan finances — the price after discount, less a deposit paid up front
+   *  (`financedAmount`, src/lib/finance.ts); the same figure the signed document's monthly plan is
+   *  based on (see `buildDocumentSnapshot` in src/lib/esignature/document.ts). */
   totalCost: number;
   onSelect: (option: PaymentMethodOption) => void;
   onChangeTermYears: (years: number) => void;

@@ -9,7 +9,7 @@ import { FormField, inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DISCOUNT_REASONS } from "@/lib/discount-reasons";
-import { aprForTermYears, monthlyRepayment, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
+import { aprForTermYears, financedAmount, MIN_DEPOSIT_PERCENT, minimumDeposit, monthlyRepayment, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
 import { updatePricingAdjustments, type PricingAdjustments } from "@/components/quotes/actions";
 import type { LineItem, PaymentMethodOption } from "@/types/quote-detail-shared";
 
@@ -17,25 +17,36 @@ const DEFAULT_TERM_YEARS = MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.lengt
 
 function EditAdjustmentsModal({
   adjustments,
+  systemCost,
   onClose,
   onSave,
 }: {
   adjustments: PricingAdjustments;
+  /** Every item added up, before the discount — the minimum deposit is worked out from this less the discount. */
+  systemCost: number;
   onClose: () => void;
   onSave: (adjustments: PricingAdjustments) => void;
 }) {
   const [discount, setDiscount] = useState(String(adjustments.discountAmount));
   const [reason, setReason] = useState(adjustments.discountReason);
   const [deposit, setDeposit] = useState(String(adjustments.depositAmount));
+  const [upfront, setUpfront] = useState(adjustments.depositPaidUpfront);
+  const [error, setError] = useState<string | null>(null);
+  const minDeposit = minimumDeposit(systemCost - (Number(discount) || 0));
 
   function handleSave() {
     const discountAmount = Number(discount) || 0;
+    if (minDeposit > 0 && (Number(deposit) || 0) < minDeposit) {
+      setError(`The deposit must be at least ${MIN_DEPOSIT_PERCENT}% of the quote — ${formatCurrency(minDeposit)}.`);
+      return;
+    }
     onSave({
       // VAT isn't editable — prices already include it — so whatever's stored passes through untouched.
       vatAmount: adjustments.vatAmount,
       discountAmount,
       discountReason: reason,
       depositAmount: Number(deposit) || 0,
+      depositPaidUpfront: upfront,
     });
     onClose();
   }
@@ -75,9 +86,32 @@ function EditAdjustmentsModal({
             step="0.01"
             className={inputClassName}
             value={deposit}
-            onChange={(event) => setDeposit(event.target.value)}
+            onChange={(event) => {
+              setDeposit(event.target.value);
+              setError(null);
+            }}
           />
+          {minDeposit > 0 && (
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              Minimum {MIN_DEPOSIT_PERCENT}% of the quote: {formatCurrency(minDeposit)}
+              <button type="button" className="font-medium text-brand-blue hover:underline" onClick={() => setDeposit(String(minDeposit))}>
+                Use {MIN_DEPOSIT_PERCENT}%
+              </button>
+            </p>
+          )}
         </FormField>
+        <FormField label="Deposit is" htmlFor="deposit-upfront">
+          <select
+            id="deposit-upfront"
+            className={inputClassName}
+            value={upfront ? "upfront" : "financed"}
+            onChange={(event) => setUpfront(event.target.value === "upfront")}
+          >
+            <option value="upfront">Paid up front (the Monthly Plan finances the rest)</option>
+            <option value="financed">Included in the finance (the Monthly Plan covers the whole price)</option>
+          </select>
+        </FormField>
+        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       </div>
       <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
         <Button variant="secondary" onClick={onClose}>
@@ -91,7 +125,18 @@ function EditAdjustmentsModal({
   );
 }
 
-function PriceTableModal({ amount, selectedTermYears, onClose }: { amount: number; selectedTermYears: number | undefined; onClose: () => void }) {
+function PriceTableModal({
+  amount,
+  selectedTermYears,
+  depositUpfront,
+  onClose,
+}: {
+  amount: number;
+  selectedTermYears: number | undefined;
+  /** True when `amount` is already net of an up-front deposit. */
+  depositUpfront: boolean;
+  onClose: () => void;
+}) {
   return (
     <Modal title="Price table" onClose={onClose}>
       <div className="px-5 py-5">
@@ -113,7 +158,7 @@ function PriceTableModal({ amount, selectedTermYears, onClose }: { amount: numbe
             ))}
           </tbody>
         </table>
-        <p className="mt-3 text-xs text-slate-500">Monthly payments on {formatCurrency(amount)}, the total after discount.</p>
+        <p className="mt-3 text-xs text-slate-500">Monthly payments on {formatCurrency(amount)}{depositUpfront ? ", the total after discount and the up-front deposit" : ", the total after discount"}.</p>
       </div>
       <div className="flex justify-end border-t border-slate-100 px-5 py-4">
         <Button variant="success" onClick={onClose}>
@@ -175,11 +220,19 @@ export function PricingSummaryCard({
   const grossTotal = netTotal;
   const finalTotal = grossTotal - adjustments.depositAmount;
   const term = termYears ?? DEFAULT_TERM_YEARS;
-  const monthly = selectedMethod === "monthly_plan" ? monthlyRepayment(netTotal, term) : undefined;
+  const financed = financedAmount(netTotal, adjustments.depositAmount, adjustments.depositPaidUpfront);
+  const depositUpfront = adjustments.depositPaidUpfront && adjustments.depositAmount > 0;
+  const minDepositForCard = minimumDeposit(netTotal);
+  const belowMinimumDeposit = netTotal > 0 && adjustments.depositAmount < minDepositForCard;
+  const monthly = selectedMethod === "monthly_plan" ? monthlyRepayment(financed, term) : undefined;
 
   function handleSave(next: PricingAdjustments) {
+    const previous = adjustments;
     onUpdated(next);
-    void updatePricingAdjustments(quoteId, next, customerName);
+    // The server re-checks the minimum deposit; if it refuses (or the save fails) put the old figures back.
+    void updatePricingAdjustments(quoteId, next, customerName).then((saved) => {
+      if (!saved) onUpdated(previous);
+    });
   }
 
   const editLink = (value: string) => (
@@ -201,7 +254,15 @@ export function PricingSummaryCard({
           <Row label="System Cost">{formatCurrency(systemCost)}</Row>
           <Row label="Net Total">{formatCurrency(netTotal)}</Row>
           <Row label="Gross Total">{formatCurrency(grossTotal)}</Row>
-          <Row label="Deposit">{editLink(formatCurrency(adjustments.depositAmount))}</Row>
+          <Row label="Deposit">
+            {editLink(formatCurrency(adjustments.depositAmount))}
+            {belowMinimumDeposit && (
+              <span className="ml-2 text-xs font-medium text-amber-600" title={`At least ${MIN_DEPOSIT_PERCENT}% of the quote`}>
+                min {formatCurrency(minDepositForCard)}
+              </span>
+            )}
+          </Row>
+          <Row label="Amount financed">{selectedMethod === "monthly_plan" ? formatCurrency(financed) : "—"}</Row>
           <Row label="Monthly Price">{monthly !== undefined ? formatCurrency(monthly) : "—"}</Row>
         </div>
         <div className="flex flex-col gap-2.5">
@@ -260,8 +321,13 @@ export function PricingSummaryCard({
         )}
       </div>
 
-      {isEditing && <EditAdjustmentsModal adjustments={adjustments} onClose={() => setIsEditing(false)} onSave={handleSave} />}
-      {isTableOpen && <PriceTableModal amount={netTotal} selectedTermYears={monthly !== undefined ? term : undefined} onClose={() => setIsTableOpen(false)} />}
+      {isEditing && <EditAdjustmentsModal adjustments={adjustments} systemCost={systemCost} onClose={() => setIsEditing(false)} onSave={handleSave} />}
+      {isTableOpen && <PriceTableModal
+          amount={financed}
+          depositUpfront={depositUpfront}
+          selectedTermYears={monthly !== undefined ? term : undefined}
+          onClose={() => setIsTableOpen(false)}
+        />}
     </Collapsible>
   );
 }

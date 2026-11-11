@@ -18,9 +18,15 @@ import type { DocumentSnapshot } from "@/lib/esignature/document";
 export function QuoteDocumentPreview({
   snapshot,
   actionsSlot,
+  designImageUrl,
+  fullPdfUrl,
 }: {
   snapshot: DocumentSnapshot;
   actionsSlot?: ReactNode;
+  /** The solar design image (panels on the roof), shown under the headline when the quote has one. */
+  designImageUrl?: string;
+  /** When the document is the Easy PV proposal with the portal's quote sheet: the whole PDF, shown in place of the hero panel. */
+  fullPdfUrl?: string;
 }) {
   const monthlyPlans = snapshot.monthlyPlans ?? [];
   const hasRepContact = Boolean(snapshot.repName && (snapshot.repEmail || snapshot.repPhone));
@@ -28,13 +34,20 @@ export function QuoteDocumentPreview({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm md:grid md:grid-cols-5">
-      {/* Hero panel */}
+      {/* Hero panel — or the full proposal PDF when that's what's being signed */}
+      {fullPdfUrl ? (
+        <div className="min-h-[75vh] bg-slate-100 md:col-span-3">
+          <iframe src={fullPdfUrl} title="Your quote and proposal" className="h-full min-h-[75vh] w-full" />
+        </div>
+      ) : (
       <div className="flex flex-col gap-8 bg-slate-900 px-8 py-10 text-white md:col-span-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-green-gradient text-sm font-bold text-white">
             M
           </div>
-          <span className="text-lg font-semibold tracking-tight">Margav Heating</span>
+          <span className="text-lg font-semibold tracking-tight">
+            {snapshot.productTypeLabel === "Boiler" ? "Margav Heating" : "MarGav Solar"}
+          </span>
         </div>
 
         {snapshot.headlineLabel && (
@@ -45,6 +58,11 @@ export function QuoteDocumentPreview({
             </h1>
             {snapshot.subheadlineLabel && <p className="mt-3 text-lg text-slate-300">{snapshot.subheadlineLabel}</p>}
           </div>
+        )}
+
+        {designImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- a short-lived signed URL or token-gated route, not a static asset next/image can optimize.
+          <img src={designImageUrl} alt="Solar design for your roof" className="max-h-72 w-full rounded-xl object-cover" />
         )}
 
         <div className="h-px w-16 bg-white/20" />
@@ -72,6 +90,8 @@ export function QuoteDocumentPreview({
           ))}
         </div>
       </div>
+
+      )}
 
       {/* Sidebar */}
       <div className="flex flex-col gap-6 bg-white px-6 py-8 md:col-span-2">
@@ -112,8 +132,14 @@ export function QuoteDocumentPreview({
           </div>
           {snapshot.depositLabel && (
             <div className="mt-1.5 flex justify-between text-sm">
-              <span className="text-slate-500">Deposit</span>
+              <span className="text-slate-500">{snapshot.depositPaidUpfront ? "Deposit (paid up front)" : "Deposit"}</span>
               <span className="font-medium text-slate-900">{snapshot.depositLabel}</span>
+            </div>
+          )}
+          {snapshot.amountFinancedLabel && (
+            <div className="mt-1.5 flex justify-between text-sm">
+              <span className="text-slate-500">Amount financed</span>
+              <span className="font-medium text-slate-900">{snapshot.amountFinancedLabel}</span>
             </div>
           )}
           <p className="mt-1 text-xs text-slate-400">Payment method: {snapshot.paymentMethodLabel}</p>

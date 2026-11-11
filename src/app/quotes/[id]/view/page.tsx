@@ -7,6 +7,8 @@ import { buildDocumentSnapshot } from "@/lib/esignature/document";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
+import { getPropertyPhotoUrl } from "@/data/property-photo-service";
+import { hasEasyPvProposal } from "@/data/easypv-proposal-service";
 import { QuoteDocumentPreview } from "@/components/esignature/QuoteDocumentPreview";
 import { QuoteSummarySidebarCard } from "@/components/esignature/QuoteSummarySidebarCard";
 import { RelatedDocumentsCard, type RelatedDocumentLink } from "@/components/esignature/RelatedDocumentsCard";
@@ -51,6 +53,8 @@ export default async function ViewQuotePage({
     waiverRequest,
     waiverSignedDocumentUrl,
     documents,
+    designImageUrl,
+    hasProposal,
   ] = await Promise.all([
     buildDocumentSnapshot(quote, detail),
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
@@ -60,6 +64,8 @@ export default async function ViewQuotePage({
     isBoiler ? getLatestSignatureRequest(id, "cooling_off_waiver") : Promise.resolve(undefined),
     isBoiler ? getSignedDocumentUrl(id, "cooling_off_waiver") : Promise.resolve(undefined),
     getQuoteDocuments(id),
+    isBoiler ? Promise.resolve(undefined) : getPropertyPhotoUrl(id),
+    isBoiler ? Promise.resolve(false) : hasEasyPvProposal(id),
   ]);
 
   // Only boiler jobs have a survey step or an Installation Agreement/
@@ -159,6 +165,8 @@ export default async function ViewQuotePage({
 
           <QuoteDocumentPreview
             snapshot={snapshot}
+            designImageUrl={hasProposal ? undefined : designImageUrl}
+            fullPdfUrl={hasProposal ? `/api/quotes/${id}/pdf` : undefined}
             actionsSlot={
               <a
                 href={`/api/quotes/${id}/pdf`}

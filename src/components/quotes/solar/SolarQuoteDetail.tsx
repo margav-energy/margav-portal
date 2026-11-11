@@ -10,6 +10,7 @@ import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
 import { SolarDesignCard } from "@/components/quotes/solar/SolarDesignCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
+import { financedAmount } from "@/lib/finance";
 import { PricingSummaryCard } from "@/components/quotes/detail/PricingSummaryCard";
 import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
@@ -22,6 +23,8 @@ import { SolarEquipmentSection } from "@/components/quotes/solar/SolarEquipmentS
 import { SOLAR_EQUIPMENT_KINDS } from "@/lib/solar-catalog";
 import { SolarSurveyCard } from "@/components/quotes/solar/SolarSurveyCard";
 import { SolarInstallChecklistCard } from "@/components/quotes/solar/SolarInstallChecklistCard";
+import { EasyPvCard } from "@/components/quotes/solar/EasyPvCard";
+import type { EasyPvLink } from "@/types/easypv";
 import { SolarSurveyLaunchModal } from "@/components/quotes/solar/SolarSurveyLaunchModal";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
@@ -56,6 +59,7 @@ export function SolarQuoteDetail({
   propertyPhotoUrl,
   survey,
   installChecklist,
+  easyPvLink,
 }: {
   detail: SolarQuoteDetailData;
   reps: RepProfile[];
@@ -66,6 +70,7 @@ export function SolarQuoteDetail({
   propertyPhotoUrl: string | undefined;
   survey: SolarSurveyDetail | undefined;
   installChecklist: SolarInstallChecklist;
+  easyPvLink: EasyPvLink;
 }) {
   const [locked, setLocked] = useState(detail.locked);
   const [favorite, setFavorite] = useState(detail.isFavourite);
@@ -106,6 +111,7 @@ export function SolarQuoteDetail({
     discountAmount: detail.discountAmount,
     discountReason: detail.discountReason,
     depositAmount: detail.depositAmount,
+    depositPaidUpfront: detail.depositPaidUpfront,
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
@@ -119,6 +125,8 @@ export function SolarQuoteDetail({
   // src/lib/esignature/document.ts) — the Payment Method card's own preview
   // needs to match that, not the pre-discount subtotal above.
   const totalAfterDiscount = totalCost - pricingAdjustments.discountAmount;
+  // What the Monthly Plan finances: the total less an up-front deposit (see `financedAmount`, src/lib/finance.ts).
+  const amountFinanced = financedAmount(totalAfterDiscount, pricingAdjustments.depositAmount, pricingAdjustments.depositPaidUpfront);
 
   const profitAmount = totalAfterDiscount - costPrice;
   const profit: ProfitBreakdown = {
@@ -161,9 +169,12 @@ export function SolarQuoteDetail({
     quoteId: detail.quoteId,
     customerName: customer.name,
     appointmentId: detail.appointmentId,
-    secondaryPortalLabel: "STAX Portal",
+    secondaryPortalLabel: "Finance Portal",
     onSendQuote: () => setIsSendModalOpen(true),
-    onSecondaryPortalAction: () => void logStaxPortalAction(detail.quoteId, customer.name),
+    onSecondaryPortalAction: () => {
+      window.open("https://ideal4finance.com/retail-hi/apply/margav", "_blank", "noopener,noreferrer");
+      void logStaxPortalAction(detail.quoteId, customer.name);
+    },
     onCancelApp: () => void handleCancelApp(),
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
@@ -293,13 +304,14 @@ export function SolarQuoteDetail({
           <PaymentMethodCard
             selected={selectedPaymentMethod}
             termYears={monthlyPlanTermYears}
-            totalCost={totalAfterDiscount}
+            totalCost={amountFinanced}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
             locked={locked}
           />
           <SolarSurveyCard survey={survey} />
-          <SolarInstallChecklistCard checklist={installChecklist} hasInstaller={Boolean(installerName)} />
+          <EasyPvCard quoteId={detail.quoteId} link={easyPvLink} />
+          <SolarInstallChecklistCard quoteId={detail.quoteId} checklist={installChecklist} hasInstaller={Boolean(installerName)} />
           <SolarKeyDetailsCard
             quoteId={detail.quoteId}
             customerName={customer.name}

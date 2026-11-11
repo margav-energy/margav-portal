@@ -187,6 +187,8 @@ export function SignForm({
         ) : (
           <QuoteDocumentPreview
             snapshot={request.snapshot as DocumentSnapshot}
+            designImageUrl={(request.snapshot as DocumentSnapshot).designImage ? `/sign/${token}/design-image` : undefined}
+            fullPdfUrl={(request.snapshot as DocumentSnapshot).proposalPdf ? `/sign/${token}/pdf` : undefined}
             actionsSlot={
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button

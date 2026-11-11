@@ -8,6 +8,7 @@ import { assertQuoteOwnedByUser, canViewCustomerPhone, requireStaffUser } from "
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getSolarSurveyForQuote } from "@/data/solar-survey-service";
 import { getSolarInstallChecklist } from "@/data/solar-install-checklist-service";
+import { getEasyPvLink } from "@/data/easypv-link-service";
 import { getLatestSignatureRequest, getSignedDocumentUrl } from "@/data/signature-service";
 import { getQuoteDocuments } from "@/data/quote-documents-service";
 import { getPropertyPhotoUrl } from "@/data/property-photo-service";
@@ -46,6 +47,7 @@ export default async function QuoteDetailPage({
     boilerCostSettings,
     solarSurvey,
     installChecklist,
+    easyPvLink,
   ] = await Promise.all([
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
@@ -63,6 +65,7 @@ export default async function QuoteDetailPage({
     isBoiler ? getBoilerCostSettings() : Promise.resolve(null),
     isBoiler ? Promise.resolve(undefined) : getSolarSurveyForQuote(id),
     isBoiler ? Promise.resolve(undefined) : getSolarInstallChecklist(id),
+    isBoiler ? Promise.resolve(undefined) : getEasyPvLink(id),
   ]);
 
   return (
@@ -104,6 +107,7 @@ export default async function QuoteDetailPage({
           propertyPhotoUrl={propertyPhotoUrl}
           survey={solarSurvey}
           installChecklist={installChecklist!}
+          easyPvLink={easyPvLink!}
         />
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, ExternalLink, ImageIcon } from "lucide-react";
+import { ClipboardCheck, Download, ExternalLink, ImageIcon } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
@@ -76,8 +76,16 @@ export function InstallerChecklistGalleryCard({
             <section key={stage.stage} className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-semibold text-slate-700">{stage.title}</h4>
-                <span className="text-xs text-slate-400">
+                <span className="flex items-center gap-2 text-xs text-slate-400">
                   {stagePhotos.length} photo{stagePhotos.length === 1 ? "" : "s"}
+                  <a
+                    href={`/api/quotes/${quoteId}/install-checklist/files?stage=${stage.stage}`}
+                    aria-label={`Download ${stage.title} folder`}
+                    title="Download folder (ZIP)"
+                    className="text-brand-blue hover:opacity-70"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
                 </span>
               </div>
               <div className="grid grid-cols-4 gap-1.5">
@@ -107,6 +115,16 @@ export function InstallerChecklistGalleryCard({
 
       {submitted && checklist.submittedAt && (
         <p className="text-xs text-slate-500">Sent to the office {formatDateTime(checklist.submittedAt)}</p>
+      )}
+
+      {hasPhotos && (
+        <a
+          href={`/api/quotes/${quoteId}/install-checklist/files`}
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-brand-blue hover:bg-slate-50"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download all photos (ZIP)
+        </a>
       )}
 
       <Button

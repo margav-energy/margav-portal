@@ -9,7 +9,10 @@ import { notifyUser } from "@/lib/notify";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { formatDateTime } from "@/lib/format";
 import { buildDocumentSnapshot, hashDocument, type DocumentSnapshot } from "@/lib/esignature/document";
-import { renderSignedDocumentPdf, type RepSignature } from "@/lib/esignature/pdf";
+import { frontPageCount, renderSignedDocumentPdf, type RepSignature } from "@/lib/esignature/pdf";
+import { lockQuoteDesignImage, readLockedDesignImage } from "@/data/quote-design-image-service";
+import { lockEasyPvProposal, readLockedProposal } from "@/data/easypv-proposal-service";
+import { composeProposalPdf } from "@/lib/esignature/compose-proposal";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
@@ -173,6 +176,15 @@ export async function createSignatureRequest(
   }
 
   const snapshot = await buildDocumentSnapshot(quote, detail);
+  // A solar quote carries its design image (panels on the roof). Lock a copy so the hash — and
+  // what the customer sees and signs — can't change if the quote's image is replaced later.
+  // When the quote has an Easy PV proposal, the customer is sent that instead (with the portal's own quote
+  // sheet replacing its Quote page) and the proposal already carries the design, so no separate image.
+  if (quote.productType !== "boiler") {
+    const [proposal, designImage] = await Promise.all([lockEasyPvProposal(quoteId), lockQuoteDesignImage(quoteId)]);
+    if (proposal) snapshot.proposalPdf = proposal;
+    if (designImage) snapshot.designImage = designImage;
+  }
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -665,7 +677,17 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
       pdfBuffer =
         snapshot.productTypeLabel === "Boiler"
           ? await buildBoilerQuotePdf(snapshot, audit)
-          : await renderSignedDocumentPdf(snapshot, audit, repSignature);
+          : await renderSignedDocumentPdf(
+              snapshot,
+              audit,
+              repSignature,
+              snapshot.designImage ? (await readLockedDesignImage(snapshot.designImage))?.bytes : undefined,
+            );
+      if (snapshot.proposalPdf) {
+        const proposal = await readLockedProposal(snapshot.proposalPdf);
+        if (!proposal) throw new Error("The locked proposal PDF is missing or no longer matches its hash.");
+        pdfBuffer = await composeProposalPdf(proposal, pdfBuffer, snapshot.proposalPdf.skipPages, frontPageCount(snapshot));
+      }
     }
   } catch (error) {
     console.error("submitSignature: PDF render failed", error);

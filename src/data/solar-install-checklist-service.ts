@@ -91,3 +91,41 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
     photos,
   };
 }
+
+export interface ChecklistPhotoBytes {
+  id: string;
+  itemKey: string;
+  fileName: string;
+  bytes: Buffer;
+}
+
+/** Downloads the photos for a quote's checklist (service role — authorise the caller first). Optionally limited to item keys. */
+export async function loadChecklistPhotoBytes(quoteId: string, itemKeys?: string[]): Promise<ChecklistPhotoBytes[]> {
+  const supabase = createServiceRoleClient();
+  const { data: checklist } = await supabase.from("solar_install_checklists").select("id").eq("quote_id", quoteId).maybeSingle();
+  if (!checklist) return [];
+
+  let query = supabase
+    .from("solar_install_checklist_photos")
+    .select("id, item_key, storage_path, file_name")
+    .eq("checklist_id", checklist.id)
+    .order("uploaded_at", { ascending: true });
+  if (itemKeys) query = query.in("item_key", itemKeys);
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error("loadChecklistPhotoBytes failed", error);
+    return [];
+  }
+
+  const files = await Promise.all(
+    (rows ?? []).map(async (row): Promise<ChecklistPhotoBytes | null> => {
+      const { data, error: downloadError } = await supabase.storage.from(SOLAR_SURVEY_BUCKET).download(row.storage_path);
+      if (downloadError || !data) {
+        console.error("loadChecklistPhotoBytes: download failed", row.storage_path, downloadError);
+        return null;
+      }
+      return { id: row.id, itemKey: row.item_key, fileName: row.file_name || row.id, bytes: Buffer.from(await data.arrayBuffer()) };
+    }),
+  );
+  return files.filter((file): file is ChecklistPhotoBytes => file !== null);
+}

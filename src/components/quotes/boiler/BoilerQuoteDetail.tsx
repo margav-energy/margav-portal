@@ -10,6 +10,7 @@ import { CustomerCard } from "@/components/quotes/detail/CustomerCard";
 import { PropertyPhotoCard } from "@/components/quotes/detail/PropertyPhotoCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
+import { financedAmount } from "@/lib/finance";
 import { PricingSummaryCard } from "@/components/quotes/detail/PricingSummaryCard";
 import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
@@ -108,6 +109,7 @@ export function BoilerQuoteDetail({
     discountAmount: detail.discountAmount,
     discountReason: detail.discountReason,
     depositAmount: detail.depositAmount,
+    depositPaidUpfront: detail.depositPaidUpfront,
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
@@ -138,6 +140,8 @@ export function BoilerQuoteDetail({
   // src/lib/esignature/document.ts) — the Payment Method card's own preview
   // needs to match that, not the pre-discount subtotal above.
   const totalAfterDiscount = totalCost - pricingAdjustments.discountAmount;
+  // What the Monthly Plan finances: the total less an up-front deposit (see `financedAmount`, src/lib/finance.ts).
+  const amountFinanced = financedAmount(totalAfterDiscount, pricingAdjustments.depositAmount, pricingAdjustments.depositPaidUpfront);
 
   // Same shape/filtering as `buildPricingBreakdown` in src/data/quotes-mappers.ts
   // (server-only, can't be imported here) — a section only shows once
@@ -333,7 +337,7 @@ export function BoilerQuoteDetail({
           <PaymentMethodCard
             selected={selectedPaymentMethod}
             termYears={monthlyPlanTermYears}
-            totalCost={totalAfterDiscount}
+            totalCost={amountFinanced}
             onSelect={handleSelectPaymentMethod}
             onChangeTermYears={handleChangeTermYears}
             locked={locked}

@@ -206,3 +206,20 @@ function computeTemplateTable(
   }
   return rows;
 }
+
+/**
+ * Years until the running net position first reaches `target` — part-years interpolated — or undefined if it never does within the table.
+ * With finance, the repayments are already in the table's costs, so the target is zero; with no running costs (a cash purchase) it is the price.
+ */
+export function paybackYears(rows: SapRow[], target: number): number | undefined {
+  if (!(target >= 0)) return undefined;
+  let previous = 0;
+  for (const row of rows) {
+    if (row.netPosition >= target) {
+      const yearGain = row.netPosition - previous;
+      return row.year - 1 + (yearGain > 0 ? (target - previous) / yearGain : 1);
+    }
+    previous = row.netPosition;
+  }
+  return undefined;
+}

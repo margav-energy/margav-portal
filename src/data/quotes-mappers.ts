@@ -71,6 +71,7 @@ export interface QuoteRow {
   discount_amount: number | string;
   discount_reason?: string | null;
   deposit_amount: number | string;
+  deposit_paid_upfront?: boolean | null;
   is_favourite: boolean;
   is_locked: boolean;
   archived_at: string | null;

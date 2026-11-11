@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { canViewCustomerPhone, requireStaffUser } from "@/data/current-user";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { buildDocumentSnapshot } from "@/lib/esignature/document";
-import { renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
+import { frontPageCount, renderUnsignedQuotePdf } from "@/lib/esignature/pdf";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
+import { readLiveDesignImage } from "@/data/quote-design-image-service";
+import { getProposalSkipPages, readLiveProposal } from "@/data/easypv-proposal-service";
+import { composeProposalPdf } from "@/lib/esignature/compose-proposal";
 
 /**
  * "Download PDF" on the internal "View Quote" page — a live render of the
@@ -28,7 +31,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!canViewCustomerPhone(user)) result.detail.customer.phone = "";
 
   const snapshot = await buildDocumentSnapshot(result.quote, result.detail);
-  const pdfBuffer = snapshot.productTypeLabel === "Boiler" ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot);
+  const isBoiler = snapshot.productTypeLabel === "Boiler";
+  const proposal = isBoiler ? undefined : await readLiveProposal(id);
+  // The cover page carries the design image.
+  const designImage = isBoiler ? undefined : (await readLiveDesignImage(id))?.bytes;
+  let pdfBuffer = isBoiler ? await buildBoilerQuotePdf(snapshot) : await renderUnsignedQuotePdf(snapshot, designImage);
+  if (proposal) pdfBuffer = await composeProposalPdf(proposal.bytes, pdfBuffer, await getProposalSkipPages(id), frontPageCount(snapshot));
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {

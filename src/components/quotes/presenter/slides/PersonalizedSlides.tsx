@@ -5,7 +5,7 @@ import { Calendar } from "lucide-react";
 import { inputClassName } from "@/components/ui/FormField";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { aprForTermYears, monthlyRepayment, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
+import { aprForTermYears, financedAmount, monthlyRepayment, MONTHLY_PLAN_TERM_YEARS } from "@/lib/finance";
 import { updateSelectedPaymentMethod } from "@/components/quotes/actions";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 
@@ -136,7 +136,7 @@ export function MonthlyCostSlide({ detail }: { detail: BoilerQuoteDetail }) {
   // shows (see `buildDocumentSnapshot` in src/lib/esignature/document.ts),
   // which is post-discount — `totalCost` above stays pre-discount since
   // it's also what the "System & installation" row displays.
-  const principalForMonthly = totalCost - detail.discountAmount;
+  const principalForMonthly = financedAmount(totalCost - detail.discountAmount, detail.depositAmount, detail.depositPaidUpfront);
   const [termYears, setTermYears] = useState(detail.monthlyPlanTermYears ?? 10);
   const [isPending, startTransition] = useTransition();
   const apr = aprForTermYears(termYears);
