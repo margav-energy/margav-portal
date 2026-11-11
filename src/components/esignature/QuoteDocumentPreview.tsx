@@ -142,6 +142,12 @@ export function QuoteDocumentPreview({
               <span className="font-medium text-slate-900">{snapshot.amountFinancedLabel}</span>
             </div>
           )}
+          {snapshot.balanceOnCompletionLabel && (
+            <div className="mt-1.5 flex justify-between text-sm">
+              <span className="text-slate-500">Balance paid on completion</span>
+              <span className="font-medium text-slate-900">{snapshot.balanceOnCompletionLabel}</span>
+            </div>
+          )}
           <p className="mt-1 text-xs text-slate-400">Payment method: {snapshot.paymentMethodLabel}</p>
         </div>
 

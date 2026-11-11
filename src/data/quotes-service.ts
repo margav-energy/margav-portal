@@ -1,4 +1,5 @@
 import "server-only";
+import { solarInstallCostLineItems, sumCostLineItems } from "@/lib/solar-install-cost";
 import { createClient } from "@/lib/supabase/server";
 import { getAllProfiles } from "@/data/profiles-service";
 import { getBoilerCostSettings } from "@/data/boiler-cost-settings-service";
@@ -94,6 +95,16 @@ export async function getAllQuotes(representativeId?: string): Promise<Quote[]> 
   }
 
   return (data ?? []).map((row) => mapQuoteRow(row as QuoteRow, profiles));
+}
+
+/** Materials (the manual / Easy PV cost price) plus Margav's own install costs — see src/lib/solar-install-cost.ts. */
+function solarProfitBreakdown(
+  materialsCost: number,
+  sellPrice: number,
+  arrays: { moduleCount: number }[],
+) {
+  const costLineItems = solarInstallCostLineItems(arrays);
+  return buildProfitBreakdown(materialsCost + sumCostLineItems(costLineItems), sellPrice, costLineItems, materialsCost);
 }
 
 /** See `getAllQuotes`'s doc comment — `representativeId` restricts the rep role the same way here. */
@@ -359,7 +370,7 @@ export async function getQuoteDetail(
       { name: "Standard additionals", total: standardAdditionalsTotal, count: standardAdditionals.length },
       { name: "Free-text extras", total: freeTextTotal, count: freeTextExtras.length },
     ]),
-    profitBreakdown: buildProfitBreakdown(manualCostPriceFrom(row.profit_breakdown), sellPrice),
+    profitBreakdown: solarProfitBreakdown(manualCostPriceFrom(row.profit_breakdown), sellPrice, solarArrays),
   };
 
   return { quote, detail };

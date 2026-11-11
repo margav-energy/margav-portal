@@ -31,7 +31,7 @@ async function latestProposalRow(quoteId: string): Promise<ProposalRow | undefin
     .eq("category", "uploads")
     .eq("group_name", "quotation")
     .eq("content_type", "application/pdf")
-    .order("source_modified_at", { ascending: false })
+    .order("source_modified_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
   return data ?? undefined;

@@ -1087,7 +1087,10 @@ export async function updatePricingAdjustments(
     Number(current?.deposit_amount ?? 0) !== adjustments.depositAmount ||
     Number(current?.discount_amount ?? 0) !== adjustments.discountAmount;
   const netTotal = Number(current?.amount ?? 0) - adjustments.discountAmount;
-  if (changingMoney && netTotal > 0 && adjustments.depositAmount < minimumDeposit(netTotal)) {
+  if (!Number.isFinite(adjustments.depositAmount) || adjustments.depositAmount < 0) return false;
+  // Same rule as the Pricing card (every quote needs the minimum). Half a penny of slack absorbs float error in the rounding.
+  const minimum = minimumDeposit(netTotal);
+  if (changingMoney && netTotal > 0 && adjustments.depositAmount + 0.005 < minimum) {
     console.error(`updatePricingAdjustments: deposit below ${MIN_DEPOSIT_PERCENT}% of the quote`);
     return false;
   }
@@ -1824,18 +1827,28 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
 
   const origin = await getSiteOrigin();
   const signLink = `${origin}/sign/${accessToken}`;
+  const isSolar = snapshot.product === "solar";
+  const brand = brandNameForProduct(isSolar ? "Solar" : "Boiler");
+  const documentName = isSolar ? "Solar PV Installation Agreement" : "Boiler Installation Agreement";
 
   try {
     await sendEmail({
       to: signerEmail,
-      subject: `Margav Heating — Boiler Installation Agreement to sign (${snapshot.reference})`,
+      fromName: brand,
+      subject: `${brand} — ${documentName} to sign (${snapshot.reference})`,
       text:
         `Hi ${snapshot.customerName},\n\n` +
-        `Please review and sign your Boiler Installation Agreement for quote ${snapshot.reference}:\n\n` +
+        `Please review and sign your ${documentName} for quote ${snapshot.reference}:\n\n` +
         `${signLink}\n\n` +
         `This link is unique to you — please don't share it.\n\n` +
-        `Margav Heating`,
-      html: signAgreementEmailHtml({ customerName: snapshot.customerName, reference: snapshot.reference, signLink }),
+        brand,
+      html: signAgreementEmailHtml({
+        customerName: snapshot.customerName,
+        reference: snapshot.reference,
+        signLink,
+        documentName,
+        productTypeLabel: isSolar ? "Solar" : "Boiler",
+      }),
     });
   } catch (error) {
     console.error("sendInstallationAgreement: email send failed", error);
@@ -1874,18 +1887,26 @@ export async function sendCoolingOffWaiver(quoteId: string): Promise<SendQuoteRe
 
   const origin = await getSiteOrigin();
   const signLink = `${origin}/sign/${accessToken}`;
+  const isSolar = snapshot.product === "solar";
+  const brand = brandNameForProduct(isSolar ? "Solar" : "Boiler");
 
   try {
     await sendEmail({
       to: signerEmail,
-      subject: `Margav Heating — Cooling-Off Waiver to sign (${snapshot.reference})`,
+      fromName: brand,
+      subject: `${brand} — Cooling-Off Waiver to sign (${snapshot.reference})`,
       text:
         `Hi ${snapshot.customerName},\n\n` +
         `Please review and sign your Cooling-Off Waiver for quote ${snapshot.reference}:\n\n` +
         `${signLink}\n\n` +
         `This link is unique to you — please don't share it.\n\n` +
-        `Margav Heating`,
-      html: signWaiverEmailHtml({ customerName: snapshot.customerName, reference: snapshot.reference, signLink }),
+        brand,
+      html: signWaiverEmailHtml({
+        customerName: snapshot.customerName,
+        reference: snapshot.reference,
+        signLink,
+        productTypeLabel: isSolar ? "Solar" : "Boiler",
+      }),
     });
   } catch (error) {
     console.error("sendCoolingOffWaiver: email send failed", error);

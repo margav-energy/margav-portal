@@ -37,19 +37,19 @@ function ItemFormModal({
   onClose: () => void;
   onSave: (item: { name: string; quantity: number; unitPrice: number }) => void;
 }) {
-  const initialCatalogEntry = initial ? findCatalogEntry(initial.name) : undefined;
+  const initialCatalogEntry = initial ? findCatalogEntry(initial.name, catalog) : undefined;
   const [preset, setPreset] = useState(initialCatalogEntry?.name ?? CUSTOM_OPTION);
   const [name, setName] = useState(initial?.name ?? "");
   const [quantity, setQuantity] = useState(String(initial?.quantity ?? 1));
   const [unitPrice, setUnitPrice] = useState(String(initial?.unitPrice ?? 0));
 
-  const selectedEntry = catalog ? findCatalogEntry(preset) : undefined;
+  const selectedEntry = catalog ? findCatalogEntry(preset, catalog) : undefined;
   const priceLocked = Boolean(selectedEntry?.lockedPrice);
 
   function handleSelectPreset(value: string) {
     setPreset(value);
     if (value === CUSTOM_OPTION) return;
-    const entry = findCatalogEntry(value);
+    const entry = findCatalogEntry(value, catalog);
     if (!entry) return;
     setName(entry.name);
     setUnitPrice(String(entry.defaultUnitPrice));
@@ -213,7 +213,7 @@ export function LineItemsSection({
       </p>
 
       {items.map((item, index) => {
-        const catalogEntry = catalog ? findCatalogEntry(item.name) : undefined;
+        const catalogEntry = catalog ? findCatalogEntry(item.name, catalog) : undefined;
         return (
           <Card key={item.id} className="overflow-hidden p-0">
             <div className="flex items-center justify-between gap-3 bg-slate-50 px-5 py-3">

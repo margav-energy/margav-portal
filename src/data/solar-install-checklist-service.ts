@@ -117,15 +117,21 @@ export async function loadChecklistPhotoBytes(quoteId: string, itemKeys?: string
     return [];
   }
 
-  const files = await Promise.all(
-    (rows ?? []).map(async (row): Promise<ChecklistPhotoBytes | null> => {
+  // A few at a time: dozens of phone photos downloaded at once can exhaust a serverless function's memory.
+  const list = rows ?? [];
+  const files: (ChecklistPhotoBytes | null)[] = new Array(list.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < list.length; i = next++) {
+      const row = list[i];
       const { data, error: downloadError } = await supabase.storage.from(SOLAR_SURVEY_BUCKET).download(row.storage_path);
       if (downloadError || !data) {
         console.error("loadChecklistPhotoBytes: download failed", row.storage_path, downloadError);
-        return null;
+        continue;
       }
-      return { id: row.id, itemKey: row.item_key, fileName: row.file_name || row.id, bytes: Buffer.from(await data.arrayBuffer()) };
-    }),
-  );
+      files[i] = ({ id: row.id, itemKey: row.item_key, fileName: row.file_name || row.id, bytes: Buffer.from(await data.arrayBuffer()) });
+    }
+  };
+  await Promise.all(Array.from({ length: 4 }, worker));
   return files.filter((file): file is ChecklistPhotoBytes => file !== null);
 }

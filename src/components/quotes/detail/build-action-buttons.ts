@@ -3,7 +3,7 @@ import type { HeaderActionButton } from "@/components/quotes/detail/ActionButton
 /**
  * Shared by `BoilerQuoteDetail.tsx` / `SolarQuoteDetail.tsx` — the two
  * verticals' action-button grids are identical except for one label
- * ("Warranty Registration" vs "STAX Portal") and which handler each button
+ * ("Warranty Registration" vs "Finance Portal") and which handler each button
  * calls, both supplied by the caller.
  */
 
@@ -31,9 +31,9 @@ export function buildActionButtons(params: {
   onCancelApp: () => void;
   onSurvey: () => void;
   onSelectPitchOutcome: (outcome: string) => void;
-  /** Boiler-only — the document itself (Boiler Installation Agreement) doesn't apply to solar. */
+  /** Opens the send-for-signature modal for the Installation Agreement — each product sends its own wording (see `createAgreementSignatureRequest`). */
   onInstallationAgreement?: () => void;
-  /** Boiler-only — same reasoning as `onInstallationAgreement` (the Cooling-Off Waiver is written for a boiler installation). */
+  /** Same as `onInstallationAgreement`, for the Cooling-Off Waiver. */
   onCoolingOffWaiver?: () => void;
 }): HeaderActionButton[] {
   return [

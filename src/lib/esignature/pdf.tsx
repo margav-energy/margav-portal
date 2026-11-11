@@ -199,6 +199,12 @@ function SolarQuoteSheet({ snapshot, logo }: { snapshot: DocumentSnapshot; logo:
           <Text>{snapshot.amountFinancedLabel}</Text>
         </View>
       )}
+      {snapshot.balanceOnCompletionLabel && (
+        <View style={styles.totalsRow}>
+          <Text style={styles.label}>Balance paid on completion</Text>
+          <Text>{snapshot.balanceOnCompletionLabel}</Text>
+        </View>
+      )}
       <View style={styles.totalsRow}>
         <Text style={styles.label}>Payment method</Text>
         <Text>{snapshot.paymentMethodLabel}</Text>
@@ -295,6 +301,12 @@ function QuoteDocumentBody({ snapshot }: { snapshot: DocumentSnapshot }) {
         <View style={styles.totalsRow}>
           <Text style={styles.label}>Amount financed</Text>
           <Text>{snapshot.amountFinancedLabel}</Text>
+        </View>
+      )}
+      {snapshot.balanceOnCompletionLabel && (
+        <View style={styles.totalsRow}>
+          <Text style={styles.label}>Balance paid on completion</Text>
+          <Text>{snapshot.balanceOnCompletionLabel}</Text>
         </View>
       )}
       {monthly && (

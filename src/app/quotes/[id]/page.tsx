@@ -53,10 +53,10 @@ export default async function QuoteDetailPage({
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
     getLatestSignatureRequest(id),
     getSignedDocumentUrl(id),
-    isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-    isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-    isBoiler ? getLatestSignatureRequest(id, "cooling_off_waiver") : Promise.resolve(undefined),
-    isBoiler ? getSignedDocumentUrl(id, "cooling_off_waiver") : Promise.resolve(undefined),
+    getLatestSignatureRequest(id, isBoiler ? "boiler_installation_agreement" : "solar_installation_agreement"),
+    getSignedDocumentUrl(id, isBoiler ? "boiler_installation_agreement" : "solar_installation_agreement"),
+    getLatestSignatureRequest(id, isBoiler ? "cooling_off_waiver" : "solar_cooling_off_waiver"),
+    getSignedDocumentUrl(id, isBoiler ? "cooling_off_waiver" : "solar_cooling_off_waiver"),
     getQuoteDocuments(id),
     getPropertyPhotoUrl(id),
     // Only boiler's Profit card recomputes cost/profit live client-side as
@@ -102,6 +102,10 @@ export default async function QuoteDetailPage({
           reps={reps}
           signatureRequest={signatureRequest}
           signedDocumentUrl={signedDocumentUrl}
+          agreementSignatureRequest={agreementSignatureRequest}
+          agreementSignedDocumentUrl={agreementSignedDocumentUrl}
+          waiverSignatureRequest={waiverSignatureRequest}
+          waiverSignedDocumentUrl={waiverSignedDocumentUrl}
           documents={documents}
           isAdmin={user.role === "admin"}
           propertyPhotoUrl={propertyPhotoUrl}

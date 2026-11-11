@@ -44,6 +44,10 @@ export default async function ViewQuotePage({
 
   const isBoiler = quote.productType === "boiler";
 
+  const agreementType = isBoiler ? "boiler_installation_agreement" : "solar_installation_agreement";
+  const waiverType = isBoiler ? "cooling_off_waiver" : "solar_cooling_off_waiver";
+  const agreementTemplateHref = isBoiler ? "/api/agreement-templates/boiler-installation" : "/api/agreement-templates/solar-installation";
+  const waiverTemplateHref = isBoiler ? "/api/agreement-templates/cooling-off-waiver" : "/api/agreement-templates/solar-cooling-off-waiver";
   const [
     snapshot,
     survey,
@@ -59,66 +63,53 @@ export default async function ViewQuotePage({
     buildDocumentSnapshot(quote, detail),
     isBoiler ? getBoilerSurveyForQuote(id) : Promise.resolve(undefined),
     isBoiler ? getSurveyDocumentUrl(id) : Promise.resolve(undefined),
-    isBoiler ? getLatestSignatureRequest(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-    isBoiler ? getSignedDocumentUrl(id, "boiler_installation_agreement") : Promise.resolve(undefined),
-    isBoiler ? getLatestSignatureRequest(id, "cooling_off_waiver") : Promise.resolve(undefined),
-    isBoiler ? getSignedDocumentUrl(id, "cooling_off_waiver") : Promise.resolve(undefined),
+    getLatestSignatureRequest(id, agreementType),
+    getSignedDocumentUrl(id, agreementType),
+    getLatestSignatureRequest(id, waiverType),
+    getSignedDocumentUrl(id, waiverType),
     getQuoteDocuments(id),
     isBoiler ? Promise.resolve(undefined) : getPropertyPhotoUrl(id),
     isBoiler ? Promise.resolve(false) : hasEasyPvProposal(id),
   ]);
 
-  // Only boiler jobs have a survey step or an Installation Agreement/
-  // Cooling-Off Waiver at all (see BoilerSurveyCard / "Send Installation
-  // Agreement" / "Send Cooling-Off Waiver" — none exist for solar) —
-  // nothing to cross-link for a solar quote.
-  const otherDocuments: RelatedDocumentLink[] = isBoiler
-    ? [
-        {
-          label: "Boiler survey",
-          href: survey?.status === "submitted" ? surveyDocumentUrl : undefined,
-          statusLabel: !survey ? "Not started" : survey.status === "submitted" ? "Submitted" : "Awaiting survey",
-        },
-        {
-          label: "Installation agreement",
-          // Always readable, even before it's ever been sent — the
-          // agreement's body is a fixed template with nothing
-          // customer-specific in it (see agreement-document.ts), so there's
-          // no reason to wait until sign-time to let someone read it. Once
-          // actually signed, this points at that signed copy instead (the
-          // one with the real signature/audit trail on it), not the blank
-          // template.
-          href:
-            agreementRequest?.status === "signed"
-              ? agreementSignedDocumentUrl
-              : "/api/agreement-templates/boiler-installation",
-          statusLabel: !agreementRequest
-            ? "Not sent yet"
-            : agreementRequest.status === "signed"
-              ? "Signed"
-              : agreementRequest.status === "declined"
-                ? "Declined"
-                : agreementRequest.status === "expired"
-                  ? "Link expired"
-                  : "Awaiting signature",
-        },
-        {
-          label: "Cooling-off waiver",
-          // Same "always readable" reasoning as the agreement above.
-          href:
-            waiverRequest?.status === "signed" ? waiverSignedDocumentUrl : "/api/agreement-templates/cooling-off-waiver",
-          statusLabel: !waiverRequest
-            ? "Not sent yet"
-            : waiverRequest.status === "signed"
-              ? "Signed"
-              : waiverRequest.status === "declined"
-                ? "Declined"
-                : waiverRequest.status === "expired"
-                  ? "Link expired"
-                  : "Awaiting signature",
-        },
-      ]
-    : [];
+  // Boiler jobs also cross-link their survey; both products have an Installation Agreement and a Cooling-Off Waiver
+  // (each product's own wording — see agreementType / waiverType above).
+  const signatureStatusLabel = (request: typeof agreementRequest) =>
+    !request
+      ? "Not sent yet"
+      : request.status === "signed"
+        ? "Signed"
+        : request.status === "declined"
+          ? "Declined"
+          : request.status === "expired"
+            ? "Link expired"
+            : "Awaiting signature";
+
+  const otherDocuments: RelatedDocumentLink[] = [
+    ...(isBoiler
+      ? [
+          {
+            label: "Boiler survey",
+            href: survey?.status === "submitted" ? surveyDocumentUrl : undefined,
+            statusLabel: !survey ? "Not started" : survey.status === "submitted" ? "Submitted" : "Awaiting survey",
+          },
+        ]
+      : []),
+    {
+      label: "Installation agreement",
+      // Always readable, even before it's ever been sent — the wording is fixed with nothing customer-specific in it, so
+      // there's no reason to wait until sign-time. Once signed, this points at the signed copy (with the real signature
+      // and audit trail) instead of the blank template.
+      href: agreementRequest?.status === "signed" ? agreementSignedDocumentUrl : agreementTemplateHref,
+      statusLabel: signatureStatusLabel(agreementRequest),
+    },
+    {
+      label: "Cooling-off waiver",
+      // Same "always readable" reasoning as the agreement above.
+      href: waiverRequest?.status === "signed" ? waiverSignedDocumentUrl : waiverTemplateHref,
+      statusLabel: signatureStatusLabel(waiverRequest),
+    },
+  ];
 
   // Once an admin's uploaded an actual document for this quote (see
   // QuoteDocumentsCard on the quote detail page), *that* — not our own

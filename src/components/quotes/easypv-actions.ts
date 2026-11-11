@@ -11,7 +11,7 @@ import {
   isEasyPvConfigured,
   listEasyPvProjects,
 } from "@/data/easypv-service";
-import { applyNewestDesignPhoto, getEasyPvFiles, setQuotePhotoFromEasyPvFile, syncEasyPvFiles } from "@/data/easypv-files-service";
+import { applyNewestDesignPhoto, clearEasyPvFiles, getEasyPvFiles, setQuotePhotoFromEasyPvFile, syncEasyPvFiles } from "@/data/easypv-files-service";
 import { parseSkipPages } from "@/lib/proposal-pages";
 import type { EasyPvFile, EasyPvProjectOption, EasyPvSummary } from "@/types/easypv";
 
@@ -191,6 +191,14 @@ export async function refreshEasyPvSummary(
 export async function unlinkEasyPvProject(quoteId: string): Promise<ActionResult> {
   const auth = await authorise(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
+  // Drop the stored proposal/design copies first — otherwise the old project's proposal would still be locked into the next quote sent.
+  if (!(await clearEasyPvFiles(quoteId))) return { ok: false, error: "Couldn't unlink." };
+  const supabase = await createClient();
+  const { error: resetError } = await supabase
+    .from("quotes")
+    .update({ easypv_proposal_skip_pages: null, easypv_photo_name: null, easypv_markup_pct: null, easypv_items_imported_at: null })
+    .eq("id", quoteId);
+  if (resetError) console.error("unlinkEasyPvProject reset failed", resetError);
   if (!(await saveLink(quoteId, null, null))) return { ok: false, error: "Couldn't unlink." };
   await record(quoteId, auth.userId, auth.quote.customer_name, "Easy PV project unlinked");
   return { ok: true };

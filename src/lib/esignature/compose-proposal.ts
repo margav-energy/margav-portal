@@ -33,6 +33,8 @@ export async function composeProposalPdf(
   const sheet = await PDFDocument.load(quoteSheet);
 
   const skip = new Set(skipPages);
+  // The portal's cover replaces Easy PV's own, so page 1 is always left out when there is one.
+  if (coverPages > 0) skip.add(1);
   // Where the quote sheet goes: in place of the first skipped page that actually exists, else at the end.
   // With front pages (the portal's cover + proposal page) Easy PV's page 1 is what they replace, so that
   // page doesn't count here — the sheet belongs where Easy PV's Quote page was.

@@ -98,6 +98,8 @@ export interface DocumentSnapshot {
   depositPaidUpfront?: boolean;
   /** Set only for a Monthly Plan with an up-front deposit — the part of the price the plan actually finances. */
   amountFinancedLabel?: string;
+  /** Set only for a cash (BACS) customer with a deposit: the rest of the price, paid on the day the installation is completed. */
+  balanceOnCompletionLabel?: string;
   /** `subtotalLabel` minus the discount — the actual amount owed. */
   totalPriceLabel: string;
   paymentMethodLabel: string;
@@ -295,12 +297,17 @@ async function easyPvAncillaryNames(quoteId: string): Promise<Set<string>> {
  * System cost, then anything priced separately. Prices are the portal's (Easy PV cost + markup),
  * so the figures always tally with the quote's total.
  */
+/** A solar array line that is the panels themselves (e.g. "Trina 450W Full Black Panel"), not mounting. */
+const PANEL_NAME = /\b(panels?|modules?)\b|\b\d{3}\s*w(p|att)?\b/i;
+
 function solarSheetFor(detail: SolarQuoteDetail, ancillaryNames: Set<string>, total: number): DocumentSnapshot["solarSheet"] {
   if (detail.solarArrays.length === 0 && detail.equipment.length === 0) return undefined;
 
   const goods: string[] = [];
   for (const array of detail.solarArrays) {
-    const [main, ...rest] = array.items;
+    // The panel line is picked by name, not position — the roof's BOM can list mounting first, or have no panel at all.
+    const main = array.items.find((item) => PANEL_NAME.test(item.name));
+    const rest = array.items.filter((item) => item !== main);
     if (main) goods.push(`${array.moduleCount > 0 ? array.moduleCount : main.quantity} \u00d7 ${main.name}`);
     if (rest.length > 0 && !goods.includes("Mounting system and fixings")) goods.push("Mounting system and fixings");
   }
@@ -359,7 +366,7 @@ function proposalPageFor(detail: SolarQuoteDetail, total: number): DocumentSnaps
     priceLabel: formatCurrency(total),
     genY1Label: generation > 0 ? `${Math.round(generation).toLocaleString("en-GB")} kWh a year` : undefined,
     savingY1Label: savingY1 !== undefined && savingY1 > 0 ? formatCurrency(savingY1) : undefined,
-    paybackLabel: payback !== undefined ? `${Math.ceil(payback)} years` : undefined,
+    paybackLabel: payback !== undefined ? `${Math.max(1, Math.ceil(payback))} ${Math.max(1, Math.ceil(payback)) === 1 ? "year" : "years"}` : undefined,
     batteryLabel:
       batteries > 0
         ? usableKwh
@@ -409,6 +416,10 @@ export async function buildDocumentSnapshot(
     amountFinancedLabel:
       detail.selectedPaymentMethod === "monthly_plan" && detail.depositAmount > 0 && detail.depositPaidUpfront
         ? formatCurrency(financedAmount(total, detail.depositAmount, true))
+        : undefined,
+    balanceOnCompletionLabel:
+      detail.selectedPaymentMethod === "bacs" && detail.depositAmount > 0 && detail.depositAmount < total
+        ? formatCurrency(total - detail.depositAmount)
         : undefined,
     totalPriceLabel: formatCurrency(total),
     paymentMethodLabel: paymentMethodLabel(detail),

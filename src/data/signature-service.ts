@@ -17,10 +17,10 @@ import { brandNameForProduct } from "@/lib/brand";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
 import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
+import { buildSolarAgreementPdf } from "@/lib/esignature/solar-agreement-pdf";
 import { buildWaiverSnapshot, type WaiverSnapshot } from "@/lib/esignature/waiver-document";
 import { buildSignedWaiverPdf } from "@/lib/esignature/waiver-pdf";
 import { signedConfirmationEmailHtml } from "@/lib/esignature/email-templates";
-import type { BoilerQuoteDetail } from "@/types/boiler-quote";
 
 /**
  * Self-hosted e-signature data layer — replaces the Dropbox Sign +
@@ -36,7 +36,23 @@ export const SIGNATURE_IMAGES_BUCKET = "signature-images";
 export const SIGNED_DOCUMENTS_BUCKET = "signed-documents";
 
 export type SignatureStatus = "pending" | "viewed" | "signed" | "declined" | "expired";
-export type SignatureDocumentType = "quote" | "boiler_installation_agreement" | "cooling_off_waiver";
+export type SignatureDocumentType =
+  | "quote"
+  | "boiler_installation_agreement"
+  | "cooling_off_waiver"
+  | "solar_installation_agreement"
+  | "solar_cooling_off_waiver";
+
+const AGREEMENT_TYPES: SignatureDocumentType[] = ["boiler_installation_agreement", "solar_installation_agreement"];
+const WAIVER_TYPES: SignatureDocumentType[] = ["cooling_off_waiver", "solar_cooling_off_waiver"];
+
+/** The agreement / waiver document type for a quote's product — each product has its own wording. */
+function agreementTypeFor(productType: string | undefined): SignatureDocumentType {
+  return productType === "boiler" ? "boiler_installation_agreement" : "solar_installation_agreement";
+}
+function waiverTypeFor(productType: string | undefined): SignatureDocumentType {
+  return productType === "boiler" ? "cooling_off_waiver" : "solar_cooling_off_waiver";
+}
 
 type AnySnapshot = DocumentSnapshot | AgreementSnapshot | WaiverSnapshot;
 
@@ -44,8 +60,10 @@ type AnySnapshot = DocumentSnapshot | AgreementSnapshot | WaiverSnapshot;
 function documentLabelFor(documentType: SignatureDocumentType): string {
   switch (documentType) {
     case "boiler_installation_agreement":
+    case "solar_installation_agreement":
       return "installation agreement";
     case "cooling_off_waiver":
+    case "solar_cooling_off_waiver":
       return "cooling-off waiver";
     default:
       return "quote";
@@ -184,6 +202,8 @@ export async function createSignatureRequest(
   if (quote.productType !== "boiler") {
     const [proposal, designImage] = await Promise.all([lockEasyPvProposal(quoteId), lockQuoteDesignImage(quoteId)]);
     if (proposal) snapshot.proposalPdf = proposal;
+    // No locked proposal (none linked, or the copy failed) means no "Your Solar Proposal" intro page either.
+    else snapshot.proposalPage = undefined;
     if (designImage) snapshot.designImage = designImage;
   }
   const documentHash = hashDocument(snapshot);
@@ -222,8 +242,8 @@ export async function createSignatureRequest(
 
 /**
  * Called from `sendInstallationAgreement` (`src/components/quotes/actions.ts`)
- * — the fixed Boiler Installation Agreement T&Cs document. Boiler-only,
- * since the document itself is boiler-specific.
+ * — the fixed installation agreement T&Cs document, boiler or solar by the
+ * quote's product (each has its own wording).
  */
 export async function createAgreementSignatureRequest(
   quoteId: string,
@@ -232,16 +252,13 @@ export async function createAgreementSignatureRequest(
   if (!result) return { error: "Quote not found." };
   const { quote, detail } = result;
 
-  if (quote.productType !== "boiler") {
-    return { error: "The installation agreement is only available for boiler quotes." };
-  }
-
   const email = detail.customer.email.trim();
   if (!email) {
     return { error: "This customer has no email address on file. Add one on the Customer card before sending for signature." };
   }
 
-  const snapshot = buildAgreementSnapshot(quote, detail as BoilerQuoteDetail);
+  const snapshot = buildAgreementSnapshot(quote, detail);
+  const documentType = agreementTypeFor(quote.productType);
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -251,14 +268,14 @@ export async function createAgreementSignatureRequest(
     .from("signature_requests")
     .update({ status: "expired" })
     .eq("quote_id", quoteId)
-    .eq("document_type", "boiler_installation_agreement")
+    .eq("document_type", documentType)
     .eq("status", "pending");
 
   const { data, error } = await supabase
     .from("signature_requests")
     .insert({
       quote_id: quoteId,
-      document_type: "boiler_installation_agreement",
+      document_type: documentType,
       signer_name: detail.customer.name,
       signer_email: email,
       document_snapshot: snapshot,
@@ -278,9 +295,8 @@ export async function createAgreementSignatureRequest(
 
 /**
  * Called from `sendCoolingOffWaiver` (`src/components/quotes/actions.ts`)
- * — the fixed Cooling-Off Waiver T&Cs document. Boiler-only, same reasoning
- * as `createAgreementSignatureRequest` (the document itself is written for
- * a boiler installation).
+ * — the fixed Cooling-Off Waiver T&Cs document, boiler or solar by the quote's
+ * product, same as `createAgreementSignatureRequest`.
  */
 export async function createWaiverSignatureRequest(
   quoteId: string,
@@ -289,16 +305,13 @@ export async function createWaiverSignatureRequest(
   if (!result) return { error: "Quote not found." };
   const { quote, detail } = result;
 
-  if (quote.productType !== "boiler") {
-    return { error: "The cooling-off waiver is only available for boiler quotes." };
-  }
-
   const email = detail.customer.email.trim();
   if (!email) {
     return { error: "This customer has no email address on file. Add one on the Customer card before sending for signature." };
   }
 
-  const snapshot = buildWaiverSnapshot(quote, detail as BoilerQuoteDetail);
+  const snapshot = buildWaiverSnapshot(quote, detail);
+  const documentType = waiverTypeFor(quote.productType);
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -308,14 +321,14 @@ export async function createWaiverSignatureRequest(
     .from("signature_requests")
     .update({ status: "expired" })
     .eq("quote_id", quoteId)
-    .eq("document_type", "cooling_off_waiver")
+    .eq("document_type", documentType)
     .eq("status", "pending");
 
   const { data, error } = await supabase
     .from("signature_requests")
     .insert({
       quote_id: quoteId,
-      document_type: "cooling_off_waiver",
+      document_type: documentType,
       signer_name: detail.customer.name,
       signer_email: email,
       document_snapshot: snapshot,
@@ -628,27 +641,27 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   // (Lucy Starkey), never whichever rep happens to be assigned to the quote
   // — see `lookupWaiverSignatory`'s doc comment.
   const repSignature =
-    row.document_type === "cooling_off_waiver"
+    WAIVER_TYPES.includes(row.document_type)
       ? await lookupWaiverSignatory(supabase)
       : await lookupRepSignature(supabase, row.quote_id);
   const repSignatureForOverlay = repSignature ? { name: repSignature.name, image: repSignature.image, signedAtLabel } : null;
 
   let pdfBuffer: Buffer;
   try {
-    if (row.document_type === "boiler_installation_agreement") {
-      pdfBuffer = await buildSignedAgreementPdf(
-        row.document_snapshot as AgreementSnapshot,
-        {
-          typedName: params.typedName,
-          signatureImage: signatureImageBuffer,
-          signedAtLabel,
-          ip: params.ip,
-          userAgent: params.userAgent,
-          documentHash: row.document_hash,
-        },
-        repSignatureForOverlay,
-      );
-    } else if (row.document_type === "cooling_off_waiver") {
+    if (AGREEMENT_TYPES.includes(row.document_type)) {
+      const customerAudit = {
+        typedName: params.typedName,
+        signatureImage: signatureImageBuffer,
+        signedAtLabel,
+        ip: params.ip,
+        userAgent: params.userAgent,
+        documentHash: row.document_hash,
+      };
+      pdfBuffer =
+        row.document_type === "solar_installation_agreement"
+          ? await buildSolarAgreementPdf(row.document_snapshot as AgreementSnapshot, { customer: customerAudit, rep: repSignatureForOverlay })
+          : await buildSignedAgreementPdf(row.document_snapshot as AgreementSnapshot, customerAudit, repSignatureForOverlay);
+    } else if (WAIVER_TYPES.includes(row.document_type)) {
       const waiverSnapshot = row.document_snapshot as WaiverSnapshot;
       pdfBuffer = await buildSignedWaiverPdf(
         // The customer's own pick on the signing page (if they made one)
@@ -726,8 +739,10 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   // failed confirmation email shouldn't fail the signing.
   if (isResendConfigured()) {
     const documentLabel = documentLabelFor(row.document_type);
-    // Only a quote snapshot carries a product type — agreements and waivers are boiler-only, so Heating.
-    const productTypeLabel = (row.document_snapshot as { productTypeLabel?: string }).productTypeLabel;
+    // Only a quote snapshot carries a product type; agreements and waivers say it through their document type.
+    const productTypeLabel = row.document_type.startsWith("solar_")
+      ? "Solar"
+      : (row.document_snapshot as { productTypeLabel?: string }).productTypeLabel;
     const brand = brandNameForProduct(productTypeLabel);
     try {
       await sendEmail({
@@ -752,9 +767,9 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
     }
   }
 
-  if (row.document_type === "boiler_installation_agreement") {
+  if (AGREEMENT_TYPES.includes(row.document_type)) {
     await performAgreementSignedSideEffects(row);
-  } else if (row.document_type === "cooling_off_waiver") {
+  } else if (WAIVER_TYPES.includes(row.document_type)) {
     await performWaiverSignedSideEffects(row);
   } else {
     await performQuoteSignedSideEffects(row);

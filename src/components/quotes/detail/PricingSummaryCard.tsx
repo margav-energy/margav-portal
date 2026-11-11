@@ -18,10 +18,13 @@ const DEFAULT_TERM_YEARS = MONTHLY_PLAN_TERM_YEARS[MONTHLY_PLAN_TERM_YEARS.lengt
 function EditAdjustmentsModal({
   adjustments,
   systemCost,
+  selectedMethod,
   onClose,
   onSave,
 }: {
   adjustments: PricingAdjustments;
+  /** A cash (BACS) customer pays the deposit up front and the remaining balance on completion — no finance option. */
+  selectedMethod: PaymentMethodOption;
   /** Every item added up, before the discount — the minimum deposit is worked out from this less the discount. */
   systemCost: number;
   onClose: () => void;
@@ -30,7 +33,8 @@ function EditAdjustmentsModal({
   const [discount, setDiscount] = useState(String(adjustments.discountAmount));
   const [reason, setReason] = useState(adjustments.discountReason);
   const [deposit, setDeposit] = useState(String(adjustments.depositAmount));
-  const [upfront, setUpfront] = useState(adjustments.depositPaidUpfront);
+  const isCash = selectedMethod === "bacs";
+  const [upfront, setUpfront] = useState(isCash ? true : adjustments.depositPaidUpfront);
   const [error, setError] = useState<string | null>(null);
   const minDeposit = minimumDeposit(systemCost - (Number(discount) || 0));
 
@@ -107,8 +111,14 @@ function EditAdjustmentsModal({
             value={upfront ? "upfront" : "financed"}
             onChange={(event) => setUpfront(event.target.value === "upfront")}
           >
-            <option value="upfront">Paid up front (the Monthly Plan finances the rest)</option>
-            <option value="financed">Included in the finance (the Monthly Plan covers the whole price)</option>
+            {isCash ? (
+              <option value="upfront">Paid upfront (remaining balance paid on completion)</option>
+            ) : (
+              <>
+                <option value="upfront">Paid up front (the Monthly Plan finances the rest)</option>
+                <option value="financed">Included in the finance (the Monthly Plan covers the whole price)</option>
+              </>
+            )}
           </select>
         </FormField>
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -262,7 +272,13 @@ export function PricingSummaryCard({
               </span>
             )}
           </Row>
-          <Row label="Amount financed">{selectedMethod === "monthly_plan" ? formatCurrency(financed) : "—"}</Row>
+          {selectedMethod === "bacs" ? (
+            <Row label="Balance on completion">
+              {adjustments.depositAmount > 0 ? formatCurrency(Math.max(0, netTotal - adjustments.depositAmount)) : "—"}
+            </Row>
+          ) : (
+            <Row label="Amount financed">{formatCurrency(financed)}</Row>
+          )}
           <Row label="Monthly Price">{monthly !== undefined ? formatCurrency(monthly) : "—"}</Row>
         </div>
         <div className="flex flex-col gap-2.5">
@@ -321,7 +337,7 @@ export function PricingSummaryCard({
         )}
       </div>
 
-      {isEditing && <EditAdjustmentsModal adjustments={adjustments} systemCost={systemCost} onClose={() => setIsEditing(false)} onSave={handleSave} />}
+      {isEditing && <EditAdjustmentsModal adjustments={adjustments} systemCost={systemCost} selectedMethod={selectedMethod} onClose={() => setIsEditing(false)} onSave={handleSave} />}
       {isTableOpen && <PriceTableModal
           amount={financed}
           depositUpfront={depositUpfront}

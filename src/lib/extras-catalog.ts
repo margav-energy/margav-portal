@@ -34,6 +34,15 @@ export const EXTRAS_CATALOG: ExtraCatalogEntry[] = [
   { name: "Extra full-day installation", defaultUnitPrice: 0 },
 ];
 
-export function findCatalogEntry(name: string): ExtraCatalogEntry | undefined {
-  return EXTRAS_CATALOG.find((entry) => entry.name === name);
+export function findCatalogEntry(name: string, catalog: ExtraCatalogEntry[] = EXTRAS_CATALOG): ExtraCatalogEntry | undefined {
+  return catalog.find((entry) => entry.name === name);
 }
+
+/** The Scaffolding entry in a solar quote's "Standard additionals" — quantity is the number of elevations scaffolded. */
+export const SCAFFOLDING_ADDITIONAL_NAME = "Scaffolding (per elevation)";
+
+/** The catalog for a solar quote's "Standard additionals" section. */
+export const SOLAR_STANDARD_ADDITIONALS_CATALOG: ExtraCatalogEntry[] = [
+  /** £500 per elevation — quantity is the number of elevations. */
+  { name: SCAFFOLDING_ADDITIONAL_NAME, defaultUnitPrice: 500 },
+];

@@ -86,9 +86,14 @@ export function ProfitCard({
 }) {
   const [isEditing, setIsEditing] = useState(false);
 
-  function handleSave(costPrice: number) {
-    onUpdated({ ...profit, costPrice, ...deriveProfit(costPrice, profit.sellPrice) });
-    void updateQuoteCostPrice(quoteId, costPrice, customerName);
+  // What the rep edits is the materials figure; any listed install costs sit on top of it in the total.
+  const extraCostLineItems = profit.costLineItems?.filter((item) => item.category === "extra") ?? [];
+  const costPriceDisplay = profit.materialsCost ?? profit.costPrice;
+
+  function handleSave(materials: number) {
+    const total = materials + extraCostLineItems.reduce((sum, item) => sum + item.amount, 0);
+    onUpdated({ ...profit, costPrice: total, materialsCost: materials, ...deriveProfit(total, profit.sellPrice) });
+    void updateQuoteCostPrice(quoteId, materials, customerName);
   }
 
   // The Profit card only ever shows six rows: Cost price, Installer Cost,
@@ -103,9 +108,6 @@ export function ProfitCard({
   // is untouched and is still what Profit/Margin derive from. Solar has no
   // line items/materialsCost, so it falls back to showing the plain,
   // rep-editable `costPrice` with nothing broken out.
-  const extraCostLineItems = profit.costLineItems?.filter((item) => item.category === "extra") ?? [];
-  const costPriceDisplay = profit.materialsCost ?? profit.costPrice;
-
   return (
     <Collapsible title="Profit">
       <div className="flex flex-col gap-2">
@@ -146,7 +148,7 @@ export function ProfitCard({
       </div>
 
       {editable && isEditing && (
-        <EditCostPriceModal costPrice={profit.costPrice} onClose={() => setIsEditing(false)} onSave={handleSave} />
+        <EditCostPriceModal costPrice={costPriceDisplay} onClose={() => setIsEditing(false)} onSave={handleSave} />
       )}
     </Collapsible>
   );

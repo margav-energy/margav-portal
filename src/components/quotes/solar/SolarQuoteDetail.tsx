@@ -11,6 +11,8 @@ import { SolarDesignCard } from "@/components/quotes/solar/SolarDesignCard";
 import { LineItemsSection } from "@/components/quotes/detail/LineItemsSection";
 import { PaymentMethodCard } from "@/components/quotes/detail/PaymentMethodCard";
 import { financedAmount } from "@/lib/finance";
+import { SOLAR_STANDARD_ADDITIONALS_CATALOG } from "@/lib/extras-catalog";
+import { solarInstallCostLineItems, sumCostLineItems } from "@/lib/solar-install-cost";
 import { PricingSummaryCard } from "@/components/quotes/detail/PricingSummaryCard";
 import type { PricingAdjustments } from "@/components/quotes/actions";
 import { ProfitCard } from "@/components/quotes/detail/ProfitCard";
@@ -33,6 +35,8 @@ import {
   cancelQuoteAppointment,
   logStaxPortalAction,
   recordPitchOutcome,
+  sendCoolingOffWaiver,
+  sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
 import type { SolarQuoteDetail as SolarQuoteDetailData } from "@/types/solar-quote";
@@ -54,6 +58,10 @@ export function SolarQuoteDetail({
   reps,
   signatureRequest,
   signedDocumentUrl,
+  agreementSignatureRequest,
+  agreementSignedDocumentUrl,
+  waiverSignatureRequest,
+  waiverSignedDocumentUrl,
   documents,
   isAdmin,
   propertyPhotoUrl,
@@ -65,6 +73,10 @@ export function SolarQuoteDetail({
   reps: RepProfile[];
   signatureRequest: SignatureRequestSummary | undefined;
   signedDocumentUrl: string | undefined;
+  agreementSignatureRequest: SignatureRequestSummary | undefined;
+  agreementSignedDocumentUrl: string | undefined;
+  waiverSignatureRequest: SignatureRequestSummary | undefined;
+  waiverSignedDocumentUrl: string | undefined;
   documents: QuoteDocument[];
   isAdmin: boolean;
   propertyPhotoUrl: string | undefined;
@@ -105,7 +117,7 @@ export function SolarQuoteDetail({
   // `sellPrice`/`profit`/`marginPercent` are derived below from
   // `totalAfterDiscount` on every render instead of being stored, so they
   // stay in sync the moment a discount is applied.
-  const [costPrice, setCostPrice] = useState<number>(detail.profitBreakdown.costPrice);
+  const [costPrice, setCostPrice] = useState<number>(detail.profitBreakdown.materialsCost ?? detail.profitBreakdown.costPrice);
   const [pricingAdjustments, setPricingAdjustments] = useState<PricingAdjustments>({
     vatAmount: detail.vatAmount,
     discountAmount: detail.discountAmount,
@@ -115,6 +127,8 @@ export function SolarQuoteDetail({
   });
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+  const [isWaiverModalOpen, setIsWaiverModalOpen] = useState(false);
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
@@ -128,9 +142,14 @@ export function SolarQuoteDetail({
   // What the Monthly Plan finances: the total less an up-front deposit (see `financedAmount`, src/lib/finance.ts).
   const amountFinanced = financedAmount(totalAfterDiscount, pricingAdjustments.depositAmount, pricingAdjustments.depositPaidUpfront);
 
-  const profitAmount = totalAfterDiscount - costPrice;
+  // `costPrice` is the materials figure; Margav's own install costs (installer per panel, electricians) come off the live arrays. Scaffolding is charged to the customer, not a cost.
+  const installCostItems = solarInstallCostLineItems(solarArrays);
+  const totalProfitCost = costPrice + sumCostLineItems(installCostItems);
+  const profitAmount = totalAfterDiscount - totalProfitCost;
   const profit: ProfitBreakdown = {
-    costPrice,
+    costPrice: totalProfitCost,
+    costLineItems: installCostItems,
+    materialsCost: costPrice,
     sellPrice: totalAfterDiscount,
     profit: profitAmount,
     marginPercent: totalAfterDiscount > 0 ? Math.round((profitAmount / totalAfterDiscount) * 1000) / 10 : 0,
@@ -178,6 +197,8 @@ export function SolarQuoteDetail({
     onCancelApp: () => void handleCancelApp(),
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
+    onInstallationAgreement: () => setIsAgreementModalOpen(true),
+    onCoolingOffWaiver: () => setIsWaiverModalOpen(true),
   });
 
   return (
@@ -277,6 +298,7 @@ export function SolarQuoteDetail({
             items={standardAdditionals}
             addLabel="Add standard additional"
             onItemsChange={setStandardAdditionals}
+            catalog={SOLAR_STANDARD_ADDITIONALS_CATALOG}
             locked={locked}
           />
 
@@ -338,7 +360,7 @@ export function SolarQuoteDetail({
             quoteId={detail.quoteId}
             customerName={customer.name}
             profit={profit}
-            onUpdated={(nextProfit) => setCostPrice(nextProfit.costPrice)}
+            onUpdated={(nextProfit) => setCostPrice(nextProfit.materialsCost ?? nextProfit.costPrice)}
             locked={locked}
           />
           <SignatureStatusCard
@@ -346,6 +368,22 @@ export function SolarQuoteDetail({
             signedDocumentUrl={signedDocumentUrl}
             readHref={`/api/quotes/${detail.quoteId}/pdf`}
             readLabel="Read the quote"
+          />
+          <SignatureStatusCard
+            title="Installation Agreement"
+            emptyActionLabel="Installation Agreement"
+            request={agreementSignatureRequest}
+            signedDocumentUrl={agreementSignedDocumentUrl}
+            readHref="/api/agreement-templates/solar-installation"
+            readLabel="Read the agreement"
+          />
+          <SignatureStatusCard
+            title="Cooling-Off Waiver"
+            emptyActionLabel="Cooling-Off Waiver"
+            request={waiverSignatureRequest}
+            signedDocumentUrl={waiverSignedDocumentUrl}
+            readHref="/api/agreement-templates/solar-cooling-off-waiver"
+            readLabel="Read the waiver"
           />
           <QuoteDocumentsCard quoteId={detail.quoteId} customerName={customer.name} documents={documents} />
         </StickyColumn>
@@ -370,6 +408,34 @@ export function SolarQuoteDetail({
           customerEmail={customer.email}
           onClose={() => {
             setIsSendModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isAgreementModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          title="Send Installation Agreement"
+          documentLabel="installation agreement"
+          sendAction={sendInstallationAgreement}
+          onClose={() => {
+            setIsAgreementModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {isWaiverModalOpen && (
+        <SendForSignatureModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          customerEmail={customer.email}
+          title="Send Cooling-Off Waiver"
+          documentLabel="cooling-off waiver"
+          sendAction={sendCoolingOffWaiver}
+          onClose={() => {
+            setIsWaiverModalOpen(false);
             router.refresh();
           }}
         />

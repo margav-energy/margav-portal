@@ -2,6 +2,7 @@ import "server-only";
 import { formatDate } from "@/lib/format";
 import type { Quote } from "@/types/quote";
 import type { BoilerQuoteDetail } from "@/types/boiler-quote";
+import type { SolarQuoteDetail } from "@/types/solar-quote";
 
 /**
  * Locked-at-send-time snapshot for the fixed "Cooling-Off Waiver" T&Cs
@@ -25,6 +26,8 @@ import type { BoilerQuoteDetail } from "@/types/boiler-quote";
  */
 export interface WaiverSnapshot {
   quoteId: string;
+  /** Which template the waiver uses — absent on waivers sent before solar had one, which are boiler. */
+  product?: "boiler" | "solar";
   reference: string;
   customerName: string;
   installationAddress: string;
@@ -33,9 +36,10 @@ export interface WaiverSnapshot {
   agreedInstallDate?: string;
 }
 
-export function buildWaiverSnapshot(quote: Quote, detail: BoilerQuoteDetail): WaiverSnapshot {
+export function buildWaiverSnapshot(quote: Quote, detail: BoilerQuoteDetail | SolarQuoteDetail): WaiverSnapshot {
   return {
     quoteId: quote.id,
+    product: quote.productType === "boiler" ? "boiler" : "solar",
     reference: detail.reference,
     customerName: detail.customer.name,
     installationAddress: quote.address,

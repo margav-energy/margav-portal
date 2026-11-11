@@ -49,13 +49,18 @@ export function signAgreementEmailHtml(params: {
   customerName: string;
   reference: string;
   signLink: string;
+  /** Defaults to the boiler agreement's name. */
+  documentName?: string;
+  /** "Solar" picks the MarGav Solar trading name; omitted means Margav Heating. */
+  productTypeLabel?: string;
 }): string {
   return wrapper(
     `<p>Hi ${params.customerName},</p>` +
-      `<p>Please review and sign your Boiler Installation Agreement for quote ${params.reference}.</p>` +
+      `<p>Please review and sign your ${params.documentName ?? "Boiler Installation Agreement"} for quote ${params.reference}.</p>` +
       buttonHtml(params.signLink, "Review & sign agreement") +
       `<p style="font-size:13px;color:#737373;">Or copy this link: <a href="${params.signLink}">${params.signLink}</a></p>` +
       `<p style="font-size:13px;color:#737373;">This link is unique to you — please don&rsquo;t share it.</p>`,
+    brandNameForProduct(params.productTypeLabel),
   );
 }
 
@@ -63,6 +68,8 @@ export function signWaiverEmailHtml(params: {
   customerName: string;
   reference: string;
   signLink: string;
+  /** "Solar" picks the MarGav Solar trading name; omitted means Margav Heating. */
+  productTypeLabel?: string;
 }): string {
   return wrapper(
     `<p>Hi ${params.customerName},</p>` +
@@ -70,6 +77,7 @@ export function signWaiverEmailHtml(params: {
       buttonHtml(params.signLink, "Review & sign waiver") +
       `<p style="font-size:13px;color:#737373;">Or copy this link: <a href="${params.signLink}">${params.signLink}</a></p>` +
       `<p style="font-size:13px;color:#737373;">This link is unique to you — please don&rsquo;t share it.</p>`,
+    brandNameForProduct(params.productTypeLabel),
   );
 }
 
@@ -78,7 +86,7 @@ export function signedConfirmationEmailHtml(params: {
   reference: string;
   /** e.g. "quote" or "installation agreement" — defaults to "quote" for the original call sites. */
   documentLabel?: string;
-  /** "Solar PV" / "Boiler" — picks the trading name; omitted for agreements and waivers (boiler-only). */
+  /** "Solar PV" / "Boiler" — picks the trading name; omitted means Margav Heating. */
   productTypeLabel?: string;
 }): string {
   const documentLabel = params.documentLabel ?? "quote";

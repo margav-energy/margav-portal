@@ -18,6 +18,8 @@ const inputClassName =
 const DOCUMENT_META = {
   boiler_installation_agreement: { label: "installation agreement", bannerTitle: "Boiler Installation Agreement", relatedLabel: "Installation Agreement" },
   cooling_off_waiver: { label: "cooling-off waiver", bannerTitle: "Cooling-Off Waiver", relatedLabel: "Cooling-Off Waiver" },
+  solar_installation_agreement: { label: "installation agreement", bannerTitle: "Solar PV Installation Agreement", relatedLabel: "Installation Agreement" },
+  solar_cooling_off_waiver: { label: "cooling-off waiver", bannerTitle: "Cooling-Off Waiver", relatedLabel: "Cooling-Off Waiver" },
 } as const;
 
 function isStaticTemplateType(
@@ -71,10 +73,11 @@ export function SignForm({
 }) {
   const staticTemplate = isStaticTemplateType(request.documentType) ? DOCUMENT_META[request.documentType] : undefined;
   const documentLabel = staticTemplate?.label ?? "quote";
-  const isWaiver = request.documentType === "cooling_off_waiver";
-  // Agreements and waivers are boiler-only; a quote is Solar or Boiler by its snapshot.
+  const isWaiver = request.documentType === "cooling_off_waiver" || request.documentType === "solar_cooling_off_waiver";
+  const isSolarDocument = request.documentType.startsWith("solar_");
+  // An agreement or waiver says its product through its document type; a quote is Solar or Boiler by its snapshot.
   const brand = staticTemplate
-    ? "Margav Heating"
+    ? brandNameForProduct(isSolarDocument ? "Solar" : "Boiler")
     : brandNameForProduct((request.snapshot as DocumentSnapshot).productTypeLabel);
   const [typedName, setTypedName] = useState("");
   // Pre-filled from whatever the quote already had (e.g. an installer's
@@ -182,6 +185,21 @@ export function SignForm({
             linkLabel="View the full agreement (PDF)"
             footnote="A statutory 14-day cooling-off period applies from the date you sign, during which you may cancel without penalty (see clause 3 of the agreement)."
           />
+        ) : request.documentType === "solar_installation_agreement" ? (
+          <StaticDocumentPreview
+            title="Solar PV Installation Agreement"
+            description={`These are the terms of your solar PV installation for quote ${request.snapshot.reference}. Please read the full agreement before signing.`}
+            pdfHref="/api/agreement-templates/solar-installation"
+            linkLabel="View the full agreement (PDF)"
+            footnote="A statutory 14-day cooling-off period applies from the date you sign (see clause 3 of the agreement). 25% of the price is due when you sign and the remaining 75% on the day the installation is completed (clause 10)."
+          />
+        ) : request.documentType === "solar_cooling_off_waiver" ? (
+          <StaticDocumentPreview
+            title="Cooling-Off Waiver"
+            description={`This waiver lets your solar PV installation for quote ${request.snapshot.reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
+            pdfHref="/api/agreement-templates/solar-cooling-off-waiver"
+            linkLabel="View the full waiver (PDF)"
+          />
         ) : request.documentType === "cooling_off_waiver" ? (
           <StaticDocumentPreview
             title="Cooling-Off Waiver"
@@ -263,8 +281,8 @@ export function SignForm({
               onChange={(event) => setAgreed(event.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
             />
-            {request.documentType === "cooling_off_waiver"
-              ? "I have read and agree to the cooling-off waiver above, and I expressly request that Margav Heating begin the installation works before my statutory 14-day cancellation period ends."
+            {isWaiver
+              ? `I have read and agree to the cooling-off waiver above, and I expressly request that ${brand} begin the installation works before my statutory 14-day cancellation period ends.`
               : `I have read and agree to the ${documentLabel} above, including the statutory 14-day cooling-off period.`}
           </label>
 

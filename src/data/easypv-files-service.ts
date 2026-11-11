@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
@@ -27,6 +28,15 @@ function contentTypeFor(name: string, reported: string): string {
   return reported || "application/octet-stream";
 }
 
+/**
+ * Sanitising can make two different Easy PV names identical ("A/B.jpg" and "A-B.jpg"), so a short hash of the
+ * raw key keeps every file's storage object its own.
+ */
+function storagePathFor(quoteId: string, category: string, group: string, name: string): string {
+  const hash = createHash("sha1").update(keyOf(category, group, name)).digest("hex").slice(0, 8);
+  return `easypv/${quoteId}/${category}/${safeName(group)}/${hash}-${safeName(name)}`;
+}
+
 function keyOf(category: string, group: string, name: string): string {
   return `${category}|${group}|${name}`;
 }
@@ -54,7 +64,7 @@ export async function syncEasyPvFiles(quoteId: string, projectId: number): Promi
     try {
       const { bytes, contentType } = await downloadEasyPvFile(projectId, file.category, file.name);
       if (bytes.length === 0 || bytes.length > MAX_FILE_BYTES) continue;
-      const path = `easypv/${quoteId}/${file.category}/${safeName(file.groupName)}/${safeName(file.name)}`;
+      const path = storagePathFor(quoteId, file.category, file.groupName, file.name);
       const type = contentTypeFor(file.name, contentType);
       const { error: uploadError } = await supabase.storage.from(SOLAR_SURVEY_BUCKET).upload(path, bytes, { contentType: type, upsert: true });
       if (uploadError) {
@@ -76,7 +86,11 @@ export async function syncEasyPvFiles(quoteId: string, projectId: number): Promi
         { onConflict: "quote_id,category,group_name,source_name" },
       );
       if (rowError) console.error("syncEasyPvFiles: row failed", rowError);
-      else added += 1;
+      else {
+        added += 1;
+        // A file stored under an older path scheme: drop the object it no longer uses.
+        if (current && current.storage_path !== path) await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove([current.storage_path]);
+      }
     } catch (error) {
       console.error("syncEasyPvFiles: file failed", file.category, file.groupName, error);
     }
@@ -84,10 +98,31 @@ export async function syncEasyPvFiles(quoteId: string, projectId: number): Promi
 
   const stale = existing.filter((row) => !wanted.has(keyOf(row.category, row.group_name, row.source_name)));
   if (stale.length > 0) {
-    await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove(stale.map((row) => row.storage_path));
+    // Never delete an object a live row still points at (older rows could share a sanitised path).
+    const livePaths = new Set(existing.filter((row) => wanted.has(keyOf(row.category, row.group_name, row.source_name))).map((row) => row.storage_path));
+    const orphaned = stale.map((row) => row.storage_path).filter((path) => !livePaths.has(path));
+    if (orphaned.length > 0) await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove(orphaned);
     await supabase.from("easypv_files").delete().in("id", stale.map((row) => row.id));
   }
   return { added, removed: stale.length };
+}
+
+/** Removes every stored Easy PV copy for a quote (used when the project is unlinked). Authorise the caller first. */
+export async function clearEasyPvFiles(quoteId: string): Promise<boolean> {
+  const supabase = createServiceRoleClient();
+  const { data: rows, error } = await supabase.from("easypv_files").select("storage_path").eq("quote_id", quoteId);
+  if (error) {
+    console.error("clearEasyPvFiles failed", error);
+    return false;
+  }
+  const { error: deleteError } = await supabase.from("easypv_files").delete().eq("quote_id", quoteId);
+  if (deleteError) {
+    console.error("clearEasyPvFiles: delete failed", deleteError);
+    return false;
+  }
+  const paths = (rows ?? []).map((row) => row.storage_path);
+  if (paths.length > 0) await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove(paths);
+  return true;
 }
 
 /**
@@ -156,7 +191,7 @@ export async function applyNewestDesignPhoto(quoteId: string): Promise<void> {
     .eq("quote_id", quoteId)
     .eq("category", "images")
     .eq("content_type", "image/jpeg")
-    .order("source_modified_at", { ascending: false })
+    .order("source_modified_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
   if (!newest) return;
@@ -173,7 +208,7 @@ export async function getEasyPvFiles(quoteId: string): Promise<EasyPvFile[]> {
     .from("easypv_files")
     .select("id, category, group_name, source_name, storage_path, content_type, size_bytes")
     .eq("quote_id", quoteId)
-    .order("source_modified_at", { ascending: false });
+    .order("source_modified_at", { ascending: false, nullsFirst: false });
   if (error) console.error("getEasyPvFiles failed", error);
   if (!rows || rows.length === 0) return [];
 

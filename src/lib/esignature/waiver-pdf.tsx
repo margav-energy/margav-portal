@@ -21,11 +21,12 @@ import type { WaiverSnapshot } from "@/lib/esignature/waiver-document";
  * simpler and more robust than coordinate-matching a page that isn't fixed
  * legal text.
  */
-const TEMPLATE_PATH = path.join(process.cwd(), "assets", "agreement-templates", "cooling-off-waiver.pdf");
+const TEMPLATE_FILES = { boiler: "cooling-off-waiver.pdf", solar: "solar-cooling-off-waiver.pdf" } as const;
+const SIGNATORY_LABELS = { boiler: "Signed on behalf of MarGav Heating", solar: "Signed on behalf of Margav Solar" } as const;
 const TERMS_PAGE_INDEX = 0; // the one page of actual T&Cs text worth keeping verbatim.
 
-async function loadTemplateBytes(): Promise<Buffer> {
-  return readFile(TEMPLATE_PATH);
+async function loadTemplateBytes(product: "boiler" | "solar"): Promise<Buffer> {
+  return readFile(path.join(process.cwd(), "assets", "agreement-templates", TEMPLATE_FILES[product]));
 }
 
 export interface WaiverCustomerAudit {
@@ -112,7 +113,8 @@ export async function buildSignedWaiverPdf(
   customer: WaiverCustomerAudit,
   rep: WaiverRepSignature | null,
 ): Promise<Buffer> {
-  const templateBytes = await loadTemplateBytes();
+  const product = snapshot.product ?? "boiler";
+  const templateBytes = await loadTemplateBytes(product);
   const templateDoc = await PDFDocument.load(templateBytes);
 
   const pdfDoc = await PDFDocument.create();
@@ -156,7 +158,7 @@ export async function buildSignedWaiverPdf(
 
   // Rep ("Signed on behalf of MarGav Heating") block — same graceful
   // fallback as agreement-pdf.tsx when the rep has no saved signature.
-  page.drawText("Signed on behalf of MarGav Heating", {
+  page.drawText(SIGNATORY_LABELS[product], {
     x: MARGIN_X,
     y: w.currentY(),
     size: 9,

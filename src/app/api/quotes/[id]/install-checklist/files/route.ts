@@ -50,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let path = `${folder}/${safeName}`;
     // Two uploads can share a name (e.g. a camera's "IMAGE.jpg") — keep both.
     if (path in entries) path = `${folder}/${photo.id.slice(0, 6)}-${safeName}`;
-    entries[path] = new Uint8Array(photo.bytes);
+    entries[path] = photo.bytes; // a Buffer is already a Uint8Array
   }
 
   const label = stage ? stage.title : "All";
