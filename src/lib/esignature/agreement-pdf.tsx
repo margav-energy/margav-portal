@@ -2,6 +2,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { pdfSafe } from "@/lib/esignature/pdf-text";
 import type { AgreementSnapshot } from "@/lib/esignature/agreement-document";
 
 /**
@@ -63,7 +64,7 @@ function drawSignatureImage(
 }
 
 function drawFieldText(page: PDFPage, font: PDFFont, text: string, x: number, lineY: number) {
-  page.drawText(text, { x: x + 4, y: lineY + 3, size: 10, font, color: rgb(0.06, 0.09, 0.16) });
+  page.drawText(pdfSafe(text), { x: x + 4, y: lineY + 3, size: 10, font, color: rgb(0.06, 0.09, 0.16) });
 }
 
 /** Crude character-count wrap — good enough for a small monospace-ish audit footer, not real typesetting. */

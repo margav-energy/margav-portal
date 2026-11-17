@@ -6,8 +6,15 @@ import { buildSolarAgreementPdf } from "@/lib/esignature/solar-agreement-pdf";
  * sign), so serving it without a token is fine — same as the boiler agreement route. Exempted from the login gate via
  * `PUBLIC_PATHS` in `src/lib/supabase/proxy.ts`.
  */
+// The unsigned agreement never changes between requests, so it is built once per server instance rather than on every hit.
+let cached: Promise<Buffer> | undefined;
+
 export async function GET() {
-  const bytes = await buildSolarAgreementPdf({ quoteId: "", reference: "", customerName: "", customerAddressLines: [] });
+  cached ??= buildSolarAgreementPdf({ quoteId: "", reference: "", customerName: "", customerAddressLines: [] }).catch((error) => {
+    cached = undefined;
+    throw error;
+  });
+  const bytes = await cached;
 
   return new Response(new Uint8Array(bytes), {
     headers: {

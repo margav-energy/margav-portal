@@ -6,8 +6,7 @@ import { ClipboardCheck, Download, ExternalLink, ImageIcon } from "lucide-react"
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Pill } from "@/components/ui/Pill";
-import { formatDateTime } from "@/lib/format";
-import { CHECKLIST_STAGES, countCompleted, getChecklistItem } from "@/lib/solar-install-checklist";
+import { CHECKLIST_STAGES, getChecklistItem } from "@/lib/solar-install-checklist";
 import type { SolarInstallChecklist } from "@/data/solar-install-checklist-service";
 
 /** Thumbnails shown per stage before "+ N more". */
@@ -41,10 +40,6 @@ export function InstallerChecklistGalleryCard({
     };
   }, [router]);
 
-  const { done, total } = countCompleted(
-    checklist.photos.map((photo) => photo.itemKey),
-    checklist.naItems,
-  );
   const submitted = checklist.status === "submitted";
   const hasPhotos = checklist.photos.length > 0;
 
@@ -56,7 +51,7 @@ export function InstallerChecklistGalleryCard({
           Install photos
         </h3>
         <Pill
-          label={submitted ? "Submitted" : `${done}/${total} done`}
+          label={submitted ? "All sent" : `${Object.keys(checklist.submittedStages).length}/${CHECKLIST_STAGES.length} sent`}
           className={submitted ? "bg-brand-green-mid/10 text-brand-green-mid" : "bg-amber-100 text-amber-700"}
         />
       </div>
@@ -113,8 +108,10 @@ export function InstallerChecklistGalleryCard({
         })
       )}
 
-      {submitted && checklist.submittedAt && (
-        <p className="text-xs text-slate-500">Sent to the office {formatDateTime(checklist.submittedAt)}</p>
+      {checklist.submittedAt && Object.keys(checklist.submittedStages).length > 0 && (
+        <p className="text-xs text-slate-500">
+          Sent to the office: {CHECKLIST_STAGES.filter((s) => checklist.submittedStages[s.stage]).map((s) => s.title).join(", ")}
+        </p>
       )}
 
       {hasPhotos && (

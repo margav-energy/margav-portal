@@ -24,6 +24,9 @@ interface ProposalRow {
 /** The newest proposal PDF Easy PV has for this quote, if any. */
 async function latestProposalRow(quoteId: string): Promise<ProposalRow | undefined> {
   const supabase = createServiceRoleClient();
+  // Stored copies only count while the quote is linked to a project — an unlinked quote must never send a leftover proposal.
+  const { data: quote } = await supabase.from("quotes").select("easypv_project_id").eq("id", quoteId).maybeSingle();
+  if (!quote?.easypv_project_id) return undefined;
   const { data } = await supabase
     .from("easypv_files")
     .select("source_name, storage_path")

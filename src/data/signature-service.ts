@@ -15,7 +15,7 @@ import { lockEasyPvProposal, readLockedProposal } from "@/data/easypv-proposal-s
 import { composeProposalPdf } from "@/lib/esignature/compose-proposal";
 import { brandNameForProduct } from "@/lib/brand";
 import { buildBoilerQuotePdf } from "@/lib/esignature/boiler-quote-pdf";
-import { buildAgreementSnapshot, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
+import { buildAgreementSnapshot, solarAgreementTermsHash, type AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import { buildSignedAgreementPdf } from "@/lib/esignature/agreement-pdf";
 import { buildSolarAgreementPdf } from "@/lib/esignature/solar-agreement-pdf";
 import { buildWaiverSnapshot, type WaiverSnapshot } from "@/lib/esignature/waiver-document";
@@ -47,11 +47,13 @@ const AGREEMENT_TYPES: SignatureDocumentType[] = ["boiler_installation_agreement
 const WAIVER_TYPES: SignatureDocumentType[] = ["cooling_off_waiver", "solar_cooling_off_waiver"];
 
 /** The agreement / waiver document type for a quote's product — each product has its own wording. */
-function agreementTypeFor(productType: string | undefined): SignatureDocumentType {
-  return productType === "boiler" ? "boiler_installation_agreement" : "solar_installation_agreement";
+function agreementTypeFor(productType: string | undefined): SignatureDocumentType | undefined {
+  if (productType === "boiler") return "boiler_installation_agreement";
+  return productType === "solar" ? "solar_installation_agreement" : undefined;
 }
-function waiverTypeFor(productType: string | undefined): SignatureDocumentType {
-  return productType === "boiler" ? "cooling_off_waiver" : "solar_cooling_off_waiver";
+function waiverTypeFor(productType: string | undefined): SignatureDocumentType | undefined {
+  if (productType === "boiler") return "cooling_off_waiver";
+  return productType === "solar" ? "solar_cooling_off_waiver" : undefined;
 }
 
 type AnySnapshot = DocumentSnapshot | AgreementSnapshot | WaiverSnapshot;
@@ -259,6 +261,7 @@ export async function createAgreementSignatureRequest(
 
   const snapshot = buildAgreementSnapshot(quote, detail);
   const documentType = agreementTypeFor(quote.productType);
+  if (!documentType) return { error: "There's no installation agreement for this type of quote." };
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -312,6 +315,7 @@ export async function createWaiverSignatureRequest(
 
   const snapshot = buildWaiverSnapshot(quote, detail);
   const documentType = waiverTypeFor(quote.productType);
+  if (!documentType) return { error: "There's no cooling-off waiver for this type of quote." };
   const documentHash = hashDocument(snapshot);
 
   const supabase = await createClient();
@@ -649,6 +653,9 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
   let pdfBuffer: Buffer;
   try {
     if (AGREEMENT_TYPES.includes(row.document_type)) {
+      if (row.document_type === "solar_installation_agreement" && (row.document_snapshot as AgreementSnapshot).termsHash !== solarAgreementTermsHash()) {
+        return { ok: false, error: "The agreement wording has been updated since this was sent. Please ask us to send you a new copy." };
+      }
       const customerAudit = {
         typedName: params.typedName,
         signatureImage: signatureImageBuffer,

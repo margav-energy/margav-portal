@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { formatDate } from "@/lib/format";
+import { pdfSafe } from "@/lib/esignature/pdf-text";
 import type { WaiverSnapshot } from "@/lib/esignature/waiver-document";
 
 /**
@@ -130,8 +131,8 @@ export async function buildSignedWaiverPdf(
   const w = new PageWriter(page, font, bold, height - 60);
 
   w.heading("Details and Signatures");
-  w.field("Customer name", snapshot.customerName);
-  w.field("Installation address", snapshot.installationAddress);
+  w.field("Customer name", pdfSafe(snapshot.customerName));
+  w.field("Installation address", pdfSafe(snapshot.installationAddress));
   w.field("Contract / quote reference", snapshot.reference);
   w.field("Contract date", snapshot.contractDateLabel);
   w.field("Agreed installation date", snapshot.agreedInstallDate ? formatDate(snapshot.agreedInstallDate) : "—");
@@ -153,7 +154,7 @@ export async function buildSignedWaiverPdf(
     height: signatureImage.height * sigScale,
   });
   w.gap(maxSigHeight);
-  page.drawText(`${customer.typedName} — ${todayLabel}`, { x: MARGIN_X, y: w.currentY(), size: 10, font, color: INK });
+  page.drawText(`${pdfSafe(customer.typedName)} — ${todayLabel}`, { x: MARGIN_X, y: w.currentY(), size: 10, font, color: INK });
   w.gap(30);
 
   // Rep ("Signed on behalf of MarGav Heating") block — same graceful
@@ -177,7 +178,7 @@ export async function buildSignedWaiverPdf(
     });
     w.gap(maxSigHeight);
     const repDateLabel = rep.signedAtLabel.split(" at ")[0] ?? rep.signedAtLabel;
-    page.drawText(`${rep.name} — ${repDateLabel}`, { x: MARGIN_X, y: w.currentY(), size: 10, font, color: INK });
+    page.drawText(`${pdfSafe(rep.name)} — ${repDateLabel}`, { x: MARGIN_X, y: w.currentY(), size: 10, font, color: INK });
     w.gap(30);
   } else {
     page.drawText("No representative signature on file", {

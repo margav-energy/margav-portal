@@ -43,6 +43,7 @@ export function SolarInstallChecklistCard({
     checklist.naItems,
   );
   const submitted = checklist.status === "submitted";
+  const sentCount = Object.keys(checklist.submittedStages).length;
 
   return (
     <Card className="overflow-hidden p-0">
@@ -51,16 +52,16 @@ export function SolarInstallChecklistCard({
           <h3 className="text-sm font-semibold text-slate-900">Install photo checklist</h3>
           <p className="mt-0.5 text-xs text-slate-500">
             {submitted && checklist.submittedAt
-              ? `${checklist.submittedByName ? `${checklist.submittedByName} · ` : ""}Submitted ${formatDateTime(checklist.submittedAt)}`
-              : checklist.submittedAt
-                ? "Installer is updating it — waiting for it to be sent again"
+              ? `${checklist.submittedByName ? `${checklist.submittedByName} · ` : ""}All stages submitted ${formatDateTime(checklist.submittedAt)}`
+              : sentCount > 0
+                ? `${sentCount} of ${CHECKLIST_STAGES.length} stages submitted`
                 : "Installer is still filling this in"}
             {` · ${done}/${total} items · ${checklist.photos.length} photo${checklist.photos.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Pill
-            label={submitted ? "Submitted" : "In progress"}
+            label={submitted ? "Submitted" : sentCount > 0 ? `${sentCount}/${CHECKLIST_STAGES.length} stages` : "In progress"}
             className={submitted ? "bg-brand-green-mid/10 text-brand-green-mid" : "bg-amber-100 text-amber-700"}
           />
           <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
@@ -81,7 +82,14 @@ export function SolarInstallChecklistCard({
           {CHECKLIST_STAGES.map((stage) => (
             <section key={stage.stage} className="flex flex-col gap-1">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <h4 className="text-xs font-semibold tracking-wide text-slate-900 uppercase">{stage.title}</h4>
+                <h4 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-900 uppercase">
+                  {stage.title}
+                  {checklist.submittedStages[stage.stage] ? (
+                    <Pill label={`Submitted ${formatDateTime(checklist.submittedStages[stage.stage]!.at)}`} className="bg-brand-green-mid/10 text-brand-green-mid normal-case" />
+                  ) : (
+                    <Pill label="Not sent" className="bg-amber-100 text-amber-700 normal-case" />
+                  )}
+                </h4>
                 {checklist.photos.some((photo) => getChecklistItem(photo.itemKey)?.stage === stage.stage) && (
                   <a
                     href={`/api/quotes/${quoteId}/install-checklist/files?stage=${stage.stage}`}

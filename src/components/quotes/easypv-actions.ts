@@ -191,15 +191,27 @@ export async function refreshEasyPvSummary(
 export async function unlinkEasyPvProject(quoteId: string): Promise<ActionResult> {
   const auth = await authorise(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
-  // Drop the stored proposal/design copies first — otherwise the old project's proposal would still be locked into the next quote sent.
-  if (!(await clearEasyPvFiles(quoteId))) return { ok: false, error: "Couldn't unlink." };
+  // Unlink first (and reset the Easy PV settings in the same update) so a failure leaves the quote exactly as it was;
+  // the stored copies are cleared afterwards, and are ignored once the quote is unlinked even if that cleanup fails.
   const supabase = await createClient();
-  const { error: resetError } = await supabase
+  const { error: unlinkError } = await supabase
     .from("quotes")
-    .update({ easypv_proposal_skip_pages: null, easypv_photo_name: null, easypv_markup_pct: null, easypv_items_imported_at: null })
+    .update({
+      easypv_project_id: null,
+      easypv_summary: null,
+      easypv_synced_at: null,
+      easypv_proposal_skip_pages: null,
+      easypv_photo_name: null,
+      easypv_markup_pct: null,
+      easypv_items_imported_at: null,
+    })
     .eq("id", quoteId);
-  if (resetError) console.error("unlinkEasyPvProject reset failed", resetError);
-  if (!(await saveLink(quoteId, null, null))) return { ok: false, error: "Couldn't unlink." };
+  if (unlinkError) {
+    console.error("unlinkEasyPvProject failed", unlinkError);
+    return { ok: false, error: "Couldn't unlink." };
+  }
+  if (!(await clearEasyPvFiles(quoteId))) console.error("unlinkEasyPvProject: stored files not cleared", quoteId);
+  revalidatePath(`/quotes/${quoteId}`);
   await record(quoteId, auth.userId, auth.quote.customer_name, "Easy PV project unlinked");
   return { ok: true };
 }

@@ -25,16 +25,17 @@ import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
 import {
   CHECKLIST_ITEMS,
   CHECKLIST_STAGES,
-  countCompleted,
   countStageCompleted,
+  getChecklistItem,
   type ChecklistItem,
+  type ChecklistStage,
 } from "@/lib/solar-install-checklist";
 import {
   createChecklistPhotoUploadUrl,
   registerChecklistPhoto,
   removeChecklistPhoto,
   setChecklistItemNotApplicable,
-  submitInstallChecklist,
+  submitInstallChecklistStage,
 } from "@/app/jobs/checklist-actions";
 import type {
   ChecklistPhoto,
@@ -71,8 +72,7 @@ export function InstallerChecklistCard({
   const [naItems, setNaItems] = useState<string[]>(initial.naItems);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
-  const [status, setStatus] = useState(initial.status);
-  const [submittedAt, setSubmittedAt] = useState(initial.submittedAt);
+  const [submittedStages, setSubmittedStages] = useState(initial.submittedStages);
   const [itemErrors, setItemErrors] = useState<Record<string, string | null>>(
     {},
   );
@@ -80,15 +80,19 @@ export function InstallerChecklistCard({
   const [isSubmitting, startSubmit] = useTransition();
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
 
-  const { done, total } = countCompleted(
-    photos.map((photo) => photo.itemKey),
-    naItems,
-  );
+  const allSent = CHECKLIST_STAGES.every(({ stage }) => submittedStages[stage]);
   const isUploading = pending.some((upload) => upload.status === "uploading");
 
-  // Any edit after a submission puts the checklist back to a draft that needs sending again (the server does the same).
-  function markEdited() {
-    setStatus("draft");
+  // Any edit to a stage after it was sent un-sends that stage so it needs sending again (the server does the same).
+  function markEdited(itemKey: string) {
+    const stage = getChecklistItem(itemKey)?.stage;
+    if (!stage) return;
+    setSubmittedStages((current) => {
+      if (!current[stage]) return current;
+      const next = { ...current };
+      delete next[stage];
+      return next;
+    });
   }
 
   async function uploadOne(upload: PendingUpload) {
@@ -136,7 +140,7 @@ export function InstallerChecklistCard({
       setPhotos((current) => [...current, registered.photo!]);
       setNaItems((current) => current.filter((key) => key !== upload.itemKey));
       setPending((current) => current.filter((p) => p.id !== upload.id));
-      markEdited();
+      markEdited(upload.itemKey);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Upload failed.";
       setPending((current) =>
@@ -180,7 +184,7 @@ export function InstallerChecklistCard({
         ...current,
         [photo.itemKey]: result.error,
       }));
-    } else markEdited();
+    } else markEdited(photo.itemKey);
   }
 
   async function handleToggleNa(item: ChecklistItem) {
@@ -199,19 +203,21 @@ export function InstallerChecklistCard({
     if (!result.ok) {
       setNaItems(previous);
       setItemErrors((current) => ({ ...current, [item.key]: result.error }));
-    } else markEdited();
+    } else markEdited(item.key);
   }
 
-  function handleSubmit() {
+  function handleSubmit(stage: ChecklistStage) {
     setSubmitError(null);
     startSubmit(async () => {
-      const result = await submitInstallChecklist(quoteId);
+      const result = await submitInstallChecklistStage(quoteId, stage);
       if (!result.ok) {
         setSubmitError(result.error);
         return;
       }
-      setStatus("submitted");
-      setSubmittedAt(new Date().toISOString());
+      setSubmittedStages((current) => ({
+        ...current,
+        [stage]: { at: new Date().toISOString() },
+      }));
       router.refresh();
     });
   }
@@ -225,13 +231,17 @@ export function InstallerChecklistCard({
           </h3>
           <p className="mt-1 text-xs text-slate-500">
             Take, upload or select one or more photos for each item — or mark it
-            N/A — then send it to the office to check.
+            N/A — then send each stage to the office as you finish it.
           </p>
         </div>
         <Pill
-          label={status === "submitted" ? "Submitted" : `${done}/${total} done`}
+          label={
+            allSent
+              ? "All sent"
+              : `${Object.keys(submittedStages).length}/${CHECKLIST_STAGES.length} sent`
+          }
           className={
-            status === "submitted"
+            allSent
               ? "bg-brand-green-mid/10 text-brand-green-mid"
               : "bg-amber-100 text-amber-700"
           }
@@ -288,7 +298,9 @@ export function InstallerChecklistCard({
                   </span>
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  {counts.done}/{counts.total} done
+                  {submittedStages[stage.stage]
+                    ? "Sent"
+                    : `${counts.done}/${counts.total} done`}
                 </span>
               </button>
             </li>
@@ -365,39 +377,58 @@ export function InstallerChecklistCard({
         )}
       </div>
 
-      {stepIndex === CHECKLIST_STAGES.length - 1 && (
-        <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
-          {status === "submitted" && submittedAt && (
-            <p className="flex items-center gap-1.5 text-sm text-brand-green-mid">
-              <CheckCircle2 className="h-4 w-4" />
-              Sent to the office {formatDateTime(submittedAt)}. If you add or
-              change anything you&rsquo;ll need to send it again.
-            </p>
-          )}
-          {done < total && status !== "submitted" && (
-            <p className="text-xs text-slate-500">
-              {total - done} item{total - done === 1 ? "" : "s"} still to do.
-              You can send it now, but the office will see what&rsquo;s missing.
-            </p>
-          )}
-          {submitError && <p className="text-xs text-red-600">{submitError}</p>}
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={isSubmitting || isUploading || status === "submitted"}
-            className="w-full justify-center gap-1.5"
-          >
-            <Send className="h-4 w-4" />
-            {isSubmitting
-              ? "Sending…"
-              : isUploading
-                ? "Uploading photos…"
-                : status === "submitted"
-                  ? "Sent to the office"
-                  : "Send to the office"}
-          </Button>
-        </div>
-      )}
+      {(() => {
+        const stage = CHECKLIST_STAGES[stepIndex];
+        const sent = submittedStages[stage.stage];
+        const counts = countStageCompleted(
+          stage.stage,
+          photos.map((photo) => photo.itemKey),
+          naItems,
+        );
+        const stageHasPhotos = photos.some(
+          (photo) => getChecklistItem(photo.itemKey)?.stage === stage.stage,
+        );
+        const remaining = counts.total - counts.done;
+        return (
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-4">
+            {sent && (
+              <p className="flex items-center gap-1.5 text-sm text-brand-green-mid">
+                <CheckCircle2 className="h-4 w-4" />
+                {stage.title} photos sent to the office{" "}
+                {formatDateTime(sent.at)}. If you add or change anything here
+                you&rsquo;ll need to send this stage again.
+              </p>
+            )}
+            {remaining > 0 && !sent && (
+              <p className="text-xs text-slate-500">
+                {remaining} item{remaining === 1 ? "" : "s"} still to do in this
+                stage. You can send it now, but the office will see
+                what&rsquo;s missing.
+              </p>
+            )}
+            {submitError && (
+              <p className="text-xs text-red-600">{submitError}</p>
+            )}
+            <Button
+              variant="primary"
+              onClick={() => handleSubmit(stage.stage)}
+              disabled={
+                isSubmitting || isUploading || !!sent || !stageHasPhotos
+              }
+              className="w-full justify-center gap-1.5"
+            >
+              <Send className="h-4 w-4" />
+              {isSubmitting
+                ? "Sending…"
+                : isUploading
+                  ? "Uploading photos…"
+                  : sent
+                    ? `${stage.title} sent`
+                    : `Send ${stage.title.toLowerCase()} photos`}
+            </Button>
+          </div>
+        );
+      })()}
     </Card>
   );
 }

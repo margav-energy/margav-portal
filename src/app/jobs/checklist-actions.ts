@@ -11,8 +11,11 @@ import { notifyUser } from "@/lib/notify";
 import {
   CHECKLIST_IMAGE_TYPES,
   CHECKLIST_MAX_PHOTO_BYTES,
-  countCompleted,
   getChecklistItem,
+  CHECKLIST_ITEMS,
+  CHECKLIST_STAGES,
+  countStageCompleted,
+  type ChecklistStage,
 } from "@/lib/solar-install-checklist";
 
 /**
@@ -72,12 +75,15 @@ async function getOrCreateChecklistId(quoteId: string): Promise<string | null> {
   return data.id;
 }
 
-/** Any edit after a submission puts the checklist back to "draft" so it has to be re-submitted for the admins to re-check. */
-async function touchChecklist(checklistId: string, extra: Record<string, unknown> = {}): Promise<void> {
+/** Any edit to a stage after it was sent un-sends that stage (and so the whole checklist) so it has to be re-submitted for the admins to re-check. */
+async function touchChecklist(checklistId: string, stage: ChecklistStage, extra: Record<string, unknown> = {}): Promise<void> {
   const supabase = createServiceRoleClient();
+  const { data } = await supabase.from("solar_install_checklists").select("submitted_stages").eq("id", checklistId).single();
+  const stages = { ...((data?.submitted_stages as Record<string, unknown> | null) ?? {}) };
+  delete stages[stage];
   await supabase
     .from("solar_install_checklists")
-    .update({ status: "draft", updated_at: new Date().toISOString(), ...extra })
+    .update({ status: "draft", submitted_stages: stages, updated_at: new Date().toISOString(), ...extra })
     .eq("id", checklistId);
 }
 
@@ -157,7 +163,7 @@ export async function registerChecklistPhoto(
   // A photo means the item applies — drop any earlier "N/A".
   const { data: checklist } = await supabase.from("solar_install_checklists").select("na_items").eq("id", checklistId).single();
   const naItems = ((checklist?.na_items as string[] | null) ?? []).filter((key) => key !== itemKey);
-  await touchChecklist(checklistId, { na_items: naItems });
+  await touchChecklist(checklistId, getChecklistItem(itemKey)!.stage, { na_items: naItems });
 
   const url = await signChecklistPhotoUrl(path);
   revalidatePath(`/quotes/${quoteId}`);
@@ -175,7 +181,7 @@ export async function removeChecklistPhoto(quoteId: string, photoId: string): Pr
   // Filtered by checklist id so a photo id from another job can't be removed through this one.
   const { data: photo } = await supabase
     .from("solar_install_checklist_photos")
-    .select("storage_path")
+    .select("storage_path, item_key")
     .eq("id", photoId)
     .eq("checklist_id", checklistId)
     .maybeSingle();
@@ -183,7 +189,7 @@ export async function removeChecklistPhoto(quoteId: string, photoId: string): Pr
 
   await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove([photo.storage_path]);
   await supabase.from("solar_install_checklist_photos").delete().eq("id", photoId).eq("checklist_id", checklistId);
-  await touchChecklist(checklistId);
+  await touchChecklist(checklistId, getChecklistItem(photo.item_key)?.stage ?? "pre");
 
   revalidatePath(`/quotes/${quoteId}`);
   return { ok: true };
@@ -203,49 +209,53 @@ export async function setChecklistItemNotApplicable(quoteId: string, itemKey: st
   if (notApplicable) current.add(itemKey);
   else current.delete(itemKey);
 
-  await touchChecklist(checklistId, { na_items: [...current] });
+  await touchChecklist(checklistId, getChecklistItem(itemKey)!.stage, { na_items: [...current] });
   revalidatePath(`/quotes/${quoteId}`);
   return { ok: true };
 }
 
-/** Sends the checklist to every admin to check. Allowed while incomplete — the notification says how far through it is. */
-export async function submitInstallChecklist(quoteId: string): Promise<Result> {
+/** Sends one stage (pre / mid / post) of the checklist to every admin to check. Allowed while incomplete — the notification says how far through the stage is. */
+export async function submitInstallChecklistStage(quoteId: string, stage: ChecklistStage): Promise<Result> {
   const auth = await requireAcceptedSolarJob(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
   const { job } = auth;
+  const stageInfo = CHECKLIST_STAGES.find((s) => s.stage === stage);
+  if (!stageInfo) return { ok: false, error: "Unknown stage." };
 
   const checklistId = await getOrCreateChecklistId(quoteId);
   if (!checklistId) return { ok: false, error: "Could not submit. Please try again." };
 
   const supabase = createServiceRoleClient();
   const [{ data: checklist }, { data: photoRows }] = await Promise.all([
-    supabase.from("solar_install_checklists").select("na_items").eq("id", checklistId).single(),
+    supabase.from("solar_install_checklists").select("na_items, submitted_stages").eq("id", checklistId).single(),
     supabase.from("solar_install_checklist_photos").select("item_key").eq("checklist_id", checklistId),
   ]);
-  const photoCount = photoRows?.length ?? 0;
-  if (photoCount === 0) return { ok: false, error: "Add at least one photo before submitting." };
+  const stageKeys = new Set(CHECKLIST_ITEMS.filter((item) => item.stage === stage).map((item) => item.key));
+  const stagePhotoKeys = (photoRows ?? []).map((row) => row.item_key).filter((key) => stageKeys.has(key));
+  if (stagePhotoKeys.length === 0) return { ok: false, error: `Add at least one ${stageInfo.title.toLowerCase()} photo before submitting.` };
 
-  const { done, total } = countCompleted(
-    (photoRows ?? []).map((row) => row.item_key),
-    (checklist?.na_items as string[] | null) ?? [],
-  );
+  const { done, total } = countStageCompleted(stage, stagePhotoKeys, (checklist?.na_items as string[] | null) ?? []);
 
+  const now = new Date().toISOString();
+  const stages = { ...((checklist?.submitted_stages as Record<string, unknown> | null) ?? {}), [stage]: { at: now, by: job.userId } };
+  const allSent = CHECKLIST_STAGES.every((s) => stages[s.stage]);
   const { error } = await supabase
     .from("solar_install_checklists")
     .update({
-      status: "submitted",
-      submitted_at: new Date().toISOString(),
+      submitted_stages: stages,
+      status: allSent ? "submitted" : "draft",
+      submitted_at: now,
       submitted_by: job.userId,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .eq("id", checklistId);
   if (error) {
-    console.error("submitInstallChecklist failed", error);
+    console.error("submitInstallChecklistStage failed", error);
     return { ok: false, error: "Could not submit. Please try again." };
   }
 
-  const summary = `${done} of ${total} items complete, ${photoCount} photo${photoCount === 1 ? "" : "s"}`;
-  const description = `${job.firstName} submitted the install photo checklist (${summary})`;
+  const summary = `${done} of ${total} items complete, ${stagePhotoKeys.length} photo${stagePhotoKeys.length === 1 ? "" : "s"}`;
+  const description = `${job.firstName} submitted the ${stageInfo.title.toLowerCase()} photos (${summary})`;
   const admins = (await getAllProfiles()).filter((profile) => profile.role === "admin");
   await Promise.all([
     supabase.from("quote_history").insert({ quote_id: quoteId, actor_id: job.userId, is_system: false, description }),
@@ -260,8 +270,8 @@ export async function submitInstallChecklist(quoteId: string): Promise<Result> {
     ...admins.map((admin) =>
       notifyUser({
         userId: admin.id,
-        title: "Install photo checklist submitted",
-        body: `${job.firstName} submitted the photo checklist for ${job.customerName}'s install — ${summary}. Open the quote to check it.`,
+        title: `${stageInfo.title} photos submitted`,
+        body: `${job.firstName} submitted the ${stageInfo.title.toLowerCase()} photos for ${job.customerName}'s install — ${summary}. Open the quote to check them.`,
         link: `/quotes/${quoteId}`,
       }),
     ),

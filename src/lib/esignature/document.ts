@@ -299,6 +299,8 @@ async function easyPvAncillaryNames(quoteId: string): Promise<Set<string>> {
  */
 /** A solar array line that is the panels themselves (e.g. "Trina 450W Full Black Panel"), not mounting. */
 const PANEL_NAME = /\b(panels?|modules?)\b|\b\d{3}\s*w(p|att)?\b/i;
+/** Names that are clearly mounting or cabling, even when they mention "panel" (e.g. "Panel mounting rail"). */
+const MOUNTING_NAME = /\b(rails?|clamps?|hooks?|brackets?|mount(ing)?|fixings?|cables?|kit|flashing|roof)\b/i;
 
 function solarSheetFor(detail: SolarQuoteDetail, ancillaryNames: Set<string>, total: number): DocumentSnapshot["solarSheet"] {
   if (detail.solarArrays.length === 0 && detail.equipment.length === 0) return undefined;
@@ -306,7 +308,9 @@ function solarSheetFor(detail: SolarQuoteDetail, ancillaryNames: Set<string>, to
   const goods: string[] = [];
   for (const array of detail.solarArrays) {
     // The panel line is picked by name, not position — the roof's BOM can list mounting first, or have no panel at all.
-    const main = array.items.find((item) => PANEL_NAME.test(item.name));
+    // Failing a name match, the first non-mounting item stands in (the importer lists panels first) as long as the array has panels.
+    const candidates = array.items.filter((item) => !MOUNTING_NAME.test(item.name));
+    const main = candidates.find((item) => PANEL_NAME.test(item.name)) ?? (array.moduleWp > 0 ? candidates[0] : undefined);
     const rest = array.items.filter((item) => item !== main);
     if (main) goods.push(`${array.moduleCount > 0 ? array.moduleCount : main.quantity} \u00d7 ${main.name}`);
     if (rest.length > 0 && !goods.includes("Mounting system and fixings")) goods.push("Mounting system and fixings");
@@ -418,7 +422,7 @@ export async function buildDocumentSnapshot(
         ? formatCurrency(financedAmount(total, detail.depositAmount, true))
         : undefined,
     balanceOnCompletionLabel:
-      detail.selectedPaymentMethod === "bacs" && detail.depositAmount > 0 && detail.depositAmount < total
+      "solarArrays" in detail && detail.selectedPaymentMethod === "bacs" && detail.depositAmount > 0 && detail.depositAmount < total
         ? formatCurrency(total - detail.depositAmount)
         : undefined,
     totalPriceLabel: formatCurrency(total),

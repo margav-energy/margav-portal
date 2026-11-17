@@ -191,7 +191,7 @@ export function SignForm({
             description={`These are the terms of your solar PV installation for quote ${request.snapshot.reference}. Please read the full agreement before signing.`}
             pdfHref="/api/agreement-templates/solar-installation"
             linkLabel="View the full agreement (PDF)"
-            footnote="A statutory 14-day cooling-off period applies from the date you sign (see clause 3 of the agreement). 25% of the price is due when you sign and the remaining 75% on the day the installation is completed (clause 10)."
+            footnote="A statutory 14-day cooling-off period applies from the date you sign (see clause 3 of the agreement). Payment terms are in clause 10."
           />
         ) : request.documentType === "solar_cooling_off_waiver" ? (
           <StaticDocumentPreview

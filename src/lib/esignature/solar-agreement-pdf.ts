@@ -2,6 +2,7 @@ import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { pdfSafe } from "@/lib/esignature/pdf-text";
 import type { AgreementSnapshot } from "@/lib/esignature/agreement-document";
 import type { AgreementCustomerAudit, AgreementRepSignature } from "@/lib/esignature/agreement-pdf";
 import { SOLAR_AGREEMENT_BLOCKS, SOLAR_AGREEMENT_PARTIES, SOLAR_AGREEMENT_TITLE } from "@/lib/esignature/solar-agreement-terms";
@@ -101,7 +102,7 @@ export async function buildSolarAgreementPdf(snapshot: AgreementSnapshot, signin
   paragraph(SOLAR_AGREEMENT_PARTIES[0], { after: 6 });
   paragraph("AND", { font: bold, after: 2 });
   paragraph(SOLAR_AGREEMENT_PARTIES[1], { after: 4 });
-  if (snapshot.reference) paragraph(`Quote reference ${snapshot.reference} \u2014 ${snapshot.customerName}`, { font: italic, color: MUTED, after: 8 });
+  if (snapshot.reference) paragraph(`Quote reference ${pdfSafe(snapshot.reference)} \u2014 ${pdfSafe(snapshot.customerName)}`, { font: italic, color: MUTED, after: 8 });
 
   for (const block of SOLAR_AGREEMENT_BLOCKS) {
     if (block.kind === "heading") {
@@ -132,7 +133,7 @@ export async function buildSolarAgreementPdf(snapshot: AgreementSnapshot, signin
     ensure(150);
     paragraph(heading, { font: bold, size: 10.5, after: 6 });
     paragraph("Name", { size: 8, font: bold, color: MUTED, after: 0 });
-    paragraph(name ?? "", { size: 11, after: 2 });
+    paragraph(pdfSafe(name ?? ""), { size: 11, after: 2 });
     paragraph("Signature", { size: 8, font: bold, color: MUTED, after: 0 });
     const boxHeight = 56;
     if (image) {
@@ -165,9 +166,9 @@ export async function buildSolarAgreementPdf(snapshot: AgreementSnapshot, signin
 
   if (signing) {
     const lines = [
-      `Quote ${snapshot.reference} — signed ${signing.customer.signedAtLabel}`,
+      `Quote ${pdfSafe(snapshot.reference)} — signed ${signing.customer.signedAtLabel}`,
       ...wrapChars(`IP address: ${signing.customer.ip}`, 100),
-      ...wrapChars(`Browser: ${signing.customer.userAgent}`, 100),
+      ...wrapChars(`Browser: ${pdfSafe(signing.customer.userAgent)}`, 100),
       ...wrapChars(`Document hash (SHA-256): ${signing.customer.documentHash}`, 100),
     ];
     let auditY = BOTTOM_Y + lines.length * 10;

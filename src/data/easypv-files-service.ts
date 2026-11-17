@@ -89,7 +89,10 @@ export async function syncEasyPvFiles(quoteId: string, projectId: number): Promi
       else {
         added += 1;
         // A file stored under an older path scheme: drop the object it no longer uses.
-        if (current && current.storage_path !== path) await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove([current.storage_path]);
+        // Skip it if another row still points at that object (older rows could share a sanitised path).
+        if (current && current.storage_path !== path && !existing.some((row) => row !== current && row.storage_path === current.storage_path)) {
+          await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove([current.storage_path]);
+        }
       }
     } catch (error) {
       console.error("syncEasyPvFiles: file failed", file.category, file.groupName, error);
@@ -107,9 +110,19 @@ export async function syncEasyPvFiles(quoteId: string, projectId: number): Promi
   return { added, removed: stale.length };
 }
 
-/** Removes every stored Easy PV copy for a quote (used when the project is unlinked). Authorise the caller first. */
+/**
+ * Removes every stored Easy PV copy for a quote (used when the project is unlinked), and the quote's design image if it
+ * came from Easy PV — otherwise the old project's image would still be locked into the next quote sent. Authorise the caller first.
+ */
 export async function clearEasyPvFiles(quoteId: string): Promise<boolean> {
   const supabase = createServiceRoleClient();
+  const { data: quote } = await supabase.from("quotes").select("property_photo_path, property_photo_source").eq("id", quoteId).maybeSingle();
+  if (quote?.property_photo_source === "easypv" && quote.property_photo_path) {
+    const { error: photoError } = await supabase.from("quotes").update({ property_photo_path: null, property_photo_source: null }).eq("id", quoteId);
+    if (photoError) console.error("clearEasyPvFiles: photo reset failed", photoError);
+    else await supabase.storage.from(PROPERTY_PHOTOS_BUCKET).remove([quote.property_photo_path]);
+  }
+
   const { data: rows, error } = await supabase.from("easypv_files").select("storage_path").eq("quote_id", quoteId);
   if (error) {
     console.error("clearEasyPvFiles failed", error);

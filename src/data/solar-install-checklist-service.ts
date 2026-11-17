@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
+import { CHECKLIST_STAGES, type ChecklistStage } from "@/lib/solar-install-checklist";
 
 /**
  * Reads the solar install photo checklist (supabase/migrations/0044_*.sql).
@@ -22,7 +23,10 @@ export interface ChecklistPhoto {
 export interface SolarInstallChecklist {
   /** Absent until the installer first touches the checklist. */
   id?: string;
+  /** "submitted" once every stage has been sent. */
   status: "draft" | "submitted";
+  /** Stages currently sent to the office (editing a stage un-sends it). */
+  submittedStages: Partial<Record<ChecklistStage, { at: string; byName?: string }>>;
   /** Item keys marked N/A. */
   naItems: string[];
   submittedAt?: string;
@@ -30,7 +34,7 @@ export interface SolarInstallChecklist {
   photos: ChecklistPhoto[];
 }
 
-export const EMPTY_CHECKLIST: SolarInstallChecklist = { status: "draft", naItems: [], photos: [] };
+export const EMPTY_CHECKLIST: SolarInstallChecklist = { status: "draft", submittedStages: {}, naItems: [], photos: [] };
 
 export async function signChecklistPhotoUrl(storagePath: string): Promise<string | undefined> {
   const supabase = createServiceRoleClient();
@@ -47,22 +51,25 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
 
   const { data: row, error } = await supabase
     .from("solar_install_checklists")
-    .select("id, status, na_items, submitted_at, submitted_by")
+    .select("id, status, na_items, submitted_at, submitted_by, submitted_stages")
     .eq("quote_id", quoteId)
     .maybeSingle();
 
   if (error) console.error("getSolarInstallChecklist failed", error);
   if (!row) return EMPTY_CHECKLIST;
 
-  const [{ data: photoRows, error: photosError }, submitter] = await Promise.all([
+  const rawStages = (row.submitted_stages ?? {}) as Record<string, { at?: string; by?: string } | undefined>;
+  const submitterIds = [...new Set([row.submitted_by, ...Object.values(rawStages).map((s) => s?.by)].filter((id): id is string => !!id))];
+
+  const [{ data: photoRows, error: photosError }, { data: submitters }] = await Promise.all([
     supabase
       .from("solar_install_checklist_photos")
       .select("id, item_key, storage_path, file_name, uploaded_at")
       .eq("checklist_id", row.id)
       .order("uploaded_at", { ascending: true }),
-    row.submitted_by
-      ? supabase.from("profiles").select("full_name").eq("id", row.submitted_by).maybeSingle()
-      : Promise.resolve({ data: null }),
+    submitterIds.length > 0
+      ? supabase.from("profiles").select("id, full_name").in("id", submitterIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
   ]);
   if (photosError) console.error("getSolarInstallChecklist: photos failed", photosError);
 
@@ -82,12 +89,20 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
     )
   ).filter((photo): photo is ChecklistPhoto => photo !== null);
 
+  const names = new Map((submitters ?? []).map((p) => [p.id, p.full_name || undefined]));
+  const submittedStages: SolarInstallChecklist["submittedStages"] = {};
+  for (const { stage } of CHECKLIST_STAGES) {
+    const entry = rawStages[stage];
+    if (entry?.at) submittedStages[stage] = { at: entry.at, byName: entry.by ? names.get(entry.by) : undefined };
+  }
+
   return {
     id: row.id,
     status: row.status === "submitted" ? "submitted" : "draft",
+    submittedStages,
     naItems: Array.isArray(row.na_items) ? (row.na_items as string[]) : [],
     submittedAt: row.submitted_at ?? undefined,
-    submittedByName: (submitter.data as { full_name?: string } | null)?.full_name || undefined,
+    submittedByName: row.submitted_by ? names.get(row.submitted_by) : undefined,
     photos,
   };
 }

@@ -82,7 +82,9 @@ export function buildImportPlan(summary: EasyPvSummary, markupPct: number): Impo
       // Panels and the mounting that rides on the roof; skip anything the cart classed otherwise.
       if (line.kind !== "panel" && line.kind !== "mounting") continue;
       const qty = take(line.name, roofItem.qty);
-      if (qty > 0) items.push(toItem(line, qty));
+      // Panels go first so the quote sheet can rely on the first item being the panel line.
+      if (qty > 0 && line.kind === "panel") items.unshift(toItem(line, qty));
+      else if (qty > 0) items.push(toItem(line, qty));
       if (line.kind === "panel") moduleWp = parsePanelWatts(line.name) ?? moduleWp;
     }
     return {
