@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
+import { signStoragePaths } from "@/lib/storage-signing";
 import { CHECKLIST_STAGES, type ChecklistStage } from "@/lib/solar-install-checklist";
 
 /**
@@ -73,21 +74,25 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
   ]);
   if (photosError) console.error("getSolarInstallChecklist: photos failed", photosError);
 
-  const photos = (
-    await Promise.all(
-      (photoRows ?? []).map(async (photo): Promise<ChecklistPhoto | null> => {
-        const url = await signChecklistPhotoUrl(photo.storage_path);
-        if (!url) return null;
-        return {
-          id: photo.id,
-          itemKey: photo.item_key,
-          fileName: photo.file_name,
-          url,
-          uploadedAt: photo.uploaded_at,
-        };
-      }),
-    )
-  ).filter((photo): photo is ChecklistPhoto => photo !== null);
+  // One batched signing request for every photo (not one request per photo).
+  const signedUrls = await signStoragePaths(
+    supabase,
+    SOLAR_SURVEY_BUCKET,
+    (photoRows ?? []).map((photo) => photo.storage_path),
+  );
+  const photos = (photoRows ?? [])
+    .map((photo): ChecklistPhoto | null => {
+      const url = signedUrls.get(photo.storage_path);
+      if (!url) return null;
+      return {
+        id: photo.id,
+        itemKey: photo.item_key,
+        fileName: photo.file_name,
+        url,
+        uploadedAt: photo.uploaded_at,
+      };
+    })
+    .filter((photo): photo is ChecklistPhoto => photo !== null);
 
   const names = new Map((submitters ?? []).map((p) => [p.id, p.full_name || undefined]));
   const submittedStages: SolarInstallChecklist["submittedStages"] = {};

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Pill } from "@/components/ui/Pill";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import { CHECKLIST_ITEMS, CHECKLIST_STAGES, countCompleted, getChecklistItem } from "@/lib/solar-install-checklist";
+import { CHECKLIST_ITEMS, CHECKLIST_STAGES, CORE_CHECKLIST_STAGES, countCompleted, getChecklistItem } from "@/lib/solar-install-checklist";
 import type { SolarInstallChecklist } from "@/data/solar-install-checklist-service";
 
 /**
@@ -46,7 +46,7 @@ export function SolarInstallChecklistCard({
     checklist.naItems,
   );
   const submitted = checklist.status === "submitted";
-  const sentCount = Object.keys(checklist.submittedStages).length;
+  const sentCount = CORE_CHECKLIST_STAGES.filter((stage) => checklist.submittedStages[stage.stage]).length;
 
   return (
     <Card className="overflow-hidden p-0">
@@ -57,14 +57,14 @@ export function SolarInstallChecklistCard({
             {submitted && checklist.submittedAt
               ? `${checklist.submittedByName ? `${checklist.submittedByName} · ` : ""}All stages submitted ${formatDateTime(checklist.submittedAt)}`
               : sentCount > 0
-                ? `${sentCount} of ${CHECKLIST_STAGES.length} stages submitted`
+                ? `${sentCount} of ${CORE_CHECKLIST_STAGES.length} stages submitted`
                 : "Installer is still filling this in"}
             {` · ${done}/${total} items · ${checklist.photos.length} photo${checklist.photos.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Pill
-            label={submitted ? "Submitted" : sentCount > 0 ? `${sentCount}/${CHECKLIST_STAGES.length} stages` : "In progress"}
+            label={submitted ? "Submitted" : sentCount > 0 ? `${sentCount}/${CORE_CHECKLIST_STAGES.length} stages` : "In progress"}
             className={submitted ? "bg-brand-green-mid/10 text-brand-green-mid" : "bg-amber-100 text-amber-700"}
           />
           <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", isOpen && "rotate-180")} />
@@ -82,7 +82,10 @@ export function SolarInstallChecklistCard({
               Download all photos (ZIP)
             </a>
           )}
-          {CHECKLIST_STAGES.map((stage) => (
+          {CHECKLIST_STAGES.map((stage) => {
+            // Nothing to review in "Other photos" until someone adds one.
+            if (stage.stage === "other" && !checklist.photos.some((photo) => getChecklistItem(photo.itemKey)?.stage === "other")) return null;
+            return (
             <section key={stage.stage} className="flex flex-col gap-1">
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
                 <h4 className="flex items-center gap-2 text-xs font-semibold tracking-wide text-slate-900 uppercase">
@@ -114,7 +117,7 @@ export function SolarInstallChecklistCard({
                         {isNa ? (
                           <Pill label="N/A" className="shrink-0 bg-slate-100 text-slate-500" />
                         ) : photos.length === 0 ? (
-                          <Pill label="Missing" className="shrink-0 bg-red-100 text-red-700" />
+                          item.optional ? null : <Pill label="Missing" className="shrink-0 bg-red-100 text-red-700" />
                         ) : (
                           <span className="flex shrink-0 items-center gap-1 text-xs text-slate-400">
                             <ImageIcon className="h-3 w-3" />
@@ -143,7 +146,8 @@ export function SolarInstallChecklistCard({
                 })}
               </ul>
             </section>
-          ))}
+            );
+          })}
         </div>
       )}
     </Card>

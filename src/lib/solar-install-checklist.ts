@@ -5,19 +5,25 @@
  * Each item's `key` is stored against its photos, so don't rename one once
  * photos exist; reword `label` freely.
  */
-export type ChecklistStage = "pre" | "mid" | "post";
+export type ChecklistStage = "pre" | "mid" | "post" | "other";
 
 export interface ChecklistItem {
   key: string;
   label: string;
   stage: ChecklistStage;
+  /** Never required: not counted towards completion, no N/A and never flagged as missing (the "Other photos" catch-all). */
+  optional?: boolean;
 }
 
-export const CHECKLIST_STAGES: { stage: ChecklistStage; title: string; description: string }[] = [
-  { stage: "pre", title: "Pre-installation", description: "Before any work starts" },
-  { stage: "mid", title: "Mid-installation", description: "While the system is going in" },
-  { stage: "post", title: "Post-installation", description: "Once everything is complete" },
+export const CHECKLIST_STAGES: { stage: ChecklistStage; title: string; description: string; /** How the stage's photos read in a sentence ("Send …", "… sent to the office"). */ photosLabel: string }[] = [
+  { stage: "pre", title: "Pre-installation", description: "Before any work starts", photosLabel: "pre-installation photos" },
+  { stage: "mid", title: "Mid-installation", description: "While the system is going in", photosLabel: "mid-installation photos" },
+  { stage: "post", title: "Post-installation", description: "Once everything is complete", photosLabel: "post-installation photos" },
+  { stage: "other", title: "Other photos", description: "Anything else worth showing", photosLabel: "other photos" },
 ];
+
+/** The three required stages. "Other photos" is an optional extra: the checklist counts as fully sent once these are. */
+export const CORE_CHECKLIST_STAGES = CHECKLIST_STAGES.filter((stage) => stage.stage !== "other");
 
 export const CHECKLIST_ITEMS: ChecklistItem[] = [
   // PRE
@@ -63,6 +69,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
   { key: "post-all-electrical", stage: "post", label: "All electrical install from various angles (inverter, battery, etc.)" },
   { key: "post-signage", stage: "post", label: "All electrical signage (shutdown procedure, string diagram, etc.)" },
   { key: "post-warning-stickers", stage: "post", label: "All electrical warning stickers" },
+  // OTHER - not on the PDF; room for any photo that doesn't fit an item above.
+  { key: "other-photos", stage: "other", label: "Other photos", optional: true },
 ];
 
 /** Checklist keys an electrician may add photos to / mark N/A. Installers can edit every item. */
@@ -82,6 +90,7 @@ const ELECTRICIAN_ITEM_KEYS = new Set([
   "post-all-electrical",
   "post-signage",
   "post-warning-stickers",
+  "other-photos",
 ]);
 
 export type ChecklistEditorRole = "installer" | "electrician";
@@ -102,8 +111,9 @@ export const CHECKLIST_MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 export function countCompleted(photoItemKeys: Iterable<string>, naItems: string[]): { done: number; total: number } {
   const withPhoto = new Set(photoItemKeys);
   const na = new Set(naItems);
-  const done = CHECKLIST_ITEMS.filter((item) => withPhoto.has(item.key) || na.has(item.key)).length;
-  return { done, total: CHECKLIST_ITEMS.length };
+  const required = CHECKLIST_ITEMS.filter((item) => !item.optional);
+  const done = required.filter((item) => withPhoto.has(item.key) || na.has(item.key)).length;
+  return { done, total: required.length };
 }
 
 /** Items in `stage` with a photo or marked N/A, out of the stage's total. */
@@ -114,6 +124,6 @@ export function countStageCompleted(
 ): { done: number; total: number } {
   const withPhoto = new Set(photoItemKeys);
   const na = new Set(naItems);
-  const items = CHECKLIST_ITEMS.filter((item) => item.stage === stage);
+  const items = CHECKLIST_ITEMS.filter((item) => item.stage === stage && !item.optional);
   return { done: items.filter((item) => withPhoto.has(item.key) || na.has(item.key)).length, total: items.length };
 }

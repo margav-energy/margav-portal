@@ -6,6 +6,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { mapSolarPropertyDetails } from "@/data/quotes-mappers";
 import { splitCustomerName, splitSolarSurveyAddress } from "@/lib/solar-survey-address";
 import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
+import { asDownloadUrl, signStoragePaths } from "@/lib/storage-signing";
 import {
   normalizeSolarSurveyAnswers,
   type SolarSurveyAnswers,
@@ -115,25 +116,26 @@ async function loadSignedFiles(
     uploaded_at: string;
   }[];
 
-  const files = await Promise.all(
-    rows.map(async (row): Promise<SolarSurveyFile | null> => {
-      const [signedUrl, downloadUrl] = await Promise.all([
-        signSolarSurveyFileUrl(supabase, row.storage_path),
-        signSolarSurveyFileUrl(supabase, row.storage_path, row.file_name || true),
-      ]);
-      if (!signedUrl) return null;
-      return {
-        id: row.id,
-        itemKey: row.item_key,
-        fileName: row.file_name,
-        contentType: row.content_type,
-        sizeBytes: row.size_bytes,
-        url: signedUrl,
-        downloadUrl,
-        uploadedAt: row.uploaded_at,
-      };
-    }),
+  // One batched signing request for the whole survey; the "download as" link is the same URL with a download name appended.
+  const signedUrls = await signStoragePaths(
+    supabase,
+    SOLAR_SURVEY_BUCKET,
+    rows.map((row) => row.storage_path),
   );
+  const files = rows.map((row): SolarSurveyFile | null => {
+    const signedUrl = signedUrls.get(row.storage_path);
+    if (!signedUrl) return null;
+    return {
+      id: row.id,
+      itemKey: row.item_key,
+      fileName: row.file_name,
+      contentType: row.content_type,
+      sizeBytes: row.size_bytes,
+      url: signedUrl,
+      downloadUrl: asDownloadUrl(signedUrl, row.file_name || undefined),
+      uploadedAt: row.uploaded_at,
+    };
+  });
 
   return files.filter((file): file is SolarSurveyFile => file !== null);
 }

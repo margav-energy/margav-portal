@@ -11,6 +11,7 @@ import {
   CHECKLIST_ITEMS,
   CHECKLIST_MAX_PHOTO_BYTES,
   CHECKLIST_STAGES,
+  CORE_CHECKLIST_STAGES,
   canEditChecklistItem,
   countStageCompleted,
   getChecklistItem,
@@ -62,9 +63,11 @@ async function touchChecklist(checklistId: string, stage: ChecklistStage, extra:
   const { data } = await supabase.from("solar_install_checklists").select("submitted_stages").eq("id", checklistId).single();
   const stages = { ...((data?.submitted_stages as Record<string, unknown> | null) ?? {}) };
   delete stages[stage];
+  // Editing a required stage un-sends the whole checklist; "Other photos" is an extra, so it doesn't reopen one that's otherwise fully sent.
+  const status = stage === "other" && CORE_CHECKLIST_STAGES.every((s) => stages[s.stage]) ? "submitted" : "draft";
   await supabase
     .from("solar_install_checklists")
-    .update({ status: "draft", submitted_stages: stages, updated_at: new Date().toISOString(), ...extra })
+    .update({ status, submitted_stages: stages, updated_at: new Date().toISOString(), ...extra })
     .eq("id", checklistId);
 }
 
@@ -223,13 +226,13 @@ export async function submitStage(quoteId: string, actor: ChecklistActor, stage:
   ]);
   const stageKeys = new Set(CHECKLIST_ITEMS.filter((item) => item.stage === stage).map((item) => item.key));
   const stagePhotoKeys = (photoRows ?? []).map((row) => row.item_key).filter((key) => stageKeys.has(key));
-  if (stagePhotoKeys.length === 0) return { ok: false, error: `Add at least one ${stageInfo.title.toLowerCase()} photo before submitting.` };
+  if (stagePhotoKeys.length === 0) return { ok: false, error: `Add at least one ${stageInfo.photosLabel.replace(/photos$/, "photo")} before submitting.` };
 
   const { done, total } = countStageCompleted(stage, stagePhotoKeys, (checklist?.na_items as string[] | null) ?? []);
 
   const now = new Date().toISOString();
   const stages = { ...((checklist?.submitted_stages as Record<string, unknown> | null) ?? {}), [stage]: { at: now, by: actor.userId, role: actor.role } };
-  const allSent = CHECKLIST_STAGES.every((s) => stages[s.stage]);
+  const allSent = CORE_CHECKLIST_STAGES.every((s) => stages[s.stage]);
   const { error } = await supabase
     .from("solar_install_checklists")
     .update({
@@ -245,8 +248,9 @@ export async function submitStage(quoteId: string, actor: ChecklistActor, stage:
     return { ok: false, error: "Could not submit. Please try again." };
   }
 
-  const summary = `${done} of ${total} items complete, ${stagePhotoKeys.length} photo${stagePhotoKeys.length === 1 ? "" : "s"}`;
-  const description = `${actor.name} submitted the ${stageInfo.title.toLowerCase()} photos (${summary})`;
+  const photoCount = `${stagePhotoKeys.length} photo${stagePhotoKeys.length === 1 ? "" : "s"}`;
+  const summary = stage === "other" ? photoCount : `${done} of ${total} items complete, ${photoCount}`;
+  const description = `${actor.name} submitted the ${stageInfo.photosLabel} (${summary})`;
   const admins = (await getAllProfiles()).filter((profile) => profile.role === "admin");
   await Promise.all([
     supabase.from("quote_history").insert({ quote_id: quoteId, actor_id: actor.userId, is_system: actor.userId === null, description }),
@@ -262,8 +266,8 @@ export async function submitStage(quoteId: string, actor: ChecklistActor, stage:
     ...admins.map((admin) =>
       notifyUser({
         userId: admin.id,
-        title: `${stageInfo.title} photos submitted`,
-        body: `${actor.name} submitted the ${stageInfo.title.toLowerCase()} photos for ${actor.customerName}'s install — ${summary}. Open the quote to check them.`,
+        title: `${stageInfo.photosLabel.charAt(0).toUpperCase() + stageInfo.photosLabel.slice(1)} submitted`,
+        body: `${actor.name} submitted the ${stageInfo.photosLabel} for ${actor.customerName}'s install — ${summary}. Open the quote to check them.`,
         link: `/quotes/${quoteId}`,
         asService: actor.userId === null,
       }),

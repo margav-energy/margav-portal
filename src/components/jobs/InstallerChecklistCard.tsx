@@ -25,6 +25,7 @@ import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
 import {
   CHECKLIST_ITEMS,
   CHECKLIST_STAGES,
+  CORE_CHECKLIST_STAGES,
   canEditChecklistItem,
   countStageCompleted,
   getChecklistItem,
@@ -116,7 +117,7 @@ export function InstallerChecklistCard({
   const [isSubmitting, startSubmit] = useTransition();
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
 
-  const allSent = CHECKLIST_STAGES.every(({ stage }) => submittedStages[stage]);
+  const allSent = CORE_CHECKLIST_STAGES.every(({ stage }) => submittedStages[stage]);
   const isUploading = pending.some((upload) => upload.status === "uploading");
 
   // Any edit to a stage after it was sent un-sends that stage so it needs sending again (the server does the same).
@@ -257,7 +258,7 @@ export function InstallerChecklistCard({
           label={
             allSent
               ? "All sent"
-              : `${Object.keys(submittedStages).length}/${CHECKLIST_STAGES.length} sent`
+              : `${CORE_CHECKLIST_STAGES.filter(({ stage }) => submittedStages[stage]).length}/${CORE_CHECKLIST_STAGES.length} sent`
           }
           className={
             allSent
@@ -268,14 +269,16 @@ export function InstallerChecklistCard({
       </div>
 
       {/* Step indicator — Pre → During → Post. Steps can be opened in any order (some photos, like serial numbers, get taken out of sequence); the ticks show which are finished. */}
-      <ol className="grid grid-cols-3 gap-2">
+      <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {CHECKLIST_STAGES.map((stage, index) => {
           const counts = countStageCompleted(
             stage.stage,
             photos.map((photo) => photo.itemKey),
             naItems,
           );
-          const complete = counts.done === counts.total;
+          // "Other photos" has nothing to complete, so it never shows the finished tick.
+          const complete = stage.stage !== "other" && counts.done === counts.total;
+          const stagePhotoCount = photos.filter((photo) => getChecklistItem(photo.itemKey)?.stage === stage.stage).length;
           const active = index === stepIndex;
           return (
             <li key={stage.stage}>
@@ -319,7 +322,11 @@ export function InstallerChecklistCard({
                 <span className="text-[11px] text-slate-500">
                   {submittedStages[stage.stage]
                     ? "Sent"
-                    : `${counts.done}/${counts.total} done`}
+                    : stage.stage === "other"
+                      ? stagePhotoCount > 0
+                        ? `${stagePhotoCount} photo${stagePhotoCount === 1 ? "" : "s"}`
+                        : "Optional"
+                      : `${counts.done}/${counts.total} done`}
                 </span>
               </button>
             </li>
@@ -414,7 +421,7 @@ export function InstallerChecklistCard({
             {sent && (
               <p className="flex items-center gap-1.5 text-sm text-brand-green-mid">
                 <CheckCircle2 className="h-4 w-4" />
-                {stage.title} photos sent to the office{" "}
+                {stage.photosLabel.charAt(0).toUpperCase() + stage.photosLabel.slice(1)} sent to the office{" "}
                 {formatDateTime(sent.at)}. If you add or change anything here
                 you&rsquo;ll need to send this stage again.
               </p>
@@ -444,7 +451,7 @@ export function InstallerChecklistCard({
                   ? "Uploading photos…"
                   : sent
                     ? `${stage.title} sent`
-                    : `Send ${stage.title.toLowerCase()} photos`}
+                    : `Send ${stage.photosLabel}`}
             </Button>
           </div>
         );
@@ -620,7 +627,7 @@ function ChecklistRow({
 
       {error && <p className="pl-6 text-xs text-red-600">{error}</p>}
 
-      {canEdit && !hasPhotos && pending.length === 0 && (
+      {canEdit && !item.optional && !hasPhotos && pending.length === 0 && (
         <div className="pl-6">
           <button
             type="button"

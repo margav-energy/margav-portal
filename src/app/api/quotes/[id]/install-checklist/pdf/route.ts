@@ -4,7 +4,7 @@ import { getInstallerJobDetail } from "@/data/installer-jobs-service";
 import { getQuoteDetail } from "@/data/quotes-service";
 import { getSolarInstallChecklist, loadChecklistPhotoBytes } from "@/data/solar-install-checklist-service";
 import { renderInstallChecklistPdf } from "@/lib/install-checklist/pdf";
-import { CHECKLIST_STAGES } from "@/lib/solar-install-checklist";
+import { CORE_CHECKLIST_STAGES } from "@/lib/solar-install-checklist";
 
 const unsafe = /[\/:*?"<>|]/g;
 
@@ -41,8 +41,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const [checklist, photos] = await Promise.all([getSolarInstallChecklist(id), loadChecklistPhotoBytes(id)]);
   if (!checklist.id) return NextResponse.json({ error: "The checklist hasn't been started yet" }, { status: 404 });
 
-  const sent = Object.keys(checklist.submittedStages).length;
-  const statusLabel = checklist.status === "submitted" ? "All stages submitted" : `${sent} of ${CHECKLIST_STAGES.length} stages submitted`;
+  const sent = CORE_CHECKLIST_STAGES.filter((stage) => checklist.submittedStages[stage.stage]).length;
+  const statusLabel = checklist.status === "submitted" ? "All stages submitted" : `${sent} of ${CORE_CHECKLIST_STAGES.length} stages submitted`;
   const pdf = await renderInstallChecklistPdf({
     customerName,
     reference: reference ?? id,

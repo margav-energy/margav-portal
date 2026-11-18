@@ -70,7 +70,9 @@ export async function renderInstallChecklistPdf(params: {
           {reference} · {statusLabel} · {done}/{total} items · {photos.length} photo{photos.length === 1 ? "" : "s"}
         </Text>
 
-        {CHECKLIST_STAGES.map((stage) => (
+        {CHECKLIST_STAGES.filter(
+          (stage) => stage.stage !== "other" || photos.some((photo) => CHECKLIST_ITEMS.find((item) => item.key === photo.itemKey)?.stage === "other"),
+        ).map((stage) => (
           <View key={stage.stage}>
             <Text style={styles.stageTitle}>{stage.title}</Text>
             {CHECKLIST_ITEMS.filter((item) => item.stage === stage.stage).map((item) => {
@@ -82,7 +84,7 @@ export async function renderInstallChecklistPdf(params: {
                     <Text style={styles.itemLabel}>{item.label}</Text>
                     {isNa ? (
                       <Text style={styles.statusNa}>N/A</Text>
-                    ) : itemPhotos.length === 0 ? (
+                    ) : itemPhotos.length === 0 && !item.optional ? (
                       <Text style={styles.statusMissing}>MISSING</Text>
                     ) : null}
                   </View>
