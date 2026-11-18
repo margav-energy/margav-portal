@@ -67,8 +67,8 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
 
 /** Checklist keys an electrician may add photos to / mark N/A. Installers can edit every item. */
 const ELECTRICIAN_ITEM_KEYS = new Set([
+  "pre-inverter-space",
   "pre-consumer-unit",
-  "pre-existing-damage",
   "mid-cu-cover-off",
   "mid-acdc-cover-off",
   "post-earthing",

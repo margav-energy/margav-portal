@@ -33,7 +33,6 @@ import {
   createQuoteLineItem,
   logWarrantyRegistration,
   recordPitchOutcome,
-  sendCoolingOffWaiver,
   sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
@@ -115,7 +114,6 @@ export function BoilerQuoteDetail({
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
-  const [isWaiverModalOpen, setIsWaiverModalOpen] = useState(false);
   const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
 
@@ -248,7 +246,6 @@ export function BoilerQuoteDetail({
     onSurvey: () => setIsSurveyModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
     onInstallationAgreement: () => setIsAgreementModalOpen(true),
-    onCoolingOffWaiver: () => setIsWaiverModalOpen(true),
   });
 
   return (
@@ -399,7 +396,7 @@ export function BoilerQuoteDetail({
           />
           <SignatureStatusCard
             title="Cooling-Off Waiver"
-            emptyActionLabel="Cooling-Off Waiver"
+            emptyActionLabel="Installation Agreement"
             request={waiverSignatureRequest}
             signedDocumentUrl={waiverSignedDocumentUrl}
             readHref="/api/agreement-templates/cooling-off-waiver"
@@ -438,25 +435,11 @@ export function BoilerQuoteDetail({
           quoteId={detail.quoteId}
           customerName={customer.name}
           customerEmail={customer.email}
-          title="Send Installation Agreement"
-          documentLabel="installation agreement"
+          title="Send Installation Agreement & Cooling-Off Waiver"
+          documentLabel="installation agreement and cooling-off waiver"
           sendAction={sendInstallationAgreement}
           onClose={() => {
             setIsAgreementModalOpen(false);
-            router.refresh();
-          }}
-        />
-      )}
-      {isWaiverModalOpen && (
-        <SendForSignatureModal
-          quoteId={detail.quoteId}
-          customerName={customer.name}
-          customerEmail={customer.email}
-          title="Send Cooling-Off Waiver"
-          documentLabel="cooling-off waiver"
-          sendAction={sendCoolingOffWaiver}
-          onClose={() => {
-            setIsWaiverModalOpen(false);
             router.refresh();
           }}
         />

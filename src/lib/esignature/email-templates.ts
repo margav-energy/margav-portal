@@ -64,6 +64,32 @@ export function signAgreementEmailHtml(params: {
   );
 }
 
+/** One email for the installation agreement and the cooling-off waiver - a button per document still waiting to be signed (each is its own signing page and its own signed PDF). */
+export function signDocumentsEmailHtml(params: {
+  customerName: string;
+  reference: string;
+  documents: { name: string; signLink: string; buttonLabel: string }[];
+  /** Extra sentence after the intro, e.g. "Read each one, then sign once for both." */
+  note?: string;
+  /** "Solar" picks the MarGav Solar trading name; omitted means Margav Heating. */
+  productTypeLabel?: string;
+}): string {
+  const names = params.documents.map((document) => document.name).join(" and ");
+  return wrapper(
+    `<p>Hi ${params.customerName},</p>` +
+      `<p>Please review and sign your ${names} for quote ${params.reference}.${params.note ? ` ${params.note}` : ""}</p>` +
+      params.documents
+        .map(
+          (document) =>
+            buttonHtml(document.signLink, document.buttonLabel) +
+            `<p style="font-size:13px;color:#737373;margin-top:-12px;">Or copy this link: <a href="${document.signLink}">${document.signLink}</a></p>`,
+        )
+        .join("") +
+      `<p style="font-size:13px;color:#737373;">These links are unique to you &mdash; please don&rsquo;t share them.</p>`,
+    brandNameForProduct(params.productTypeLabel),
+  );
+}
+
 export function signWaiverEmailHtml(params: {
   customerName: string;
   reference: string;

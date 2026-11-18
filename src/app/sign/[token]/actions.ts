@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { declineSignature, submitSignature } from "@/data/signature-service";
+import { declineSignatureBundle, submitSignatureBundle } from "@/data/signature-service";
 
 /**
  * Mutations for the public, unauthenticated `/sign/[token]` form. Mirrors
@@ -24,18 +24,21 @@ export async function submitSignatureAction(
   signatureImageDataUrl: string,
   /** Cooling-Off Waiver only — see `SubmitSignatureParams.installDate`'s doc comment. Ignored for every other document type. */
   installDate?: string,
+  /** The customer saw the installation agreement and cooling-off waiver together and is signing both - the server looks the second one up itself. */
+  includeCompanion = false,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!typedName.trim()) return { ok: false, error: "Please type your full name." };
   if (!signatureImageDataUrl) return { ok: false, error: "Please draw your signature." };
 
   const { ip, userAgent } = await clientMeta();
-  const result = await submitSignature({
+  const result = await submitSignatureBundle({
     token,
     typedName: typedName.trim(),
     signatureImageDataUrl,
     ip,
     userAgent,
     installDate,
+    includeCompanion,
   });
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
@@ -43,7 +46,8 @@ export async function submitSignatureAction(
 export async function declineSignatureAction(
   token: string,
   reason: string,
+  includeCompanion = false,
 ): Promise<{ ok: boolean; error?: string }> {
-  const result = await declineSignature(token, reason);
+  const result = await declineSignatureBundle(token, reason, includeCompanion);
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }

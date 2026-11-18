@@ -297,7 +297,7 @@ export async function createAgreementSignatureRequest(
 }
 
 /**
- * Called from `sendCoolingOffWaiver` (`src/components/quotes/actions.ts`)
+ * Called from `sendInstallationAgreement` (`src/components/quotes/actions.ts`), which sends it with the agreement
  * — the fixed Cooling-Off Waiver T&Cs document, boiler or solar by the quote's
  * product, same as `createAgreementSignatureRequest`.
  */
@@ -782,6 +782,89 @@ export async function submitSignature(params: SubmitSignatureParams): Promise<{ 
     await performQuoteSignedSideEffects(row);
   }
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Agreement + waiver signed together (one signature for both)
+// ─────────────────────────────────────────────────────────────────────────
+
+const COMPANION_TYPE: Partial<Record<SignatureDocumentType, SignatureDocumentType>> = {
+  boiler_installation_agreement: "cooling_off_waiver",
+  cooling_off_waiver: "boiler_installation_agreement",
+  solar_installation_agreement: "solar_cooling_off_waiver",
+  solar_cooling_off_waiver: "solar_installation_agreement",
+};
+
+/** The installation agreement's waiver (or the waiver's agreement) - the other half of a combined signing. Quotes have none. */
+export function companionDocumentType(documentType: SignatureDocumentType): SignatureDocumentType | undefined {
+  return COMPANION_TYPE[documentType];
+}
+
+/** The latest request of the companion type on the same quote, if it is still waiting for a signature. */
+async function findOpenCompanion(row: SignatureRequestRow): Promise<SignatureRequestRow | null> {
+  const companionType = COMPANION_TYPE[row.document_type];
+  if (!companionType) return null;
+
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("signature_requests")
+    .select(FULL_ROW_COLUMNS)
+    .eq("quote_id", row.quote_id)
+    .eq("document_type", companionType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const companion = data as SignatureRequestRow | null;
+  if (!companion) return null;
+  if (companion.status !== "pending" && companion.status !== "viewed") return null;
+  if (new Date(companion.expires_at).getTime() < Date.now()) return null;
+  return companion;
+}
+
+/**
+ * Signs a document and, when the customer saw both on the combined page
+ * (`includeCompanion`), its companion with the same typed name, drawn
+ * signature, time, IP and browser - one signature across the installation
+ * agreement and the cooling-off waiver. Each stays its own `signature_requests`
+ * row with its own signed PDF, so the quote page's status cards and downloads
+ * work unchanged. The companion is looked up here (never taken from the
+ * client), and only signed if it's still open.
+ */
+export async function submitSignatureBundle(
+  params: SubmitSignatureParams & { includeCompanion: boolean },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { includeCompanion, ...single } = params;
+  if (!includeCompanion) return submitSignature(single);
+
+  const row = await findRequestByToken(single.token);
+  if (!row) return { ok: false, error: "This signing link is no longer valid." };
+  const companion = await findOpenCompanion(row);
+
+  const first = await submitSignature(single);
+  if (!first.ok || !companion) return first;
+
+  const second = await submitSignature({ ...single, token: companion.access_token });
+  if (!second.ok) {
+    return {
+      ok: false,
+      error: `One document was signed, but the other couldn't be saved (${second.error}) Refresh the page to sign what's left.`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Declines a document and, from the combined page, its companion too. */
+export async function declineSignatureBundle(
+  token: string,
+  reason: string,
+  includeCompanion: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const row = await findRequestByToken(token);
+  const companion = includeCompanion && row ? await findOpenCompanion(row) : null;
+  const first = await declineSignature(token, reason);
+  if (!first.ok || !companion) return first;
+  return declineSignature(companion.access_token, reason);
 }
 
 export async function declineSignature(

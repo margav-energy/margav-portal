@@ -58,7 +58,7 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
   if (error) console.error("getSolarInstallChecklist failed", error);
   if (!row) return EMPTY_CHECKLIST;
 
-  const rawStages = (row.submitted_stages ?? {}) as Record<string, { at?: string; by?: string } | undefined>;
+  const rawStages = (row.submitted_stages ?? {}) as Record<string, { at?: string; by?: string | null; role?: string } | undefined>;
   const submitterIds = [...new Set([row.submitted_by, ...Object.values(rawStages).map((s) => s?.by)].filter((id): id is string => !!id))];
 
   const [{ data: photoRows, error: photosError }, { data: submitters }] = await Promise.all([
@@ -93,7 +93,11 @@ export async function getSolarInstallChecklist(quoteId: string): Promise<SolarIn
   const submittedStages: SolarInstallChecklist["submittedStages"] = {};
   for (const { stage } of CHECKLIST_STAGES) {
     const entry = rawStages[stage];
-    if (entry?.at) submittedStages[stage] = { at: entry.at, byName: entry.by ? names.get(entry.by) : undefined };
+    if (entry?.at) {
+      // A stage sent through the share link has no signed-in user - label it by role instead.
+      const linkLabel = entry.role === "electrician" ? "Electrician (via link)" : entry.role === "installer" ? "Installer (via link)" : undefined;
+      submittedStages[stage] = { at: entry.at, byName: entry.by ? names.get(entry.by) : linkLabel };
+    }
   }
 
   return {
@@ -111,6 +115,7 @@ export interface ChecklistPhotoBytes {
   id: string;
   itemKey: string;
   fileName: string;
+  contentType: string;
   bytes: Buffer;
 }
 
@@ -122,7 +127,7 @@ export async function loadChecklistPhotoBytes(quoteId: string, itemKeys?: string
 
   let query = supabase
     .from("solar_install_checklist_photos")
-    .select("id, item_key, storage_path, file_name")
+    .select("id, item_key, storage_path, file_name, content_type")
     .eq("checklist_id", checklist.id)
     .order("uploaded_at", { ascending: true });
   if (itemKeys) query = query.in("item_key", itemKeys);
@@ -144,9 +149,67 @@ export async function loadChecklistPhotoBytes(quoteId: string, itemKeys?: string
         console.error("loadChecklistPhotoBytes: download failed", row.storage_path, downloadError);
         continue;
       }
-      files[i] = ({ id: row.id, itemKey: row.item_key, fileName: row.file_name || row.id, bytes: Buffer.from(await data.arrayBuffer()) });
+      files[i] = ({ id: row.id, itemKey: row.item_key, fileName: row.file_name || row.id, contentType: row.content_type || "", bytes: Buffer.from(await data.arrayBuffer()) });
     }
   };
   await Promise.all(Array.from({ length: 4 }, worker));
   return files.filter((file): file is ChecklistPhotoBytes => file !== null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Share link (no login) - /checklist/[token]
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Called when the office clicks "Checklist" on a solar quote. Reuses the
+ * checklist row for the quote (one per quote), creating it if the installer
+ * hasn't started yet, and returns its unguessable token for the QR / link.
+ * Callers MUST have checked the user is staff who can open the quote.
+ */
+export async function getOrCreateChecklistToken(quoteId: string): Promise<{ accessToken: string; created: boolean }> {
+  const supabase = createServiceRoleClient();
+  const { data: existing } = await supabase.from("solar_install_checklists").select("access_token").eq("quote_id", quoteId).maybeSingle();
+  if (existing) return { accessToken: existing.access_token, created: false };
+
+  const { data, error } = await supabase.from("solar_install_checklists").insert({ quote_id: quoteId }).select("access_token").single();
+  if (error || !data) {
+    // Lost a race with a parallel creator.
+    const { data: again } = await supabase.from("solar_install_checklists").select("access_token").eq("quote_id", quoteId).maybeSingle();
+    if (again) return { accessToken: again.access_token, created: false };
+    throw new Error(`getOrCreateChecklistToken failed: ${error?.message ?? "no row returned"}`);
+  }
+  return { accessToken: data.access_token, created: true };
+}
+
+/** The quote a share-link token belongs to, or null if the token isn't valid. */
+export async function findQuoteIdByChecklistToken(token: string): Promise<string | null> {
+  if (!/^[0-9a-f]{20,}$/i.test(token)) return null;
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase.from("solar_install_checklists").select("quote_id").eq("access_token", token).maybeSingle();
+  if (error) console.error("findQuoteIdByChecklistToken failed", error);
+  return data?.quote_id ?? null;
+}
+
+export interface PublicChecklist {
+  quoteId: string;
+  customerName: string;
+  address: string;
+  checklist: SolarInstallChecklist;
+}
+
+/** What the public checklist page shows. Solar quotes only. */
+export async function getPublicChecklist(token: string): Promise<PublicChecklist | null> {
+  const quoteId = await findQuoteIdByChecklistToken(token);
+  if (!quoteId) return null;
+
+  const supabase = createServiceRoleClient();
+  const { data: quote } = await supabase.from("quotes").select("customer_name, address, postcode, product_type").eq("id", quoteId).maybeSingle();
+  if (!quote || quote.product_type !== "solar") return null;
+
+  return {
+    quoteId,
+    customerName: quote.customer_name,
+    address: quote.address || quote.postcode || "",
+    checklist: await getSolarInstallChecklist(quoteId),
+  };
 }

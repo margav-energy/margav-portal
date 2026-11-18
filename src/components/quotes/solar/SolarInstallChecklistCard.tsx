@@ -20,12 +20,15 @@ export function SolarInstallChecklistCard({
   quoteId,
   checklist,
   hasInstaller,
+  defaultOpen,
 }: {
   quoteId: string;
   checklist: SolarInstallChecklist;
   hasInstaller: boolean;
+  /** Start expanded - used by the standalone "View online" page. Defaults to open once everything is submitted. */
+  defaultOpen?: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(checklist.status === "submitted");
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? checklist.status === "submitted");
 
   if (!checklist.id && !hasInstaller) return null;
 

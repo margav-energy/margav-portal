@@ -1,4 +1,4 @@
-import { getPublicRelatedDocuments, getPublicSignatureRequest } from "@/data/signature-service";
+import { companionDocumentType, getPublicRelatedDocuments, getPublicSignatureRequest } from "@/data/signature-service";
 import { getPublicSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { SignForm } from "@/app/sign/[token]/SignForm";
 import type { DocumentSnapshot } from "@/lib/esignature/document";
@@ -35,7 +35,24 @@ export default async function PublicSignPage({
     isBoilerJob ? getPublicSurveyDocumentUrl(request.snapshot.quoteId) : Promise.resolve(undefined),
   ]);
 
+  // An installation agreement and its cooling-off waiver are read separately but signed once: if this document's
+  // other half is still waiting, show both on this page (see `submitSignatureBundle`).
+  const companionType = companionDocumentType(request.documentType);
+  const openCompanion =
+    companionType && (request.status === "pending" || request.status === "viewed")
+      ? relatedDocuments.find(
+          (related) => related.documentType === companionType && (related.status === "pending" || related.status === "viewed"),
+        )
+      : undefined;
+  const companionRequest = openCompanion ? await getPublicSignatureRequest(openCompanion.accessToken) : undefined;
+
   return (
-    <SignForm token={token} request={request} relatedDocuments={relatedDocuments} surveyDocumentUrl={surveyDocumentUrl} />
+    <SignForm
+      token={token}
+      request={request}
+      relatedDocuments={relatedDocuments}
+      surveyDocumentUrl={surveyDocumentUrl}
+      companion={companionRequest && !companionRequest.expired ? { accessToken: openCompanion!.accessToken, request: companionRequest } : undefined}
+    />
   );
 }

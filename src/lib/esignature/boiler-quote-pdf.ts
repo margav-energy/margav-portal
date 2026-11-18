@@ -182,49 +182,6 @@ export interface OrderAcceptanceSignature {
   documentHash: string;
 }
 
-/** Crude character-count wrap — good enough for a small monospace-ish audit
- *  footer, not real typesetting. Same helper as agreement-pdf.tsx. */
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if ((current + " " + word).trim().length > maxChars) {
-      if (current) lines.push(current.trim());
-      current = word;
-    } else {
-      current = `${current} ${word}`.trim();
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-/** Both signature pages have plenty of blank space below their two field
- *  rows — same audit trail (IP/browser/document hash) `agreement-pdf.tsx`
- *  prints in its own page's leftover space. `startY` is measured from each
- *  page's own field layout (46pt below the "Date" row's line) rather than
- *  hardcoded, since page 9's rows sit lower on the page than page 5's. */
-function drawAuditFooter(page: PDFPage, font: PDFFont, reference: string, audit: OrderAcceptanceSignature, startY: number) {
-  const lines = [
-    `Quote ${reference} — signed ${audit.signedAtLabel}`,
-    ...wrapText(`IP address: ${audit.ip}`, 100),
-    ...wrapText(`Browser: ${audit.userAgent}`, 100),
-    ...wrapText(`Document hash (SHA-256): ${audit.documentHash}`, 100),
-  ];
-  let y = startY;
-  for (const line of lines) {
-    page.drawText(line, { x: 78, y, size: 7, font, color: rgb(0.58, 0.64, 0.72) });
-    y -= 10;
-  }
-}
-
-/** 46pt below a field layout's "Date" row line — where `drawAuditFooter`
- *  starts on both signature pages. */
-function auditFooterStartY(fields: { date: { lineY: number } }): number {
-  return fields.date.lineY - 46;
-}
-
 /** Right-edge-anchored x for `text` at `size` — used throughout the
  *  regenerated pricing table for the numeric columns, which read better
  *  right-aligned than left-aligned. */
@@ -533,7 +490,7 @@ interface SignatureFieldLayout {
 
 /**
  * Fills one signature page's "Customer name / Customer signature / Date /
- * Contract reference" block plus its audit footer — shared by page 5
+ * Contract reference" block — shared by page 5
  * ("Order acceptance") and page 9 ("Acknowledgements"), which use the
  * identical field layout at different y-positions (see
  * `ACKNOWLEDGEMENTS_FIELDS`'s comment).
@@ -552,7 +509,6 @@ function fillSignatureBlock(
   drawAcceptanceSignature(page, signatureImage, fields.customerSignature);
   drawAcceptanceText(page, font, dateLabel, fields.date);
   drawAcceptanceText(page, font, reference, fields.reference);
-  drawAuditFooter(page, font, reference, signature, auditFooterStartY(fields));
 }
 
 /**

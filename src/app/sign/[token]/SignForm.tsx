@@ -60,21 +60,75 @@ function StaticDocumentPreview({
   );
 }
 
+type StaticDocumentType = keyof typeof DOCUMENT_META;
+
+/** The preview card for one of the fixed-template documents - shared by the single-document page and the combined agreement + waiver page, where each is read on its own. */
+function StaticPreviewFor({ documentType, reference }: { documentType: StaticDocumentType; reference: string }) {
+  switch (documentType) {
+    case "boiler_installation_agreement":
+      return (
+        <StaticDocumentPreview
+          title="Boiler Installation Agreement"
+          description={`This is the Terms & Conditions of Installation for quote ${reference}. Please read the full agreement before signing.`}
+          pdfHref="/api/agreement-templates/boiler-installation"
+          linkLabel="View the full agreement (PDF)"
+          footnote="A statutory 14-day cooling-off period applies from the date you sign, during which you may cancel without penalty (see clause 3 of the agreement)."
+        />
+      );
+    case "solar_installation_agreement":
+      return (
+        <StaticDocumentPreview
+          title="Solar PV Installation Agreement"
+          description={`These are the terms of your solar PV installation for quote ${reference}. Please read the full agreement before signing.`}
+          pdfHref="/api/agreement-templates/solar-installation"
+          linkLabel="View the full agreement (PDF)"
+          footnote="A statutory 14-day cooling-off period applies from the date you sign (see clause 3 of the agreement). Payment terms are in clause 10."
+        />
+      );
+    case "solar_cooling_off_waiver":
+      return (
+        <StaticDocumentPreview
+          title="Cooling-Off Waiver"
+          description={`This waiver lets your solar PV installation for quote ${reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
+          pdfHref="/api/agreement-templates/solar-cooling-off-waiver"
+          linkLabel="View the full waiver (PDF)"
+        />
+      );
+    case "cooling_off_waiver":
+      return (
+        <StaticDocumentPreview
+          title="Cooling-Off Waiver"
+          description={`This waiver lets your boiler installation for quote ${reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
+          pdfHref="/api/agreement-templates/cooling-off-waiver"
+          linkLabel="View the full waiver (PDF)"
+        />
+      );
+  }
+}
+
 export function SignForm({
   token,
   request,
   relatedDocuments = [],
   surveyDocumentUrl,
+  companion,
 }: {
   token: string;
   request: PublicSignatureRequest;
   relatedDocuments?: PublicRelatedDocument[];
   surveyDocumentUrl?: string;
+  /** The other half of the installation agreement + cooling-off waiver pair, when it's still waiting - both are then read separately and signed together with one signature. */
+  companion?: { accessToken: string; request: PublicSignatureRequest };
 }) {
   const staticTemplate = isStaticTemplateType(request.documentType) ? DOCUMENT_META[request.documentType] : undefined;
   const documentLabel = staticTemplate?.label ?? "quote";
   const isWaiver = request.documentType === "cooling_off_waiver" || request.documentType === "solar_cooling_off_waiver";
+  const bundle = staticTemplate !== undefined && companion !== undefined;
   const isSolarDocument = request.documentType.startsWith("solar_");
+  // In the combined page the agreement is always listed first, whichever of the two links was opened.
+  const agreementType = (isWaiver ? companion?.request.documentType : request.documentType) as StaticDocumentType;
+  const waiverType = (isWaiver ? request.documentType : companion?.request.documentType) as StaticDocumentType;
+  const waiverSnapshot = (isWaiver ? request.snapshot : companion?.request.snapshot) as WaiverSnapshot | undefined;
   // An agreement or waiver says its product through its document type; a quote is Solar or Boiler by its snapshot.
   const brand = staticTemplate
     ? brandNameForProduct(isSolarDocument ? "Solar" : "Boiler")
@@ -85,21 +139,38 @@ export function SignForm({
   // submit time is what gets recorded on the signed PDF (see
   // `WaiverSnapshot.agreedInstallDate`'s doc comment). Optional: left blank
   // prints as "—", same as before this existed.
-  const [installDate, setInstallDate] = useState(
-    isWaiver ? ((request.snapshot as WaiverSnapshot).agreedInstallDate ?? "") : "",
-  );
+  const [installDate, setInstallDate] = useState(waiverSnapshot?.agreedInstallDate ?? "");
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
+  // Combined page only: the second tick-box (the waiver; `agreed` is the agreement's) - each document gets its own conscious yes.
+  const [agreedWaiver, setAgreedWaiver] = useState(false);
   const [status, setStatus] = useState<"form" | "submitting" | "signed" | "declined" | "declining">("form");
   const [error, setError] = useState<string | null>(null);
   const [declineReason, setDeclineReason] = useState("");
+
+  // The agreement and the waiver go out together but are signed separately - once one is done, point at whichever is still waiting.
+  const pendingRelated = relatedDocuments.filter(
+    (relatedDocument) =>
+      isStaticTemplateType(relatedDocument.documentType) &&
+      // In the combined view the companion was just signed on this page too.
+      !(bundle && relatedDocument.accessToken === companion?.accessToken) &&
+      (relatedDocument.status === "pending" || relatedDocument.status === "viewed"),
+  );
 
   if (request.status === "signed" || status === "signed") {
     return (
       <StatusScreen
         icon={<CheckCircle2 className="h-10 w-10 text-brand-green-mid" />}
         title="Signed — thank you"
-        body={`This ${documentLabel} has been signed and ${brand} has been notified. You'll receive a copy for your records.`}
+        body={
+          bundle
+            ? `Your installation agreement and cooling-off waiver have been signed and ${brand} has been notified. You'll receive a copy of each for your records.`
+            : `This ${documentLabel} has been signed and ${brand} has been notified. You'll receive a copy for your records.`
+        }
+        nextLinks={pendingRelated.map((relatedDocument) => ({
+          label: `Next: sign the ${isStaticTemplateType(relatedDocument.documentType) ? DOCUMENT_META[relatedDocument.documentType].relatedLabel : "document"}`,
+          href: `/sign/${relatedDocument.accessToken}`,
+        }))}
       />
     );
   }
@@ -109,18 +180,18 @@ export function SignForm({
       <StatusScreen
         icon={<XCircle className="h-10 w-10 text-slate-400" />}
         title="Signature declined"
-        body={`You've declined to sign this ${documentLabel}. ${brand} has been notified — get in touch if you'd like to discuss it further.`}
+        body={`You've declined to sign ${bundle ? "these documents" : `this ${documentLabel}`}. ${brand} has been notified — get in touch if you'd like to discuss it further.`}
       />
     );
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (!typedName.trim() || !signatureDataUrl || !agreed) return;
+    if (!typedName.trim() || !signatureDataUrl || !agreed || (bundle && !agreedWaiver)) return;
 
     setStatus("submitting");
     setError(null);
-    const result = await submitSignatureAction(token, typedName, signatureDataUrl, isWaiver ? installDate : undefined);
+    const result = await submitSignatureAction(token, typedName, signatureDataUrl, isWaiver || bundle ? installDate : undefined, bundle);
     if (result.ok) {
       setStatus("signed");
     } else {
@@ -131,7 +202,7 @@ export function SignForm({
 
   async function handleDecline() {
     setStatus("submitting");
-    const result = await declineSignatureAction(token, declineReason);
+    const result = await declineSignatureAction(token, declineReason, bundle);
     if (result.ok) {
       setStatus("declined");
     } else {
@@ -140,7 +211,7 @@ export function SignForm({
     }
   }
 
-  const canSubmit = typedName.trim().length > 0 && Boolean(signatureDataUrl) && agreed && status !== "submitting";
+  const canSubmit = typedName.trim().length > 0 && Boolean(signatureDataUrl) && agreed && (!bundle || agreedWaiver) && status !== "submitting";
 
   function scrollToSignForm() {
     document.getElementById("sign-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -151,6 +222,8 @@ export function SignForm({
     relatedDocumentLinks.push({ label: "Boiler survey", href: surveyDocumentUrl, statusLabel: "Submitted" });
   }
   for (const relatedDocument of relatedDocuments) {
+    // Signed on this very page in the combined view, so no separate link to it.
+    if (bundle && relatedDocument.accessToken === companion?.accessToken) continue;
     const label = isStaticTemplateType(relatedDocument.documentType)
       ? DOCUMENT_META[relatedDocument.documentType].relatedLabel
       : "Quote";
@@ -172,41 +245,20 @@ export function SignForm({
         <div className="text-center">
           <p className="text-lg font-bold text-slate-900">{brand}</p>
           <p className="text-sm text-slate-500">
-            {staticTemplate?.bannerTitle ?? `Quote ${request.snapshot.reference}`}
+            {bundle
+              ? `Installation Agreement & Cooling-Off Waiver — quote ${request.snapshot.reference}`
+              : (staticTemplate?.bannerTitle ?? `Quote ${request.snapshot.reference}`)}
             {!staticTemplate && " — " + (request.snapshot as DocumentSnapshot).productTypeLabel}
           </p>
         </div>
 
-        {request.documentType === "boiler_installation_agreement" ? (
-          <StaticDocumentPreview
-            title="Boiler Installation Agreement"
-            description={`This is the Terms & Conditions of Installation for quote ${request.snapshot.reference}. Please read the full agreement before signing.`}
-            pdfHref="/api/agreement-templates/boiler-installation"
-            linkLabel="View the full agreement (PDF)"
-            footnote="A statutory 14-day cooling-off period applies from the date you sign, during which you may cancel without penalty (see clause 3 of the agreement)."
-          />
-        ) : request.documentType === "solar_installation_agreement" ? (
-          <StaticDocumentPreview
-            title="Solar PV Installation Agreement"
-            description={`These are the terms of your solar PV installation for quote ${request.snapshot.reference}. Please read the full agreement before signing.`}
-            pdfHref="/api/agreement-templates/solar-installation"
-            linkLabel="View the full agreement (PDF)"
-            footnote="A statutory 14-day cooling-off period applies from the date you sign (see clause 3 of the agreement). Payment terms are in clause 10."
-          />
-        ) : request.documentType === "solar_cooling_off_waiver" ? (
-          <StaticDocumentPreview
-            title="Cooling-Off Waiver"
-            description={`This waiver lets your solar PV installation for quote ${request.snapshot.reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
-            pdfHref="/api/agreement-templates/solar-cooling-off-waiver"
-            linkLabel="View the full waiver (PDF)"
-          />
-        ) : request.documentType === "cooling_off_waiver" ? (
-          <StaticDocumentPreview
-            title="Cooling-Off Waiver"
-            description={`This waiver lets your boiler installation for quote ${request.snapshot.reference} begin before your statutory 14-day cancellation period ends. Please read it in full before signing — you're under no obligation to sign it.`}
-            pdfHref="/api/agreement-templates/cooling-off-waiver"
-            linkLabel="View the full waiver (PDF)"
-          />
+        {bundle ? (
+          <>
+            <StaticPreviewFor documentType={agreementType} reference={request.snapshot.reference} />
+            <StaticPreviewFor documentType={waiverType} reference={request.snapshot.reference} />
+          </>
+        ) : staticTemplate ? (
+          <StaticPreviewFor documentType={request.documentType as StaticDocumentType} reference={request.snapshot.reference} />
         ) : (
           <QuoteDocumentPreview
             snapshot={request.snapshot as DocumentSnapshot}
@@ -257,7 +309,7 @@ export function SignForm({
             />
           </div>
 
-          {isWaiver && (
+          {(isWaiver || bundle) && (
             <div className="flex flex-col gap-1.5">
               <label htmlFor="installDate" className="text-sm font-medium text-slate-700">
                 Agreed installation date <span className="font-normal text-slate-400">(optional)</span>
@@ -281,10 +333,23 @@ export function SignForm({
               onChange={(event) => setAgreed(event.target.checked)}
               className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
             />
-            {isWaiver
-              ? `I have read and agree to the cooling-off waiver above, and I expressly request that ${brand} begin the installation works before my statutory 14-day cancellation period ends.`
-              : `I have read and agree to the ${documentLabel} above, including the statutory 14-day cooling-off period.`}
+            {bundle
+              ? "I have read and agree to the installation agreement above, including the statutory 14-day cooling-off period."
+              : isWaiver
+                ? `I have read and agree to the cooling-off waiver above, and I expressly request that ${brand} begin the installation works before my statutory 14-day cancellation period ends.`
+                : `I have read and agree to the ${documentLabel} above, including the statutory 14-day cooling-off period.`}
           </label>
+          {bundle && (
+            <label className="flex items-start gap-2 text-sm text-slate-600">
+              <input
+                type="checkbox"
+                checked={agreedWaiver}
+                onChange={(event) => setAgreedWaiver(event.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
+              />
+              {`I have read and agree to the cooling-off waiver above, and I expressly request that ${brand} begin the installation works before my statutory 14-day cancellation period ends.`}
+            </label>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -294,7 +359,7 @@ export function SignForm({
               disabled={!canSubmit}
               className="flex-1 rounded-lg bg-brand-green-gradient px-4 py-2.5 text-sm font-semibold text-black transition-colors hover:brightness-95 disabled:opacity-50"
             >
-              {status === "submitting" ? "Submitting…" : "Sign & submit"}
+              {status === "submitting" ? "Submitting…" : bundle ? "Sign both documents" : "Sign & submit"}
             </button>
           </div>
 
@@ -324,12 +389,31 @@ export function SignForm({
   );
 }
 
-function StatusScreen({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+function StatusScreen({
+  icon,
+  title,
+  body,
+  nextLinks = [],
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  nextLinks?: { label: string; href: string }[];
+}) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 p-6 text-center">
       {icon}
       <p className="text-lg font-semibold text-slate-900">{title}</p>
       <p className="max-w-sm text-sm text-slate-500">{body}</p>
+      {nextLinks.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          className="mt-2 rounded-lg bg-brand-green-gradient px-5 py-2.5 text-sm font-semibold text-black hover:brightness-95"
+        >
+          {link.label} →
+        </a>
+      ))}
     </div>
   );
 }

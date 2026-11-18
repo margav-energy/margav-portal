@@ -28,6 +28,7 @@ import { SolarInstallChecklistCard } from "@/components/quotes/solar/SolarInstal
 import { EasyPvCard } from "@/components/quotes/solar/EasyPvCard";
 import type { EasyPvLink } from "@/types/easypv";
 import { SolarSurveyLaunchModal } from "@/components/quotes/solar/SolarSurveyLaunchModal";
+import { SolarChecklistLaunchModal } from "@/components/quotes/solar/SolarChecklistLaunchModal";
 import { SolarKeyDetailsCard } from "@/components/quotes/solar/SolarKeyDetailsCard";
 import { SignatureStatusCard } from "@/components/quotes/detail/SignatureStatusCard";
 import { QuoteDocumentsCard } from "@/components/quotes/detail/QuoteDocumentsCard";
@@ -35,7 +36,6 @@ import {
   cancelQuoteAppointment,
   logStaxPortalAction,
   recordPitchOutcome,
-  sendCoolingOffWaiver,
   sendInstallationAgreement,
   updateSelectedPaymentMethod,
 } from "@/components/quotes/actions";
@@ -130,8 +130,8 @@ export function SolarQuoteDetail({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
-  const [isWaiverModalOpen, setIsWaiverModalOpen] = useState(false);
   const [isSurveyModalOpen, setIsSurveyModalOpen] = useState(false);
+  const [isChecklistModalOpen, setIsChecklistModalOpen] = useState(false);
   const [isAppointmentCancelled, setIsAppointmentCancelled] = useState(detail.installStatus === "cancelled");
   const router = useRouter();
 
@@ -198,9 +198,9 @@ export function SolarQuoteDetail({
     },
     onCancelApp: () => void handleCancelApp(),
     onSurvey: () => setIsSurveyModalOpen(true),
+    onChecklist: () => setIsChecklistModalOpen(true),
     onSelectPitchOutcome: handleSelectPitchOutcome,
     onInstallationAgreement: () => setIsAgreementModalOpen(true),
-    onCoolingOffWaiver: () => setIsWaiverModalOpen(true),
   });
 
   return (
@@ -389,7 +389,7 @@ export function SolarQuoteDetail({
           />
           <SignatureStatusCard
             title="Cooling-Off Waiver"
-            emptyActionLabel="Cooling-Off Waiver"
+            emptyActionLabel="Installation Agreement"
             request={waiverSignatureRequest}
             signedDocumentUrl={waiverSignedDocumentUrl}
             readHref="/api/agreement-templates/solar-cooling-off-waiver"
@@ -411,6 +411,17 @@ export function SolarQuoteDetail({
           }}
         />
       )}
+      {isChecklistModalOpen && (
+        <SolarChecklistLaunchModal
+          quoteId={detail.quoteId}
+          customerName={customer.name}
+          photoCount={installChecklist.photos.length}
+          onClose={() => {
+            setIsChecklistModalOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
       {isSendModalOpen && (
         <SendForSignatureModal
           quoteId={detail.quoteId}
@@ -427,25 +438,11 @@ export function SolarQuoteDetail({
           quoteId={detail.quoteId}
           customerName={customer.name}
           customerEmail={customer.email}
-          title="Send Installation Agreement"
-          documentLabel="installation agreement"
+          title="Send Installation Agreement & Cooling-Off Waiver"
+          documentLabel="installation agreement and cooling-off waiver"
           sendAction={sendInstallationAgreement}
           onClose={() => {
             setIsAgreementModalOpen(false);
-            router.refresh();
-          }}
-        />
-      )}
-      {isWaiverModalOpen && (
-        <SendForSignatureModal
-          quoteId={detail.quoteId}
-          customerName={customer.name}
-          customerEmail={customer.email}
-          title="Send Cooling-Off Waiver"
-          documentLabel="cooling-off waiver"
-          sendAction={sendCoolingOffWaiver}
-          onClose={() => {
-            setIsWaiverModalOpen(false);
             router.refresh();
           }}
         />

@@ -9,10 +9,12 @@ import { getProfileById } from "@/data/profiles-service";
 import { allocateAppointment } from "@/data/appointments-service";
 import { getOrCreateBoilerSurveyToken } from "@/data/boiler-survey-service";
 import { getOrCreateSolarSurveyToken } from "@/data/solar-survey-service";
+import { getOrCreateChecklistToken } from "@/data/solar-install-checklist-service";
 import { fetchStreetViewPhotoForQuote, refreshStreetViewPhotoForQuote } from "@/data/property-photo-service";
-import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest } from "@/data/signature-service";
+import { createAgreementSignatureRequest, createSignatureRequest, createWaiverSignatureRequest, getLatestSignatureRequest } from "@/data/signature-service";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
-import { signAgreementEmailHtml, signQuoteEmailHtml, signWaiverEmailHtml } from "@/lib/esignature/email-templates";
+import { signDocumentsEmailHtml, signQuoteEmailHtml } from "@/lib/esignature/email-templates";
+import { getQuoteDetail } from "@/data/quotes-service";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatCurrency } from "@/lib/format";
@@ -1925,12 +1927,16 @@ export async function sendQuote(quoteId: string): Promise<SendQuoteResult> {
 }
 
 /**
- * Sends the fixed "Boiler Installation Agreement" T&Cs document (see
- * `assets/agreement-templates/boiler-installation-agreement.pdf`) to the
- * customer for signature. The rep's side is filled in automatically from
- * their saved Settings signature once the customer signs — see
- * `src/data/signature-service.ts`'s `submitSignature`. Boiler-only, since
- * the document itself is boiler-specific.
+ * Sends the installation agreement and the cooling-off waiver to the customer
+ * together - one email, one link. The page behind it lets them read each
+ * document on its own and sign once for both (`submitSignatureBundle`); each
+ * still ends up as its own signed PDF and status card.
+ * A document the customer has already signed is left out, so re-sending after
+ * only one was signed (or after the waiver's install date changed) doesn't
+ * ask them to sign the same thing twice - they get a link to just the other. The rep's side of each is filled in
+ * automatically once the customer signs - see `submitSignature`,
+ * src/data/signature-service.ts. Works for both products (each has its own
+ * wording).
  */
 export async function sendInstallationAgreement(quoteId: string): Promise<SendQuoteResult> {
   if (!isResendConfigured()) {
@@ -1940,32 +1946,72 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
     };
   }
 
-  const request = await createAgreementSignatureRequest(quoteId);
-  if ("error" in request) return { ok: false, error: request.error };
-  const { accessToken, snapshot, signerEmail } = request;
+  const quoteResult = await getQuoteDetail(quoteId);
+  if (!quoteResult) return { ok: false, error: "Quote not found." };
+  const isSolar = quoteResult.quote.productType === "solar";
+
+  const [agreementLatest, waiverLatest] = await Promise.all([
+    getLatestSignatureRequest(quoteId, isSolar ? "solar_installation_agreement" : "boiler_installation_agreement"),
+    getLatestSignatureRequest(quoteId, isSolar ? "solar_cooling_off_waiver" : "cooling_off_waiver"),
+  ]);
+  const needsAgreement = agreementLatest?.status !== "signed";
+  const needsWaiver = waiverLatest?.status !== "signed";
+  if (!needsAgreement && !needsWaiver) {
+    return { ok: false, error: "The installation agreement and the cooling-off waiver have both been signed already." };
+  }
 
   const origin = await getSiteOrigin();
-  const signLink = `${origin}/sign/${accessToken}`;
-  const isSolar = snapshot.product === "solar";
   const brand = brandNameForProduct(isSolar ? "Solar" : "Boiler");
-  const documentName = isSolar ? "Solar PV Installation Agreement" : "Boiler Installation Agreement";
+  const agreementName = isSolar ? "Solar PV Installation Agreement" : "Boiler Installation Agreement";
 
+  let agreementLink: string | undefined;
+  let waiverLink: string | undefined;
+  let reference = "";
+  let customerName = "";
+  let signerEmail = "";
+
+  if (needsAgreement) {
+    const request = await createAgreementSignatureRequest(quoteId);
+    if ("error" in request) return { ok: false, error: request.error };
+    agreementLink = `${origin}/sign/${request.accessToken}`;
+    ({ reference, customerName } = request.snapshot);
+    signerEmail = request.signerEmail;
+  }
+  if (needsWaiver) {
+    const request = await createWaiverSignatureRequest(quoteId);
+    if ("error" in request) return { ok: false, error: request.error };
+    waiverLink = `${origin}/sign/${request.accessToken}`;
+    ({ reference, customerName } = request.snapshot);
+    signerEmail = request.signerEmail;
+  }
+
+  // Both outstanding: one link. Its page shows the two documents to read separately and takes one signature for both
+  // (see `submitSignatureBundle`). Only one outstanding: a plain link to that document.
+  const together = Boolean(agreementLink && waiverLink);
+  const documents = together
+    ? [{ name: `${agreementName} and Cooling-Off Waiver`, signLink: agreementLink!, buttonLabel: "Review & sign documents" }]
+    : agreementLink
+      ? [{ name: agreementName, signLink: agreementLink, buttonLabel: "Review & sign agreement" }]
+      : [{ name: "Cooling-Off Waiver", signLink: waiverLink!, buttonLabel: "Review & sign waiver" }];
+  const note = together ? "You can read each document on its own, then sign once for both." : undefined;
+
+  const names = documents.map((document) => document.name).join(" and ");
   try {
     await sendEmail({
       to: signerEmail,
       fromName: brand,
-      subject: `${brand} — ${documentName} to sign (${snapshot.reference})`,
+      subject: `${brand} — ${names} to sign (${reference})`,
       text:
-        `Hi ${snapshot.customerName},\n\n` +
-        `Please review and sign your ${documentName} for quote ${snapshot.reference}:\n\n` +
-        `${signLink}\n\n` +
-        `This link is unique to you — please don't share it.\n\n` +
+        `Hi ${customerName},\n\n` +
+        `Please review and sign your ${names} for quote ${reference}.${note ? ` ${note}` : ""}\n\n` +
+        documents.map((document) => document.signLink).join("\n") +
+        `\n\nThis link is unique to you — please don't share it.\n\n` +
         brand,
-      html: signAgreementEmailHtml({
-        customerName: snapshot.customerName,
-        reference: snapshot.reference,
-        signLink,
-        documentName,
+      html: signDocumentsEmailHtml({
+        customerName,
+        reference,
+        documents,
+        note,
         productTypeLabel: isSolar ? "Solar" : "Boiler",
       }),
     });
@@ -1975,72 +2021,14 @@ export async function sendInstallationAgreement(quoteId: string): Promise<SendQu
   }
 
   const user = await getCurrentUser();
-  const customerName = snapshot.customerName;
+  const historyDescription = `Sent the ${[needsAgreement && agreementName, needsWaiver && "Cooling-Off Waiver"].filter(Boolean).join(" and ").toLowerCase()} for signature`;
 
   await Promise.all([
-    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the installation agreement for signature" }),
+    insertQuoteHistory({ quoteId, actorId: user?.id, description: historyDescription }),
     logActivity({
       actorId: user?.id,
       customerName,
-      description: `Sent installation agreement for signature — ${customerName}`,
-      status: "allocated",
-      entityType: "quote",
-      entityId: quoteId,
-    }),
-  ]);
-  revalidateQuote(quoteId);
-  return { ok: true };
-}
-
-export async function sendCoolingOffWaiver(quoteId: string): Promise<SendQuoteResult> {
-  if (!isResendConfigured()) {
-    return {
-      ok: false,
-      error: "Email sending isn't configured yet. Ask an admin to set up Resend (see .env.local.example).",
-    };
-  }
-
-  const request = await createWaiverSignatureRequest(quoteId);
-  if ("error" in request) return { ok: false, error: request.error };
-  const { accessToken, snapshot, signerEmail } = request;
-
-  const origin = await getSiteOrigin();
-  const signLink = `${origin}/sign/${accessToken}`;
-  const isSolar = snapshot.product === "solar";
-  const brand = brandNameForProduct(isSolar ? "Solar" : "Boiler");
-
-  try {
-    await sendEmail({
-      to: signerEmail,
-      fromName: brand,
-      subject: `${brand} — Cooling-Off Waiver to sign (${snapshot.reference})`,
-      text:
-        `Hi ${snapshot.customerName},\n\n` +
-        `Please review and sign your Cooling-Off Waiver for quote ${snapshot.reference}:\n\n` +
-        `${signLink}\n\n` +
-        `This link is unique to you — please don't share it.\n\n` +
-        brand,
-      html: signWaiverEmailHtml({
-        customerName: snapshot.customerName,
-        reference: snapshot.reference,
-        signLink,
-        productTypeLabel: isSolar ? "Solar" : "Boiler",
-      }),
-    });
-  } catch (error) {
-    console.error("sendCoolingOffWaiver: email send failed", error);
-    return { ok: false, error: "Couldn't email the signing link. Please try again or contact support." };
-  }
-
-  const user = await getCurrentUser();
-  const customerName = snapshot.customerName;
-
-  await Promise.all([
-    insertQuoteHistory({ quoteId, actorId: user?.id, description: "Sent the cooling-off waiver for signature" }),
-    logActivity({
-      actorId: user?.id,
-      customerName,
-      description: `Sent cooling-off waiver for signature — ${customerName}`,
+      description: `${historyDescription} — ${customerName}`,
       status: "allocated",
       entityType: "quote",
       entityId: quoteId,
@@ -2076,6 +2064,30 @@ export async function requestSolarSurvey(quoteId: string, customerName: string):
 
   if (created) {
     await logExternalPortalAction(quoteId, customerName, "Survey link generated");
+  }
+
+  return { accessToken };
+}
+
+/**
+ * Backs the solar "Checklist" button - returns the install photo checklist's
+ * share-link token (creating the checklist record on first use) so the modal
+ * can build the `/checklist/[token]` QR code / link. Staff only; a rep can
+ * only do this for their own quotes.
+ */
+export async function requestInstallChecklistLink(quoteId: string, customerName: string): Promise<{ accessToken: string }> {
+  const user = await getCurrentUser();
+  if (!user || user.role === "installer" || user.role === "electrician") throw new Error("Not allowed.");
+
+  const supabase = await createClient();
+  const { data: quote } = await supabase.from("quotes").select("representative_id, product_type").eq("id", quoteId).maybeSingle();
+  if (!quote || quote.product_type !== "solar" || (user.role === "rep" && quote.representative_id !== user.id)) {
+    throw new Error("Quote not found.");
+  }
+
+  const { accessToken, created } = await getOrCreateChecklistToken(quoteId);
+  if (created) {
+    await logExternalPortalAction(quoteId, customerName, "Install checklist link generated");
   }
 
   return { accessToken };

@@ -6,6 +6,7 @@ import { Download, Loader2, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { ImageLightbox } from "@/components/ui/ImageLightbox";
 import { deleteSolarSurveyFile } from "@/app/quotes/[id]/survey/actions";
 import { ALL_SOLAR_FILE_ITEMS } from "@/lib/solar-survey-fields";
 import type { SolarSurveyFile } from "@/types/solar-survey";
@@ -19,6 +20,8 @@ export function SolarSurveyGallery({ quoteId, files: initialFiles }: { quoteId: 
   const router = useRouter();
   const [files, setFiles] = useState(initialFiles);
   const [toDelete, setToDelete] = useState<SolarSurveyFile | null>(null);
+  // Index into the images only (videos and documents keep opening on their own) - the viewer steps through these.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +29,8 @@ export function SolarSurveyGallery({ quoteId, files: initialFiles }: { quoteId: 
   const ordered = ALL_SOLAR_FILE_ITEMS.flatMap((item) =>
     files.filter((file) => file.itemKey === item.key).map((file) => ({ file, label: item.label })),
   );
+
+  const imageEntries = ordered.filter(({ file }) => file.contentType.startsWith("image/"));
 
   async function confirmDelete() {
     if (!toDelete) return;
@@ -63,10 +68,15 @@ export function SolarSurveyGallery({ quoteId, files: initialFiles }: { quoteId: 
                 {isVideo ? (
                   <video src={file.url} controls preload="metadata" className="h-full w-full bg-black object-cover" />
                 ) : isImage ? (
-                  <a href={file.url} target="_blank" rel="noopener noreferrer" title={file.fileName}>
+                  <button
+                    type="button"
+                    onClick={() => setLightboxIndex(imageEntries.findIndex((entry) => entry.file.id === file.id))}
+                    title={file.fileName}
+                    className="block h-full w-full cursor-zoom-in"
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element -- signed Supabase Storage URL, refreshed on every server read. */}
                     <img src={file.url} alt={file.fileName} className="h-full w-full object-cover" />
-                  </a>
+                  </button>
                 ) : (
                   <a
                     href={file.url}
@@ -113,6 +123,21 @@ export function SolarSurveyGallery({ quoteId, files: initialFiles }: { quoteId: 
           );
         })}
       </div>
+
+      {lightboxIndex !== null && imageEntries[lightboxIndex] && (
+        <ImageLightbox
+          images={imageEntries.map(({ file, label }) => ({
+            id: file.id,
+            url: file.url,
+            title: label,
+            subtitle: file.fileName,
+            downloadUrl: file.downloadUrl ?? file.url,
+          }))}
+          index={lightboxIndex}
+          onIndexChange={setLightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      )}
 
       {toDelete && (
         <Modal title="Delete this file?" onClose={() => !isDeleting && setToDelete(null)}>

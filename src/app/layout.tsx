@@ -28,7 +28,8 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={poppins.variable}>
-      <body className="min-h-screen font-sans antialiased">
+      {/* suppressHydrationWarning: browser extensions (e.g. ColorZilla's cz-shortcut-listen) add attributes to <body> before React hydrates. Only silences attribute mismatches on this element, not its children. */}
+      <body className="min-h-screen font-sans antialiased" suppressHydrationWarning>
         {configured ? (
           <AppShellClient user={user}>{children}</AppShellClient>
         ) : (

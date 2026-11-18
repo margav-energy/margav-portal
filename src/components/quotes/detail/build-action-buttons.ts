@@ -30,11 +30,11 @@ export function buildActionButtons(params: {
   onSecondaryPortalAction: () => void;
   onCancelApp: () => void;
   onSurvey: () => void;
+  /** Solar only: opens the install photo checklist link/tools modal (see `SolarChecklistLaunchModal`). */
+  onChecklist?: () => void;
   onSelectPitchOutcome: (outcome: string) => void;
-  /** Opens the send-for-signature modal for the Installation Agreement — each product sends its own wording (see `createAgreementSignatureRequest`). */
+  /** Opens the send-for-signature modal for the Installation Agreement and Cooling-Off Waiver together - one button sends both (see `sendInstallationAgreement`). */
   onInstallationAgreement?: () => void;
-  /** Same as `onInstallationAgreement`, for the Cooling-Off Waiver. */
-  onCoolingOffWaiver?: () => void;
 }): HeaderActionButton[] {
   return [
     { label: "Presenter", variant: "primary", href: `/quotes/${params.quoteId}/presenter` },
@@ -50,11 +50,9 @@ export function buildActionButtons(params: {
     },
     { label: "Rebook App", variant: "primary", href: rebookAppointmentHref(params.customerName, params.appointmentId) },
     { label: "Survey", variant: "primary", onClick: params.onSurvey },
+    ...(params.onChecklist ? [{ label: "Checklist", variant: "primary" as const, onClick: params.onChecklist }] : []),
     ...(params.onInstallationAgreement
       ? [{ label: "Installation Agreement", variant: "primary" as const, onClick: params.onInstallationAgreement }]
-      : []),
-    ...(params.onCoolingOffWaiver
-      ? [{ label: "Cooling-Off Waiver", variant: "primary" as const, onClick: params.onCoolingOffWaiver }]
       : []),
     // No manual "Archive" button — quotes archive themselves automatically
     // after 5 years (see src/data/quotes-service.ts).

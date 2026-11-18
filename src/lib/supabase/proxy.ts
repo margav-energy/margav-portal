@@ -6,6 +6,8 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 // `/survey` is the on-site pre-installation survey form — surveyors open it
 // via a QR code / link with no portal account, authenticated instead by the
 // unguessable token in the URL (see supabase/migrations/0007_boiler_surveys.sql).
+// `/checklist` is the install photo checklist share link - same token-authenticated
+// shape as `/survey` (see supabase/migrations/0055_install_checklist_share_link.sql).
 // `/sign` is the self-hosted e-signature flow (see
 // supabase/migrations/0010_self_signed_documents.sql /
 // src/data/signature-service.ts) — same token-authenticated shape as
@@ -13,7 +15,7 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 // `/api/agreement-templates` serves the static (no customer data) Boiler
 // Installation Agreement / Cooling-Off Waiver template PDFs that
 // `/sign/[token]` links to.
-const PUBLIC_PATHS = ["/login", "/survey", "/sign", "/api/agreement-templates"];
+const PUBLIC_PATHS = ["/login", "/survey", "/checklist", "/sign", "/api/agreement-templates"];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

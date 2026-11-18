@@ -51,13 +51,6 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
   return lines;
 }
 
-/** Crude character-count wrap for the small audit footer (same approach as the other signed documents). */
-function wrapChars(text: string, maxChars: number): string[] {
-  const lines: string[] = [];
-  for (let i = 0; i < text.length; i += maxChars) lines.push(text.slice(i, i + maxChars));
-  return lines;
-}
-
 export async function buildSolarAgreementPdf(snapshot: AgreementSnapshot, signing?: SolarAgreementSigning): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -163,20 +156,6 @@ export async function buildSolarAgreementPdf(snapshot: AgreementSnapshot, signin
     signing ? todayLabel(signing.customer.signedAtLabel) : undefined,
     signing?.customer.signatureImage,
   );
-
-  if (signing) {
-    const lines = [
-      `Quote ${pdfSafe(snapshot.reference)} — signed ${signing.customer.signedAtLabel}`,
-      ...wrapChars(`IP address: ${signing.customer.ip}`, 100),
-      ...wrapChars(`Browser: ${pdfSafe(signing.customer.userAgent)}`, 100),
-      ...wrapChars(`Document hash (SHA-256): ${signing.customer.documentHash}`, 100),
-    ];
-    let auditY = BOTTOM_Y + lines.length * 10;
-    for (const line of lines) {
-      page.drawText(line, { x: MARGIN_X, y: auditY, size: 7, font, color: MUTED });
-      auditY -= 10;
-    }
-  }
 
   // Footer + page numbers on every page.
   const pages = pdf.getPages();

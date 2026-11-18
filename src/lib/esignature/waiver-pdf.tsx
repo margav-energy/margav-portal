@@ -50,23 +50,6 @@ const INK = rgb(0.06, 0.09, 0.16);
 const MUTED = rgb(0.58, 0.64, 0.72);
 const LABEL = rgb(0.2, 0.25, 0.33);
 
-/** Crude character-count wrap — good enough for a small monospace-ish audit footer, not real typesetting (same approach as agreement-pdf.tsx). */
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if ((current + " " + word).trim().length > maxChars) {
-      if (current) lines.push(current.trim());
-      current = word;
-    } else {
-      current = `${current} ${word}`.trim();
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
 class PageWriter {
   private y: number;
   constructor(
@@ -189,19 +172,6 @@ export async function buildSignedWaiverPdf(
       color: MUTED,
     });
     w.gap(30);
-  }
-
-  // Audit footer, pinned near the bottom of the page.
-  w.setY(90);
-  const auditLines = [
-    `Quote ${snapshot.reference} — signed ${customer.signedAtLabel}`,
-    ...wrapText(`IP address: ${customer.ip}`, 100),
-    ...wrapText(`Browser: ${customer.userAgent}`, 100),
-    ...wrapText(`Document hash (SHA-256): ${customer.documentHash}`, 100),
-  ];
-  for (const line of auditLines) {
-    page.drawText(line, { x: MARGIN_X, y: w.currentY(), size: 7, font, color: MUTED });
-    w.gap(10);
   }
 
   return Buffer.from(await pdfDoc.save());

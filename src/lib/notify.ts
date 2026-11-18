@@ -19,9 +19,11 @@ export async function notifyUser(entry: {
    *  path relative to the site root (e.g. `/quotes/${quoteId}`), not a full
    *  URL. Defaults to the portal's root if omitted. */
   link?: string;
+  /** For public token links (no signed-in user, so no session for RLS) - writes with the service role instead. */
+  asService?: boolean;
 }): Promise<void> {
   try {
-    const supabase = await createClient();
+    const supabase = entry.asService ? createServiceRoleClient() : await createClient();
     await supabase.from("notifications").insert({
       user_id: entry.userId,
       title: entry.title,

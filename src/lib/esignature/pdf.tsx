@@ -71,8 +71,6 @@ const styles = StyleSheet.create({
   signatureRole: { fontSize: 9, color: "#a3a3a3", textTransform: "uppercase", marginBottom: 4 },
   signatureImage: { width: 200, height: 70, objectFit: "contain", marginTop: 6, marginBottom: 6 },
   signaturePlaceholder: { fontSize: 9, color: "#a3a3a3", fontStyle: "italic", marginTop: 6, marginBottom: 6 },
-  auditBlock: { marginTop: 20, padding: 10, backgroundColor: "#fafafa", borderRadius: 4 },
-  auditLine: { fontSize: 8, color: "#737373", marginBottom: 2 },
 });
 
 export interface SignedDocumentAudit {
@@ -398,12 +396,6 @@ export async function renderSignedDocumentPdf(
               <Text style={styles.signaturePlaceholder}>No representative signature on file</Text>
             )}
           </View>
-        </View>
-
-        <View style={styles.auditBlock}>
-          <Text style={styles.auditLine}>IP address: {audit.ip}</Text>
-          <Text style={styles.auditLine}>Browser: {audit.userAgent}</Text>
-          <Text style={styles.auditLine}>Document hash (SHA-256): {audit.documentHash}</Text>
         </View>
       </Page>
     </Document>

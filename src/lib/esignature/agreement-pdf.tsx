@@ -67,23 +67,6 @@ function drawFieldText(page: PDFPage, font: PDFFont, text: string, x: number, li
   page.drawText(pdfSafe(text), { x: x + 4, y: lineY + 3, size: 10, font, color: rgb(0.06, 0.09, 0.16) });
 }
 
-/** Crude character-count wrap — good enough for a small monospace-ish audit footer, not real typesetting. */
-function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if ((current + " " + word).trim().length > maxChars) {
-      if (current) lines.push(current.trim());
-      current = word;
-    } else {
-      current = `${current} ${word}`.trim();
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
 /**
  * Fills in the template's own blank signature lines directly (see
  * `FIELD_LAYOUT`) rather than appending a new page — the final document is
@@ -127,20 +110,6 @@ export async function buildSignedAgreementPdf(
       font: italicFont,
       color: rgb(0.58, 0.64, 0.72),
     });
-  }
-
-  // Audit footer — the template's signature box ends well above the page
-  // footer branding, leaving room to add this without a new page.
-  const auditLines = [
-    `Quote ${snapshot.reference} — signed ${customer.signedAtLabel}`,
-    ...wrapText(`IP address: ${customer.ip}`, 100),
-    ...wrapText(`Browser: ${customer.userAgent}`, 100),
-    ...wrapText(`Document hash (SHA-256): ${customer.documentHash}`, 100),
-  ];
-  let auditY = 390;
-  for (const line of auditLines) {
-    page.drawText(line, { x: 55, y: auditY, size: 7, font, color: rgb(0.58, 0.64, 0.72) });
-    auditY -= 10;
   }
 
   return Buffer.from(await pdfDoc.save());

@@ -52,6 +52,33 @@ interface PendingUpload {
   error?: string;
 }
 
+/** The mutations the card calls. Defaults to the signed-in server actions; the no-login share link passes its own (token + role bound). */
+export interface ChecklistApi {
+  createUploadUrl: (itemKey: string, fileId: string, fileName: string, contentType: string) => ReturnType<typeof createChecklistPhotoUploadUrl>;
+  register: (
+    itemKey: string,
+    fileId: string,
+    path: string,
+    fileName: string,
+    contentType: string,
+    sizeBytes: number,
+  ) => ReturnType<typeof registerChecklistPhoto>;
+  remove: (photoId: string) => ReturnType<typeof removeChecklistPhoto>;
+  setNa: (itemKey: string, notApplicable: boolean) => ReturnType<typeof setChecklistItemNotApplicable>;
+  submit: (stage: ChecklistStage) => ReturnType<typeof submitInstallChecklistStage>;
+}
+
+function signedInApi(quoteId: string): ChecklistApi {
+  return {
+    createUploadUrl: (itemKey, fileId, fileName, contentType) => createChecklistPhotoUploadUrl(quoteId, itemKey, fileId, fileName, contentType),
+    register: (itemKey, fileId, path, fileName, contentType, sizeBytes) =>
+      registerChecklistPhoto(quoteId, itemKey, fileId, path, fileName, contentType, sizeBytes),
+    remove: (photoId) => removeChecklistPhoto(quoteId, photoId),
+    setNa: (itemKey, notApplicable) => setChecklistItemNotApplicable(quoteId, itemKey, notApplicable),
+    submit: (stage) => submitInstallChecklistStage(quoteId, stage),
+  };
+}
+
 const BUTTON_CLASS =
   "inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50";
 
@@ -66,13 +93,17 @@ export function InstallerChecklistCard({
   quoteId,
   initial,
   role = "installer",
+  api: apiProp,
 }: {
   quoteId: string;
   initial: SolarInstallChecklist;
+  /** Overrides the signed-in server actions - used by the share-link page. */
+  api?: ChecklistApi;
   /** Electricians can only edit the electrical items; the rest show read-only. */
   role?: ChecklistEditorRole;
 }) {
   const router = useRouter();
+  const api = apiProp ?? signedInApi(quoteId);
   const [photos, setPhotos] = useState<ChecklistPhoto[]>(initial.photos);
   const [naItems, setNaItems] = useState<string[]>(initial.naItems);
   const [pending, setPending] = useState<PendingUpload[]>([]);
@@ -112,13 +143,7 @@ export function InstallerChecklistCard({
     try {
       const file = await compressPhoto(upload.file);
       const contentType = file.type || upload.file.type || "image/jpeg";
-      const target = await createChecklistPhotoUploadUrl(
-        quoteId,
-        upload.itemKey,
-        upload.id,
-        file.name,
-        contentType,
-      );
+      const target = await api.createUploadUrl(upload.itemKey, upload.id, file.name, contentType);
       if (!target.ok || !target.path || !target.uploadToken)
         throw new Error(target.error ?? "Could not start the upload.");
 
@@ -130,15 +155,7 @@ export function InstallerChecklistCard({
         });
       if (uploadError) throw new Error(uploadError.message || "Upload failed.");
 
-      const registered = await registerChecklistPhoto(
-        quoteId,
-        upload.itemKey,
-        upload.id,
-        target.path,
-        file.name,
-        contentType,
-        file.size,
-      );
+      const registered = await api.register(upload.itemKey, upload.id, target.path, file.name, contentType, file.size);
       if (!registered.ok || !registered.photo)
         throw new Error(registered.error ?? "Could not save the photo.");
 
@@ -182,7 +199,7 @@ export function InstallerChecklistCard({
   async function handleRemovePhoto(photo: ChecklistPhoto) {
     const previous = photos;
     setPhotos((current) => current.filter((p) => p.id !== photo.id));
-    const result = await removeChecklistPhoto(quoteId, photo.id);
+    const result = await api.remove(photo.id);
     if (!result.ok) {
       setPhotos(previous);
       setItemErrors((current) => ({
@@ -200,11 +217,7 @@ export function InstallerChecklistCard({
         ? [...naItems, item.key]
         : naItems.filter((key) => key !== item.key),
     );
-    const result = await setChecklistItemNotApplicable(
-      quoteId,
-      item.key,
-      makeNa,
-    );
+    const result = await api.setNa(item.key, makeNa);
     if (!result.ok) {
       setNaItems(previous);
       setItemErrors((current) => ({ ...current, [item.key]: result.error }));
@@ -214,7 +227,7 @@ export function InstallerChecklistCard({
   function handleSubmit(stage: ChecklistStage) {
     setSubmitError(null);
     startSubmit(async () => {
-      const result = await submitInstallChecklistStage(quoteId, stage);
+      const result = await api.submit(stage);
       if (!result.ok) {
         setSubmitError(result.error);
         return;

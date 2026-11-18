@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ActivityStatus } from "@/types/activity";
 
 /**
@@ -16,9 +17,11 @@ export async function logActivity(entry: {
   entityType?: string;
   entityId?: string;
   isSystem?: boolean;
+  /** For public token links (no signed-in user, so no session for RLS) - writes with the service role instead. */
+  asService?: boolean;
 }): Promise<void> {
   try {
-    const supabase = await createClient();
+    const supabase = entry.asService ? createServiceRoleClient() : await createClient();
     await supabase.from("activities").insert({
       actor_id: entry.actorId ?? null,
       is_system: entry.isSystem ?? !entry.actorId,
