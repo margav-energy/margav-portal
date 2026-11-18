@@ -65,6 +65,8 @@ export interface QuoteRow {
   pipeline_status: string;
   representative_id: string | null;
   installer_id: string | null;
+  electrician_id: string | null;
+  electrician_acceptance_status: "pending" | "accepted" | "rejected" | null;
   install_date: string | null;
   install_acceptance_status: "pending" | "accepted" | "rejected" | null;
   vat_amount: number | string;
@@ -464,6 +466,7 @@ export function buildPricingBreakdown(
     }));
 }
 
+/** Sum of quantity × unit price, rounded to the penny so float noise (0.1 × 3) never reaches a displayed or stored total. */
 export function sumLineItems(items: { quantity: number; unitPrice: number }[]): number {
-  return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  return Math.round(items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0) * 100) / 100;
 }

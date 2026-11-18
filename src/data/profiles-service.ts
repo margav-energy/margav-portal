@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import type { UserRole } from "@/lib/roles";
 
 /**
  * Shared teammate/rep directory — used anywhere the app needs to show or
@@ -13,7 +14,7 @@ export interface RepProfile {
   id: string;
   fullName: string;
   initials: string;
-  role: "admin" | "rep" | "installer";
+  role: UserRole;
   /** Self-service, same as full_name — shown in "Get In Touch" on the
    *  quote document. Absent until the person sets one in Settings. */
   phone?: string;
@@ -39,7 +40,7 @@ export async function getAllProfiles(): Promise<RepProfile[]> {
     id: row.id,
     fullName: row.full_name || "Unnamed",
     initials: row.initials || "?",
-    role: (row.role as "admin" | "rep" | "installer") ?? "rep",
+    role: (row.role as UserRole) ?? "rep",
     phone: row.phone || undefined,
     calendarColor: row.calendar_color || undefined,
   }));
@@ -90,7 +91,7 @@ export async function getTeammatesForAdmin(): Promise<TeammateProfile[]> {
     id: row.id,
     fullName: row.full_name || "Unnamed",
     initials: row.initials || "?",
-    role: (row.role as "admin" | "rep" | "installer") ?? "rep",
+    role: (row.role as UserRole) ?? "rep",
     phone: row.phone || undefined,
     email: emailById.get(row.id) ?? "",
     active: row.active ?? true,
@@ -113,7 +114,7 @@ export async function getProfileById(id: string | null | undefined): Promise<Rep
     id: data.id,
     fullName: data.full_name || "Unnamed",
     initials: data.initials || "?",
-    role: (data.role as "admin" | "rep" | "installer") ?? "rep",
+    role: (data.role as UserRole) ?? "rep",
     phone: data.phone || undefined,
     calendarColor: data.calendar_color || undefined,
   };

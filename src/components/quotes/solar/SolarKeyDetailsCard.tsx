@@ -26,7 +26,7 @@ export function SolarKeyDetailsCard({
   keyDetails: SolarKeyDetails;
   /** Built on the server — see `computeMcsEstimate`. */
   mcsEstimate: McsEstimate;
-  /** £ per kWh from the property details, used for the 25-year projection's savings. */
+  /** £ per kWh from the property details, used for the 30-year projection's savings. */
   electricUnitRate: number;
   /** What the customer pays (after discount) — the payback target. */
   totalCost: number;

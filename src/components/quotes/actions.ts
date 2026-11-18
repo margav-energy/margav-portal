@@ -115,6 +115,10 @@ async function isQuoteLocked(
  * the list stays in sync instead of showing whatever `amount` was at
  * quote creation (0 for an appointment-linked quote) forever after.
  */
+const isMoney = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+const isLineItemValid = (item: { quantity: number; unitPrice: number }) =>
+  Number.isFinite(item.quantity) && item.quantity >= 0 && Number.isFinite(item.unitPrice);
+
 async function syncQuoteAmount(quoteId: string): Promise<void> {
   const supabase = await createClient();
   const [unitsResult, arraysResult, equipmentResult, lineItemsResult] = await Promise.all([
@@ -123,6 +127,13 @@ async function syncQuoteAmount(quoteId: string): Promise<void> {
     supabase.from("solar_equipment").select("items").eq("quote_id", quoteId),
     supabase.from("quote_line_items").select("quantity, unit_price").eq("quote_id", quoteId),
   ]);
+
+  // Don't overwrite a good stored amount with a partial total if any read failed.
+  const readError = unitsResult.error ?? arraysResult.error ?? equipmentResult.error ?? lineItemsResult.error;
+  if (readError) {
+    console.error("syncQuoteAmount read failed", readError);
+    return;
+  }
 
   const unitsTotal = (unitsResult.data ?? []).reduce(
     (sum, unit) => sum + Number(unit.price ?? 0) + sumLineItems(parseLineItems(unit.items)),
@@ -145,7 +156,7 @@ async function syncQuoteAmount(quoteId: string): Promise<void> {
 
   const { error } = await supabase
     .from("quotes")
-    .update({ amount: unitsTotal + arraysTotal + equipmentTotal + lineItemsTotal })
+    .update({ amount: Math.round((unitsTotal + arraysTotal + equipmentTotal + lineItemsTotal) * 100) / 100 })
     .eq("id", quoteId);
   if (error) console.error("syncQuoteAmount failed", error);
 }
@@ -200,6 +211,7 @@ export async function createQuote(input: CreateQuoteInput): Promise<CreateQuoteR
 
   const customerName = toTitleCase(input.customerName.trim());
   if (!customerName) return { error: "Customer name is required." };
+  if (!isMoney(input.amount)) return { error: "Enter a valid quote amount." };
   const postcode = formatUkPostcode(input.postcode.trim());
   const customerEmail = input.customerEmail?.trim() ? normalizeEmail(input.customerEmail) : null;
   const customerPhone = input.customerPhone?.trim() ? formatUkPhone(input.customerPhone) : null;
@@ -721,6 +733,71 @@ export async function assignQuoteInstaller(
   return { installerId, installerName: installer?.fullName ?? null };
 }
 
+/**
+ * Assigns (or clears, with `null`) the electrician on a solar job. The
+ * electrician adds photos to the same install checklist as the installer
+ * (electrical items only - see `canEditChecklistItem`). Unlike
+ * `assignQuoteInstaller` this leaves the install date and the installer's
+ * accept/decline alone. Admin-only.
+ */
+export async function assignQuoteElectrician(
+  quoteId: string,
+  electricianId: string | null,
+  customerName: string,
+): Promise<{ electricianId: string | null; electricianName: string | null } | null> {
+  const supabase = await createClient();
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") return null;
+
+  const electrician = electricianId ? await getProfileById(electricianId) : null;
+  if (electricianId && (!electrician || electrician.role !== "electrician")) return null;
+
+  const { data: existing } = await supabase
+    .from("quotes")
+    .select("product_type, electrician_id")
+    .eq("id", quoteId)
+    .maybeSingle();
+  if (!existing || existing.product_type !== "solar") return null;
+  if ((existing.electrician_id ?? null) === electricianId) {
+    return { electricianId, electricianName: electrician?.fullName ?? null };
+  }
+
+  const { error } = await supabase.from("quotes").update({
+      electrician_id: electricianId,
+      // Fresh assignment, fresh answer - the electrician accepts or declines from /jobs/[id].
+      electrician_acceptance_status: electricianId ? "pending" : null,
+    })
+    .eq("id", quoteId);
+  if (error) {
+    console.error("assignQuoteElectrician failed", error);
+    return null;
+  }
+
+  const description = electrician ? `Electrician ${electrician.fullName} assigned` : "Electrician unassigned";
+  await Promise.all([
+    insertQuoteHistory({ quoteId, actorId: user.id, description }),
+    logActivity({
+      actorId: user.id,
+      customerName,
+      description: `${description} - ${customerName}`,
+      status: electrician ? "allocated" : "unallocated",
+      entityType: "quote_installer_assignment",
+      entityId: quoteId,
+    }),
+    electrician
+      ? notifyUser({
+          userId: electrician.id,
+          title: "New solar job assigned to you",
+          body: `You've been assigned to ${customerName}'s solar job. Log in to Margav Portal to view it.`,
+          link: `/jobs/${quoteId}`,
+        })
+      : Promise.resolve(),
+  ]);
+  revalidateQuote(quoteId);
+  revalidatePath("/jobs");
+  return { electricianId, electricianName: electrician?.fullName ?? null };
+}
+
 export interface SyncAppointmentRepsResult {
   ok: boolean;
   syncedCount: number;
@@ -995,7 +1072,7 @@ async function patchSolarKeyDetails(
   return true;
 }
 
-/** Admin-only: the assumptions behind the 25-year "Quote SAP table" projection (`computeSapTable`, src/lib/solar-sap.ts). */
+/** Admin-only: the assumptions behind the 30-year "Quote SAP table" projection (`computeSapTable`, src/lib/solar-sap.ts). */
 export async function updateQuoteSapAssumptions(
   quoteId: string,
   assumptions: SapAssumptions,
@@ -1029,11 +1106,17 @@ export async function updateQuoteCostPrice(
   costPrice: number,
   customerName: string,
 ): Promise<boolean> {
+  if (!isMoney(costPrice)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
-  const { error } = await supabase.from("quotes").update({ profit_breakdown: { costPrice } }).eq("id", quoteId);
+  // Solar only (boiler cost is calculated); merge so any other stored breakdown fields survive.
+  const { data: quote } = await supabase.from("quotes").select("profit_breakdown, product_type").eq("id", quoteId).maybeSingle();
+  if (!quote || quote.product_type !== "solar") return false;
+  const existing = quote.profit_breakdown && typeof quote.profit_breakdown === "object" ? (quote.profit_breakdown as Record<string, unknown>) : {};
+
+  const { error } = await supabase.from("quotes").update({ profit_breakdown: { ...existing, costPrice } }).eq("id", quoteId);
 
   if (error) {
     console.error("updateQuoteCostPrice failed", error);
@@ -1076,6 +1159,7 @@ export async function updatePricingAdjustments(
   adjustments: PricingAdjustments,
   customerName: string,
 ): Promise<boolean> {
+  if (!isMoney(adjustments.vatAmount) || !isMoney(adjustments.discountAmount) || !isMoney(adjustments.depositAmount)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
@@ -1086,6 +1170,10 @@ export async function updatePricingAdjustments(
   const changingMoney =
     Number(current?.deposit_amount ?? 0) !== adjustments.depositAmount ||
     Number(current?.discount_amount ?? 0) !== adjustments.discountAmount;
+  if (adjustments.discountAmount > Number(current?.amount ?? 0)) {
+    console.error("updatePricingAdjustments: discount exceeds the quote amount");
+    return false;
+  }
   const netTotal = Number(current?.amount ?? 0) - adjustments.discountAmount;
   if (!Number.isFinite(adjustments.depositAmount) || adjustments.depositAmount < 0) return false;
   // Same rule as the Pricing card (every quote needs the minimum). Half a penny of slack absorbs float error in the rounding.
@@ -1188,6 +1276,7 @@ export async function createBoilerUnit(
   unit: Omit<BoilerUnit, "id">,
   customerName: string,
 ): Promise<BoilerUnit | null> {
+  if (!isMoney(unit.price) || !unit.items.every(isLineItemValid)) return null;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
@@ -1235,6 +1324,7 @@ export async function createBoilerUnit(
 }
 
 export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, customerName: string): Promise<boolean> {
+  if (!isMoney(unit.price) || !unit.items.every(isLineItemValid)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
@@ -1254,7 +1344,8 @@ export async function updateBoilerUnit(quoteId: string, unit: BoilerUnit, custom
       price: unit.price,
       items: serializeLineItems(unit.items),
     })
-    .eq("id", unit.id);
+    .eq("id", unit.id)
+    .eq("quote_id", quoteId);
 
   if (error) {
     console.error("updateBoilerUnit failed", error);
@@ -1282,7 +1373,7 @@ export async function deleteBoilerUnit(quoteId: string, unitId: string, unitLabe
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
-  const { error } = await supabase.from("boiler_units").delete().eq("id", unitId);
+  const { error } = await supabase.from("boiler_units").delete().eq("id", unitId).eq("quote_id", quoteId);
   if (error) {
     console.error("deleteBoilerUnit failed", error);
     return false;
@@ -1308,11 +1399,31 @@ export async function deleteBoilerUnit(quoteId: string, unitId: string, unitLabe
 // Solar arrays
 // ─────────────────────────────────────────────────────────────────────────
 
+/** Server-side sanity check on array inputs the MCS estimate relies on (a NaN here would poison every total). */
+function isValidSolarArray(array: Omit<SolarArray, "id">): boolean {
+  const finite = (value: number) => Number.isFinite(value);
+  return (
+    array.items.every(isLineItemValid) &&
+    finite(array.shadeFactor) &&
+    array.shadeFactor >= 0 &&
+    array.shadeFactor <= 1 &&
+    finite(array.pitchDegrees) &&
+    array.pitchDegrees >= 0 &&
+    array.pitchDegrees <= 90 &&
+    finite(array.moduleWp) &&
+    array.moduleWp >= 0 &&
+    finite(array.moduleCount) &&
+    array.moduleCount >= 0 &&
+    (array.orientationDegrees === undefined || array.orientationDegrees === null || finite(array.orientationDegrees))
+  );
+}
+
 export async function createSolarArray(
   quoteId: string,
   array: Omit<SolarArray, "id">,
   customerName: string,
 ): Promise<SolarArray | null> {
+  if (!isValidSolarArray(array)) return null;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
@@ -1357,6 +1468,7 @@ export async function createSolarArray(
 }
 
 export async function updateSolarArray(quoteId: string, array: SolarArray, customerName: string): Promise<boolean> {
+  if (!isValidSolarArray(array)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
@@ -1373,7 +1485,8 @@ export async function updateSolarArray(quoteId: string, array: SolarArray, custo
       module_count: array.moduleCount,
       items: serializeLineItems(array.items),
     })
-    .eq("id", array.id);
+    .eq("id", array.id)
+    .eq("quote_id", quoteId);
 
   if (error) {
     console.error("updateSolarArray failed", error);
@@ -1406,7 +1519,7 @@ export async function deleteSolarArray(
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
-  const { error } = await supabase.from("solar_arrays").delete().eq("id", arrayId);
+  const { error } = await supabase.from("solar_arrays").delete().eq("id", arrayId).eq("quote_id", quoteId);
   if (error) {
     console.error("deleteSolarArray failed", error);
     return false;
@@ -1437,6 +1550,7 @@ export async function createSolarEquipment(
   entry: Omit<SolarEquipment, "id">,
   customerName: string,
 ): Promise<SolarEquipment | null> {
+  if (!entry.items.every(isLineItemValid)) return null;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
@@ -1470,6 +1584,7 @@ export async function createSolarEquipment(
 }
 
 export async function updateSolarEquipment(quoteId: string, entry: SolarEquipment, customerName: string): Promise<boolean> {
+  if (!entry.items.every(isLineItemValid)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
@@ -1477,7 +1592,8 @@ export async function updateSolarEquipment(quoteId: string, entry: SolarEquipmen
   const { error } = await supabase
     .from("solar_equipment")
     .update({ label: entry.label, items: serializeLineItems(entry.items) })
-    .eq("id", entry.id);
+    .eq("id", entry.id)
+    .eq("quote_id", quoteId);
 
   if (error) {
     console.error("updateSolarEquipment failed", error);
@@ -1510,7 +1626,7 @@ export async function deleteSolarEquipment(
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
-  const { error } = await supabase.from("solar_equipment").delete().eq("id", entryId);
+  const { error } = await supabase.from("solar_equipment").delete().eq("id", entryId).eq("quote_id", quoteId);
   if (error) {
     console.error("deleteSolarEquipment failed", error);
     return false;
@@ -1549,6 +1665,7 @@ export async function createQuoteLineItem(
   data: { name: string; quantity: number; unitPrice: number },
   customerName: string,
 ): Promise<LineItem | FreeTextExtra | null> {
+  if (!isLineItemValid(data)) return null;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return null;
   const user = await getCurrentUser();
@@ -1603,6 +1720,7 @@ export async function updateQuoteLineItem(
   data: { name: string; quantity: number; unitPrice: number },
   customerName: string,
 ): Promise<boolean> {
+  if (!isLineItemValid(data)) return false;
   const supabase = await createClient();
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
@@ -1616,7 +1734,8 @@ export async function updateQuoteLineItem(
       quantity: data.quantity,
       unit_price: data.unitPrice,
     })
-    .eq("id", itemId);
+    .eq("id", itemId)
+    .eq("quote_id", quoteId);
 
   if (error) {
     console.error("updateQuoteLineItem failed", error);
@@ -1654,7 +1773,7 @@ export async function deleteQuoteLineItem(
   if (await isQuoteLocked(supabase, quoteId)) return false;
   const user = await getCurrentUser();
 
-  const { error } = await supabase.from("quote_line_items").delete().eq("id", itemId);
+  const { error } = await supabase.from("quote_line_items").delete().eq("id", itemId).eq("quote_id", quoteId);
   if (error) {
     console.error("deleteQuoteLineItem failed", error);
     return false;
@@ -2057,7 +2176,7 @@ export type ImportEasyPvItemsResult =
  */
 export async function importEasyPvItems(quoteId: string, markupPct: number): Promise<ImportEasyPvItemsResult> {
   const user = await getCurrentUser();
-  if (!user || user.role === "installer") return { ok: false, error: "Not allowed." };
+  if (!user || (user.role === "installer" || user.role === "electrician")) return { ok: false, error: "Not allowed." };
   if (!Number.isFinite(markupPct) || markupPct < 0 || markupPct > 500) {
     return { ok: false, error: "Enter a markup between 0% and 500%." };
   }

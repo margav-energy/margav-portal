@@ -47,7 +47,7 @@ import type { SolarQuoteDetail } from "@/types/solar-quote";
  */
 
 const QUOTE_COLUMNS =
-  "id, appointment_id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, install_date, install_acceptance_status, vat_amount, discount_amount, discount_reason, deposit_amount, deposit_paid_upfront, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
+  "id, appointment_id, customer_name, customer_email, customer_phone, customer_address_lines, postcode, address, amount, payment_type, selected_payment_method, monthly_plan_term_years, stage, sent_date, signed_date, install_status, notes, product_type, pipeline_status, representative_id, installer_id, electrician_id, electrician_acceptance_status, install_date, install_acceptance_status, vat_amount, discount_amount, discount_reason, deposit_amount, deposit_paid_upfront, is_favourite, is_locked, archived_at, property_details, key_details, profit_breakdown, sent_at, reference, version, status_label, dropbox_sign_request_id";
 
 const ARCHIVE_AFTER_YEARS = 5;
 
@@ -235,6 +235,8 @@ export async function getQuoteDetail(
   const assignedRep = assignedRepId ? (profiles.get(assignedRepId)?.fullName ?? "Unassigned") : "Unassigned";
   const installerId = row.installer_id ?? undefined;
   const installerName = installerId ? profiles.get(installerId)?.fullName : undefined;
+  const electricianId = row.electrician_id ?? undefined;
+  const electricianName = electricianId ? profiles.get(electricianId)?.fullName : undefined;
   const installDate = row.install_date ?? undefined;
   const installAcceptanceStatus = row.install_acceptance_status ?? undefined;
   const vatAmount = Number(row.vat_amount ?? 0);
@@ -261,6 +263,9 @@ export async function getQuoteDetail(
     assignedRepId,
     installerId,
     installerName,
+    electricianId,
+    electricianName,
+    electricianAcceptanceStatus: electricianId ? (row.electrician_acceptance_status ?? undefined) : undefined,
     installDate,
     installAcceptanceStatus,
     vatAmount,

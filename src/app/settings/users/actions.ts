@@ -9,8 +9,9 @@ import { getInitials } from "@/lib/utils";
 import { isResendConfigured, sendEmail } from "@/lib/resend";
 import { getSiteOrigin } from "@/lib/site-origin";
 import { REP_COLOR_PALETTE_HEX } from "@/lib/rep-colors";
+import type { UserRole } from "@/lib/roles";
 
-export type UserRole = "admin" | "rep" | "installer";
+export type { UserRole };
 
 export interface UpdateUserRoleResult {
   error?: string;
@@ -29,10 +30,11 @@ const ROLE_LABELS: Record<UserRole, string> = {
   admin: "Admin",
   rep: "Rep",
   installer: "Installer",
+  electrician: "Electrician",
 };
 
 /**
- * Promotes/demotes a teammate between admin, rep, and installer. This is
+ * Promotes/demotes a teammate between admin, rep, installer, and electrician. This is
  * the only place `profiles.role` can be changed from the app — previously
  * an installer account could only be provisioned with a manual SQL update.
  */

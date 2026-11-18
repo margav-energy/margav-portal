@@ -18,7 +18,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   full_name text not null default '',
   initials text not null default '',
-  role text not null default 'rep' check (role in ('admin', 'rep', 'installer')),
+  role text not null default 'rep' check (role in ('admin', 'rep', 'installer', 'electrician')),
   -- Self-service, same as full_name — shown in "Get In Touch" on the quote
   -- document (see supabase/migrations/0020_*.sql).
   phone text,
@@ -101,6 +101,8 @@ create table if not exists public.quotes (
   pipeline_status text not null default 'new_lead' check (pipeline_status in ('new_lead', 'ready_to_pitch', 'locked', 'complete')),
   representative_id uuid references public.profiles (id),
   installer_id uuid references public.profiles (id),
+  electrician_id uuid references public.profiles (id) on delete set null,
+  electrician_acceptance_status text check (electrician_acceptance_status in ('pending', 'accepted', 'rejected')),
   install_date date,
   install_acceptance_status text check (install_acceptance_status in ('pending', 'accepted', 'rejected')),
   is_favourite boolean not null default false,

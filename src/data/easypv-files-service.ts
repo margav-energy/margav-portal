@@ -196,7 +196,7 @@ export async function setQuotePhotoFromEasyPvFile(quoteId: string, fileId: strin
  * applied, make it the quote's image. A quote whose image was picked by hand
  * keeps it until Easy PV produces a *new* snapshot.
  */
-export async function applyNewestDesignPhoto(quoteId: string): Promise<void> {
+export async function applyNewestDesignPhoto(quoteId: string, force = false): Promise<boolean> {
   const supabase = createServiceRoleClient();
   const { data: newest } = await supabase
     .from("easypv_files")
@@ -207,11 +207,12 @@ export async function applyNewestDesignPhoto(quoteId: string): Promise<void> {
     .order("source_modified_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  if (!newest) return;
+  if (!newest) return false;
 
+  // `force` (an explicit "Fetch from Easy PV") replaces the image even if this view, or a hand-uploaded one, is already in place.
   const { data: quote } = await supabase.from("quotes").select("easypv_photo_name").eq("id", quoteId).maybeSingle();
-  if (quote?.easypv_photo_name === newest.source_name) return;
-  await setQuotePhotoFromEasyPvFile(quoteId, newest.id);
+  if (!force && quote?.easypv_photo_name === newest.source_name) return false;
+  return setQuotePhotoFromEasyPvFile(quoteId, newest.id);
 }
 
 /** Our stored copies, with signed URLs — authorise the caller for the quote first. */

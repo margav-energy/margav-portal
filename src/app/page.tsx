@@ -22,6 +22,7 @@ export default async function DashboardPage() {
   // is the availability calendar + whatever job they're booked into, which
   // already lives at /availability (see src/app/availability/page.tsx).
   if (user.role === "installer") redirect("/availability");
+  if (user.role === "electrician") redirect("/jobs");
 
   // Reps only see quotes assigned to them; admins see everything (see
   // `getAllQuotes`'s doc comment in quotes-service.ts).

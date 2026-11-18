@@ -74,7 +74,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Upcoming Jobs",
     href: "/jobs",
     icon: Briefcase,
-    roles: ["installer"],
+    roles: ["installer", "electrician"],
   },
   { type: "link", label: "Quick Links", href: "/quick-links", icon: Link2, roles: ["admin", "rep"] },
   {

@@ -1,12 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isFieldRole, type UserRole } from "@/lib/roles";
 
 export interface CurrentUser {
   id: string;
   email: string;
   firstName: string;
   initials: string;
-  role: "admin" | "rep" | "installer";
+  role: UserRole;
 }
 
 /**
@@ -56,7 +57,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     email: user.email ?? "",
     firstName,
     initials: profile?.initials || firstName[0]?.toUpperCase() || "?",
-    role: (profile?.role as "admin" | "rep" | "installer") ?? "rep",
+    role: (profile?.role as UserRole) ?? "rep",
   };
 }
 
@@ -72,6 +73,7 @@ export async function requireStaffUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role === "installer") redirect("/availability");
+  if (user.role === "electrician") redirect("/jobs");
   return user;
 }
 
@@ -82,6 +84,14 @@ export async function requireInstallerUser(): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role !== "installer") redirect("/");
+  return user;
+}
+
+/** For the job pages shared by both field roles (installer + electrician). */
+export async function requireFieldUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!isFieldRole(user.role)) redirect("/");
   return user;
 }
 

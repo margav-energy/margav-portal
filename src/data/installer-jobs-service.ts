@@ -41,6 +41,8 @@ interface InstallerJobDbRow {
   reference: string | null;
   install_date: string | null;
   install_acceptance_status: InstallAcceptanceStatus | null;
+  electrician_id?: string | null;
+  electrician_acceptance_status?: InstallAcceptanceStatus | null;
 }
 
 /**
@@ -53,8 +55,9 @@ export async function getInstallerJobs(installerId: string, fromDate: string, li
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("quotes")
-    .select("id, customer_name, address, postcode, product_type, reference, install_date, install_acceptance_status")
-    .eq("installer_id", installerId)
+    .select("id, customer_name, address, postcode, product_type, reference, install_date, install_acceptance_status, electrician_id, electrician_acceptance_status")
+    // The installer on the job, or the electrician assigned to it (same "my jobs" list for both field roles).
+    .or(`installer_id.eq.${installerId},electrician_id.eq.${installerId}`)
     // A dated (boiler) job from `fromDate` on, or any undated one — a solar job assigned for survey.
     .or(`install_date.gte.${fromDate},install_date.is.null`)
     .order("install_date", { ascending: true, nullsFirst: true })
@@ -75,7 +78,9 @@ export async function getInstallerJobs(installerId: string, fromDate: string, li
       productType: jobRow.product_type,
       reference: jobRow.reference,
       installDate: jobRow.install_date,
-      acceptanceStatus: jobRow.install_acceptance_status,
+      // The status shown is the signed-in person's own: an electrician sees their acceptance, not the installer's.
+      acceptanceStatus:
+        jobRow.electrician_id === installerId ? (jobRow.electrician_acceptance_status ?? null) : jobRow.install_acceptance_status,
     };
   });
 }
@@ -189,7 +194,7 @@ export async function getInstallerJobDetail(
   const { data: row, error } = await supabase
     .from("quotes")
     .select(
-      "id, customer_name, customer_email, customer_phone, customer_address_lines, address, postcode, product_type, reference, install_date, install_acceptance_status, installer_id, property_details",
+      "id, customer_name, customer_email, customer_phone, customer_address_lines, address, postcode, product_type, reference, install_date, install_acceptance_status, installer_id, electrician_id, electrician_acceptance_status, property_details",
     )
     .eq("id", quoteId)
     .maybeSingle();
@@ -198,7 +203,7 @@ export async function getInstallerJobDetail(
     console.error("getInstallerJobDetail failed", error);
     return undefined;
   }
-  if (!row || row.installer_id !== installerId) return undefined;
+  if (!row || (row.installer_id !== installerId && row.electrician_id !== installerId)) return undefined;
   // A boiler job only exists for its installer once it's booked on a date; a solar one is just assigned (no date).
   if (row.product_type === "boiler" && !row.install_date) return undefined;
 
@@ -210,7 +215,8 @@ export async function getInstallerJobDetail(
     productType: row.product_type,
     reference: row.reference,
     installDate: row.install_date ?? null,
-    acceptanceStatus: row.install_acceptance_status,
+    acceptanceStatus:
+      row.electrician_id === installerId ? (row.electrician_acceptance_status ?? null) : row.install_acceptance_status,
   };
 
   const customer: CustomerDetails = {

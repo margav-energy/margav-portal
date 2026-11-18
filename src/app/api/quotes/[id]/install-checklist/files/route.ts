@@ -12,7 +12,7 @@ const unsafe = /[\/:*?"<>|]/g;
  * "Download" on the install photo checklist — a ZIP of the photos, one
  * folder per stage (and a sub-folder per checklist item). `?stage=pre|mid|post`
  * limits it to one stage; omit for everything. Used by both the office
- * (admin, or the rep who owns the quote) and the installer assigned to the job.
+ * (admin, or the rep who owns the quote) and the installer or electrician assigned to the job.
  * Anyone else gets the same 404 as a nonexistent quote.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   let reference: string | null | undefined;
-  if (user.role === "installer") {
+  if (user.role === "installer" || user.role === "electrician") {
     const job = await getInstallerJobDetail(user.id, id);
     if (!job || job.productType === "boiler") return NextResponse.json({ error: "Not found" }, { status: 404 });
     reference = job.reference;

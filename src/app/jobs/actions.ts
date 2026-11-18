@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/data/current-user";
 import { getAllProfiles } from "@/data/profiles-service";
+import { isFieldRole } from "@/lib/roles";
 import { logActivity } from "@/lib/activity";
 import { notifyUser } from "@/lib/notify";
 import { formatDate } from "@/lib/format";
@@ -26,12 +27,12 @@ async function respondToJob(
 ): Promise<RespondToJobResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role !== "installer") return { error: "Only installers can accept or reject a job." };
+  if (!isFieldRole(user.role)) return { error: "Only installers and electricians can accept or reject a job." };
 
   const supabase = await createClient();
   const { data: existing, error: fetchError } = await supabase
     .from("quotes")
-    .select("customer_name, installer_id, install_date, product_type")
+    .select("customer_name, installer_id, electrician_id, install_date, product_type")
     .eq("id", quoteId)
     .single();
 
@@ -39,6 +40,7 @@ async function respondToJob(
     console.error("respondToJob: quote not found", fetchError);
     return { error: "Job not found." };
   }
+  if (user.role === "electrician") return respondAsElectrician(quoteId, status, user, existing);
   if (existing.installer_id !== user.id) {
     return { error: "This job isn't booked to you." };
   }
@@ -103,6 +105,60 @@ async function respondToJob(
 
   revalidatePath("/jobs");
   revalidatePath("/appointments/installer-availability");
+  return {};
+}
+
+/**
+ * An electrician accepting or declining their assignment to a solar job. Kept
+ * separate from the installer's answer (`electrician_acceptance_status`) and,
+ * unlike the installer's, not tied to the survey. They only get the install
+ * checklist once they've accepted. Admins are notified either way.
+ */
+async function respondAsElectrician(
+  quoteId: string,
+  status: "accepted" | "rejected",
+  user: { id: string; firstName: string },
+  existing: { customer_name: string; electrician_id: string | null; product_type: string },
+): Promise<RespondToJobResult> {
+  if (existing.electrician_id !== user.id || existing.product_type !== "solar") {
+    return { error: "This job isn't assigned to you." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("quotes").update({ electrician_acceptance_status: status }).eq("id", quoteId);
+  if (error) {
+    console.error("respondAsElectrician failed", error);
+    return { error: "Could not save your response. Please try again." };
+  }
+
+  const verb = status === "accepted" ? "accepted" : "declined";
+  await logActivity({
+    actorId: user.id,
+    customerName: existing.customer_name,
+    description: `Electrician ${user.firstName} ${verb} the solar job for ${existing.customer_name}`,
+    status: status === "accepted" ? "allocated" : "unallocated",
+    entityType: "quote_installer_assignment",
+    entityId: quoteId,
+  });
+
+  const admins = (await getAllProfiles()).filter((profile) => profile.role === "admin");
+  await Promise.all(
+    admins.map((admin) =>
+      notifyUser({
+        userId: admin.id,
+        title: status === "accepted" ? "Electrician accepted a job" : "Electrician declined a job",
+        body:
+          status === "accepted"
+            ? `${user.firstName} (electrician) accepted ${existing.customer_name}'s solar job.`
+            : `${user.firstName} (electrician) declined ${existing.customer_name}'s solar job - it needs reassigning.`,
+        link: `/quotes/${quoteId}`,
+      }),
+    ),
+  );
+
+  revalidatePath("/jobs");
+  revalidatePath(`/jobs/${quoteId}`);
+  revalidatePath(`/quotes/${quoteId}`);
   return {};
 }
 

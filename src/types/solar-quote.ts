@@ -73,7 +73,7 @@ export interface SolarArray {
 }
 
 /**
- * Admin-entered assumptions for the 25-year "Quote SAP table" projection
+ * Admin-entered assumptions for the 30-year "Quote SAP table" projection
  * (see `computeSapTable`, src/lib/solar-sap.ts) — stored inside
  * `quotes.key_details`. The year-1 generation and self-consumption come from
  * the MCS estimate, so only what MCS doesn't specify is entered here.
@@ -138,7 +138,7 @@ export interface SolarKeyDetails {
   paybackYears: number;
   /** Optional external URL, stored in `quotes.key_details`. No upload UI — set manually/by another integration. */
   sapTableUrl?: string;
-  /** Assumptions for the 25-year projection; absent until an admin enters them. */
+  /** Assumptions for the 30-year projection; absent until an admin enters them. */
   sapAssumptions?: SapAssumptions;
   /** Battery's usable capacity (kWh) for MCS self-consumption — after depth of discharge / reserved backup (MGD 003 §4.5). */
   batteryUsableKwh?: number;
@@ -172,6 +172,11 @@ export interface SolarQuoteDetail {
   /** Who's booked to install this job, if anyone (see quotes.installer_id/install_date). */
   installerId?: string;
   installerName?: string;
+  /** The electrician on the job, if any (see quotes.electrician_id) - adds photos to the install checklist. */
+  electricianId?: string;
+  electricianName?: string;
+  /** Whether the electrician has accepted the job - absent when there is no electrician. */
+  electricianAcceptanceStatus?: "pending" | "accepted" | "rejected";
   /** ISO date, e.g. "2026-09-12" — only meaningful alongside installerId. */
   installDate?: string;
   /** Whether the installer has confirmed the booking — absent when unassigned. */

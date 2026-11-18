@@ -20,6 +20,7 @@ export function JobResponseCard({
   productLabel,
   reference,
   awaitingSurvey = false,
+  electrician = false,
 }: {
   quoteId: string;
   /** Null for a solar job — it's assigned for survey, with no install date booked yet. */
@@ -29,6 +30,8 @@ export function JobResponseCard({
   reference: string | null;
   /** Solar only: the survey hasn't been submitted yet, so Accept/Decline isn't offered (the server enforces this too — see `respondToJob`). */
   awaitingSurvey?: boolean;
+  /** The electrician's own accept/decline for the job (no survey step). */
+  electrician?: boolean;
 }) {
   const [status, setStatus] = useState(acceptanceStatus);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +71,13 @@ export function JobResponseCard({
       )}
 
       {status === "pending" && !awaitingSurvey && (
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
+          {electrician && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+              You&rsquo;ve been assigned to this job. Accept it to get the install photo checklist.
+            </p>
+          )}
+          <div className="flex gap-2">
           <Button variant="success" disabled={isPending} onClick={() => handleRespond("accepted")} className="gap-1.5">
             <Check className="h-4 w-4" />
             Accept
@@ -77,6 +86,7 @@ export function JobResponseCard({
             <X className="h-4 w-4" />
             Reject
           </Button>
+          </div>
         </div>
       )}
     </Card>

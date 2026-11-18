@@ -56,7 +56,7 @@ export async function uploadPropertyPhotoAction(
 ): Promise<PropertyPhotoActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can upload a property photo." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can upload a property photo." };
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a photo to upload." };
@@ -106,7 +106,7 @@ export async function uploadPropertyPhotoAction(
 export async function removePropertyPhotoAction(quoteId: string): Promise<PropertyPhotoActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can remove the property photo." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can remove the property photo." };
 
   const supabase = await createClient();
   const blocked = await photoEditBlockedReason(supabase, quoteId, user.role);
@@ -152,7 +152,7 @@ export async function fetchStreetViewPhotoAction(
 ): Promise<PropertyPhotoActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can fetch a property photo." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can fetch a property photo." };
 
   const supabase = await createClient();
   const { data: quote } = await supabase.from("quotes").select("product_type").eq("id", quoteId).maybeSingle();

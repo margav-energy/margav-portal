@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
-import { requireInstallerUser } from "@/data/current-user";
+import { requireFieldUser } from "@/data/current-user";
 import { getInstallerJobDetail } from "@/data/installer-jobs-service";
 import { getSolarInstallChecklist } from "@/data/solar-install-checklist-service";
 import { InstallerChecklistCard } from "@/components/jobs/InstallerChecklistCard";
@@ -13,7 +13,7 @@ import { InstallerChecklistCard } from "@/components/jobs/InstallerChecklistCard
  * (the same rule the server actions enforce, see checklist-actions.ts).
  */
 export default async function JobChecklistPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await requireInstallerUser();
+  const user = await requireFieldUser();
   const { id } = await params;
 
   const job = await getInstallerJobDetail(user.id, id);
@@ -40,7 +40,7 @@ export default async function JobChecklistPage({ params }: { params: Promise<{ i
         </p>
       </div>
 
-      <InstallerChecklistCard quoteId={job.quoteId} initial={checklist} />
+      <InstallerChecklistCard quoteId={job.quoteId} initial={checklist} role={user.role as "installer" | "electrician"} />
     </div>
   );
 }

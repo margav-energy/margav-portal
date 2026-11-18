@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/data/current-user";
+import { isFieldRole } from "@/lib/roles";
 import { getAllProfiles } from "@/data/profiles-service";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { signChecklistPhotoUrl, type ChecklistPhoto } from "@/data/solar-install-checklist-service";
@@ -15,45 +16,52 @@ import {
   CHECKLIST_ITEMS,
   CHECKLIST_STAGES,
   countStageCompleted,
+  canEditChecklistItem,
+  type ChecklistEditorRole,
   type ChecklistStage,
 } from "@/lib/solar-install-checklist";
 
 /**
- * Server actions behind the installer's photo checklist
- * (src/components/jobs/InstallerChecklistCard.tsx). Every one first checks
- * the job is a solar quote assigned to the calling installer who has
- * accepted it, then works through the service-role client (the browser
+ * Server actions behind the install photo checklist
+ * (src/components/jobs/InstallerChecklistCard.tsx), used by the job's installer
+ * and its electrician (who can only touch electrical items - see
+ * `canEditChecklistItem`). Every one first checks the job is a solar quote
+ * assigned to the calling installer/electrician and accepted by the installer, then works through the service-role client (the browser
  * uploads straight to Storage with a one-shot signed URL — see
  * `createChecklistPhotoUploadUrl`).
  */
 
 type Result = { ok: true } | { ok: false; error: string };
 
+const NOT_YOUR_ITEM = "That item is filled in by the installer.";
+
 interface OwnedJob {
   userId: string;
   firstName: string;
   customerName: string;
+  role: ChecklistEditorRole;
 }
 
 async function requireAcceptedSolarJob(quoteId: string): Promise<{ job: OwnedJob } | { error: string }> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role !== "installer") return { error: "Only installers can fill in the checklist." };
+  if (!isFieldRole(user.role)) return { error: "Only installers and electricians can fill in the checklist." };
 
   const supabase = createServiceRoleClient();
   const { data: quote } = await supabase
     .from("quotes")
-    .select("customer_name, installer_id, product_type, install_acceptance_status")
+    .select("customer_name, installer_id, electrician_id, product_type, install_acceptance_status, electrician_acceptance_status")
     .eq("id", quoteId)
     .maybeSingle();
 
-  if (!quote || quote.installer_id !== user.id || quote.product_type !== "solar") {
+  const assignedId = user.role === "installer" ? quote?.installer_id : quote?.electrician_id;
+  if (!quote || assignedId !== user.id || quote.product_type !== "solar") {
     return { error: "This job isn't assigned to you." };
   }
-  if (quote.install_acceptance_status !== "accepted") {
-    return { error: "Accept the job before filling in the checklist." };
-  }
-  return { job: { userId: user.id, firstName: user.firstName, customerName: quote.customer_name } };
+  // Each role needs to have accepted the job themselves - the electrician's acceptance is separate from the installer's.
+  const accepted = user.role === "installer" ? quote.install_acceptance_status : quote.electrician_acceptance_status;
+  if (accepted !== "accepted") return { error: "Accept the job before filling in the checklist." };
+  return { job: { userId: user.id, firstName: user.firstName, customerName: quote.customer_name, role: user.role } };
 }
 
 async function getOrCreateChecklistId(quoteId: string): Promise<string | null> {
@@ -103,6 +111,7 @@ export async function createChecklistPhotoUploadUrl(
   const auth = await requireAcceptedSolarJob(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!getChecklistItem(itemKey)) return { ok: false, error: "Unknown checklist item." };
+  if (!canEditChecklistItem(auth.job.role, itemKey)) return { ok: false, error: NOT_YOUR_ITEM };
   if (!CHECKLIST_IMAGE_TYPES.includes(contentType.toLowerCase())) return { ok: false, error: "Only photos can be added here." };
   if (!/^[0-9a-f-]{36}$/i.test(fileId)) return { ok: false, error: "Invalid file id." };
 
@@ -132,6 +141,8 @@ export async function registerChecklistPhoto(
   const auth = await requireAcceptedSolarJob(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!getChecklistItem(itemKey)) return { ok: false, error: "Unknown checklist item." };
+  if (!canEditChecklistItem(auth.job.role, itemKey)) return { ok: false, error: NOT_YOUR_ITEM };
+  if (!CHECKLIST_IMAGE_TYPES.includes(contentType.toLowerCase())) return { ok: false, error: "Only photos can be added here." };
   if (Number.isFinite(sizeBytes) && sizeBytes > CHECKLIST_MAX_PHOTO_BYTES) return { ok: false, error: "That photo is too large." };
 
   const checklistId = await getOrCreateChecklistId(quoteId);
@@ -181,11 +192,16 @@ export async function removeChecklistPhoto(quoteId: string, photoId: string): Pr
   // Filtered by checklist id so a photo id from another job can't be removed through this one.
   const { data: photo } = await supabase
     .from("solar_install_checklist_photos")
-    .select("storage_path, item_key")
+    .select("storage_path, item_key, uploaded_by")
     .eq("id", photoId)
     .eq("checklist_id", checklistId)
     .maybeSingle();
   if (!photo) return { ok: false, error: "Photo not found." };
+  if (!canEditChecklistItem(auth.job.role, photo.item_key)) return { ok: false, error: NOT_YOUR_ITEM };
+  // An electrician can only take back their own photos; the installer can clear any.
+  if (auth.job.role === "electrician" && photo.uploaded_by !== auth.job.userId) {
+    return { ok: false, error: "You can only remove photos you added." };
+  }
 
   await supabase.storage.from(SOLAR_SURVEY_BUCKET).remove([photo.storage_path]);
   await supabase.from("solar_install_checklist_photos").delete().eq("id", photoId).eq("checklist_id", checklistId);
@@ -199,6 +215,7 @@ export async function setChecklistItemNotApplicable(quoteId: string, itemKey: st
   const auth = await requireAcceptedSolarJob(quoteId);
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!getChecklistItem(itemKey)) return { ok: false, error: "Unknown checklist item." };
+  if (!canEditChecklistItem(auth.job.role, itemKey)) return { ok: false, error: NOT_YOUR_ITEM };
 
   const checklistId = await getOrCreateChecklistId(quoteId);
   if (!checklistId) return { ok: false, error: "Could not save that. Please try again." };
@@ -255,7 +272,8 @@ export async function submitInstallChecklistStage(quoteId: string, stage: Checkl
   }
 
   const summary = `${done} of ${total} items complete, ${stagePhotoKeys.length} photo${stagePhotoKeys.length === 1 ? "" : "s"}`;
-  const description = `${job.firstName} submitted the ${stageInfo.title.toLowerCase()} photos (${summary})`;
+  const actor = job.role === "electrician" ? `${job.firstName} (electrician)` : job.firstName;
+  const description = `${actor} submitted the ${stageInfo.title.toLowerCase()} photos (${summary})`;
   const admins = (await getAllProfiles()).filter((profile) => profile.role === "admin");
   await Promise.all([
     supabase.from("quote_history").insert({ quote_id: quoteId, actor_id: job.userId, is_system: false, description }),
@@ -271,7 +289,7 @@ export async function submitInstallChecklistStage(quoteId: string, stage: Checkl
       notifyUser({
         userId: admin.id,
         title: `${stageInfo.title} photos submitted`,
-        body: `${job.firstName} submitted the ${stageInfo.title.toLowerCase()} photos for ${job.customerName}'s install — ${summary}. Open the quote to check them.`,
+        body: `${actor} submitted the ${stageInfo.title.toLowerCase()} photos for ${job.customerName}'s install — ${summary}. Open the quote to check them.`,
         link: `/quotes/${quoteId}`,
       }),
     ),

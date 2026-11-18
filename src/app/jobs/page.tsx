@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MapPin } from "lucide-react";
-import { requireInstallerUser } from "@/data/current-user";
+import { requireFieldUser } from "@/data/current-user";
 import { getInstallerJobs } from "@/data/installer-jobs-service";
 import { toISODate } from "@/lib/date-utils";
 import { formatDate } from "@/lib/format";
@@ -13,7 +13,7 @@ const GRID_COLS = "grid-cols-[2fr_1fr_1fr_1fr]";
 /** Upcoming Jobs list — same shape as the Quotes list (a table you click
  *  into for the detail), rather than the old inline cards-with-survey. */
 export default async function JobsPage() {
-  const user = await requireInstallerUser();
+  const user = await requireFieldUser();
 
   const jobs = await getInstallerJobs(user.id, toISODate(new Date()));
 

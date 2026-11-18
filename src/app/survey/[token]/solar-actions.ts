@@ -165,7 +165,9 @@ export async function registerSolarFile(
 ): Promise<{ ok: boolean; file?: { id: string; url: string; uploadedAt: string }; error?: string }> {
   const survey = await findSurveyByToken(token);
   if (!survey) return { ok: false, error: "This survey link is no longer valid." };
-  if (!getSolarFileItem(itemKey)) return { ok: false, error: "Unknown upload slot." };
+  const item = getSolarFileItem(itemKey);
+  if (!item) return { ok: false, error: "Unknown upload slot." };
+  if (!isContentTypeAllowed(item.kind, contentType)) return { ok: false, error: "That file type isn't accepted here." };
   // The path must be the one `createSolarUploadUrl` would have issued for this survey/item/file.
   if (!path.startsWith(`solar/${survey.id}/${itemKey}/${fileId}.`)) return { ok: false, error: "Invalid upload." };
 

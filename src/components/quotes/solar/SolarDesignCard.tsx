@@ -2,8 +2,9 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Image as ImageIcon, Trash2, UploadCloud } from "lucide-react";
+import { Download, Image as ImageIcon, Trash2, UploadCloud } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { fetchDesignImageFromEasyPv } from "@/components/quotes/easypv-actions";
 import { removePropertyPhotoAction, uploadPropertyPhotoAction } from "@/app/quotes/[id]/property-photo-actions";
 
 /**
@@ -19,11 +20,14 @@ export function SolarDesignCard({
   customerName,
   photoUrl,
   canEdit,
+  easyPvLinked = false,
 }: {
   quoteId: string;
   customerName: string;
   photoUrl: string | undefined;
   canEdit: boolean;
+  /** The quote is linked to an Easy PV project, so the design image can be fetched from it. */
+  easyPvLinked?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -43,6 +47,15 @@ export function SolarDesignCard({
       if (result.error) setError(result.error);
       else router.refresh();
       if (fileInputRef.current) fileInputRef.current.value = "";
+    });
+  }
+
+  function handleFetchFromEasyPv() {
+    setError(null);
+    startTransition(async () => {
+      const result = await fetchDesignImageFromEasyPv(quoteId);
+      if (!result.ok) setError(result.error);
+      else router.refresh();
     });
   }
 
@@ -76,6 +89,17 @@ export function SolarDesignCard({
               <UploadCloud className="h-3.5 w-3.5" />
               Replace
             </button>
+            {easyPvLinked && (
+              <button
+                type="button"
+                onClick={handleFetchFromEasyPv}
+                disabled={isPending}
+                className="flex items-center gap-1 text-xs font-medium text-white hover:underline disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {isPending ? "Fetching…" : "Fetch from Easy PV"}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRemove}
@@ -99,11 +123,24 @@ export function SolarDesignCard({
       <ImageIcon className="h-8 w-8" />
       <p className="text-xs font-medium text-slate-400">No solar design uploaded yet</p>
       {canEdit ? (
-        <label className="mt-1 flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
-          <UploadCloud className="h-3.5 w-3.5" />
-          {isPending ? "Uploading…" : "Upload solar design"}
-          <input type="file" accept="image/*" onChange={handleFileChosen} disabled={isPending} className="hidden" />
-        </label>
+        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+            <UploadCloud className="h-3.5 w-3.5" />
+            {isPending ? "Working…" : "Upload solar design"}
+            <input type="file" accept="image/*" onChange={handleFileChosen} disabled={isPending} className="hidden" />
+          </label>
+          {easyPvLinked && (
+            <button
+              type="button"
+              onClick={handleFetchFromEasyPv}
+              disabled={isPending}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Fetch from Easy PV
+            </button>
+          )}
+        </div>
       ) : (
         <p className="text-[11px] text-slate-400">An admin will add the design for this roof.</p>
       )}

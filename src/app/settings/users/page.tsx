@@ -17,8 +17,8 @@ export default async function TeamMembersSettingsPage() {
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Team Members</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Set who&rsquo;s an admin, a rep, or an installer. Installers get their own &ldquo;My Availability&rdquo;
-          page instead of the rep/admin nav. Admin only.
+          Set who&rsquo;s an admin, a rep, an installer, or an electrician. Installers get their own &ldquo;My Availability&rdquo;
+          page and electricians a jobs list instead of the rep/admin nav. Admin only.
         </p>
       </div>
 

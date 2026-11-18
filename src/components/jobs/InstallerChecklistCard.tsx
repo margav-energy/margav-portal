@@ -25,8 +25,10 @@ import { SOLAR_SURVEY_BUCKET } from "@/lib/solar-survey-bucket";
 import {
   CHECKLIST_ITEMS,
   CHECKLIST_STAGES,
+  canEditChecklistItem,
   countStageCompleted,
   getChecklistItem,
+  type ChecklistEditorRole,
   type ChecklistItem,
   type ChecklistStage,
 } from "@/lib/solar-install-checklist";
@@ -63,9 +65,12 @@ const BUTTON_CLASS =
 export function InstallerChecklistCard({
   quoteId,
   initial,
+  role = "installer",
 }: {
   quoteId: string;
   initial: SolarInstallChecklist;
+  /** Electricians can only edit the electrical items; the rest show read-only. */
+  role?: ChecklistEditorRole;
 }) {
   const router = useRouter();
   const [photos, setPhotos] = useState<ChecklistPhoto[]>(initial.photos);
@@ -230,8 +235,9 @@ export function InstallerChecklistCard({
             Install photo checklist
           </h3>
           <p className="mt-1 text-xs text-slate-500">
-            Take, upload or select one or more photos for each item — or mark it
-            N/A — then send each stage to the office as you finish it.
+            {role === "electrician"
+              ? "Add photos for the electrical items — or mark them N/A. The other items are filled in by the installer. Either of you can send a stage to the office."
+              : "Take, upload or select one or more photos for each item — or mark it N/A — then send each stage to the office as you finish it."}
           </p>
         </div>
         <Pill
@@ -334,6 +340,7 @@ export function InstallerChecklistCard({
                       (upload) => upload.itemKey === item.key,
                     )}
                     isNa={naItems.includes(item.key)}
+                    canEdit={canEditChecklistItem(role, item.key)}
                     error={itemErrors[item.key] ?? null}
                     onAddFiles={(files) => addFiles(item.key, files)}
                     onRemovePhoto={handleRemovePhoto}
@@ -438,6 +445,7 @@ function ChecklistRow({
   photos,
   pending,
   isNa,
+  canEdit,
   error,
   onAddFiles,
   onRemovePhoto,
@@ -449,6 +457,8 @@ function ChecklistRow({
   photos: ChecklistPhoto[];
   pending: PendingUpload[];
   isNa: boolean;
+  /** False for items the signed-in role can't edit (an electrician viewing an installer item). */
+  canEdit: boolean;
   error: string | null;
   onAddFiles: (files: File[]) => void;
   onRemovePhoto: (photo: ChecklistPhoto) => void;
@@ -490,7 +500,9 @@ function ChecklistRow({
         )}
       </div>
 
-      {!isNa && (
+      {!canEdit && !hasPhotos && !isNa && <p className="pl-6 text-xs text-slate-400">Filled in by the installer</p>}
+
+      {canEdit && !isNa && (
         <div className="flex flex-wrap items-center gap-2 pl-6">
           {/* Straight to the camera — touch devices only; on a desktop `capture` is ignored and it would just duplicate "Add photos". */}
           <label
@@ -547,14 +559,16 @@ function ChecklistRow({
                   className="h-full w-full object-cover"
                 />
               </a>
-              <button
-                type="button"
-                onClick={() => onRemovePhoto(photo)}
-                aria-label={`Remove ${photo.fileName || "photo"}`}
-                className="absolute top-0.5 right-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onRemovePhoto(photo)}
+                  aria-label={`Remove ${photo.fileName || "photo"}`}
+                  className="absolute top-0.5 right-0.5 rounded-full bg-black/60 p-0.5 text-white hover:bg-black"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
           ))}
           {pending.map((upload) => (
@@ -593,7 +607,7 @@ function ChecklistRow({
 
       {error && <p className="pl-6 text-xs text-red-600">{error}</p>}
 
-      {!hasPhotos && pending.length === 0 && (
+      {canEdit && !hasPhotos && pending.length === 0 && (
         <div className="pl-6">
           <button
             type="button"

@@ -9,6 +9,7 @@ import { clearDraft, useAutosaveDraft, useDraftRestore } from "@/hooks/useAutosa
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "rep", label: "Rep" },
   { value: "installer", label: "Installer" },
+  { value: "electrician", label: "Electrician" },
   { value: "admin", label: "Admin" },
 ];
 

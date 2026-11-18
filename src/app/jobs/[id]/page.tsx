@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, MapPin } from "lucide-react";
-import { requireInstallerUser } from "@/data/current-user";
+import { requireFieldUser } from "@/data/current-user";
 import { getInstallerJobDetail } from "@/data/installer-jobs-service";
 import { getBoilerSurveyForQuote, getSurveyDocumentUrl } from "@/data/boiler-survey-service";
 import { getSolarSurveyForQuote } from "@/data/solar-survey-service";
@@ -21,13 +21,14 @@ import { InstallerNotesPanel } from "@/components/jobs/InstallerNotesPanel";
 export default async function JobDetailPage({
   params,
 }: PageProps<"/jobs/[id]">) {
-  const user = await requireInstallerUser();
+  const user = await requireFieldUser();
   const { id } = await params;
 
   const job = await getInstallerJobDetail(user.id, id);
   if (!job) notFound();
 
   const isBoiler = job.productType === "boiler";
+  const isElectrician = user.role === "electrician";
   // The photo checklist is for the install itself, so a solar job only gets it once the installer has accepted.
   const showChecklist = !isBoiler && job.acceptanceStatus === "accepted";
   const [survey, surveyDocumentUrl, solarSurvey, checklist, propertyPhotoUrl] = await Promise.all([
@@ -73,19 +74,21 @@ export default async function JobDetailPage({
 
         {/* Sidebar — respond to the job, then the survey. */}
         <div className="flex flex-col gap-4">
+          {/* Both roles answer for themselves; only the installer's answer waits on the survey, which is also theirs alone. */}
           <JobResponseCard
             quoteId={job.quoteId}
             installDate={job.installDate}
             acceptanceStatus={job.acceptanceStatus}
             productLabel={PRODUCT_TYPE_LABELS[job.productType]}
             reference={job.reference}
-            awaitingSurvey={!isBoiler && solarSurvey?.status !== "submitted"}
+            awaitingSurvey={!isElectrician && !isBoiler && solarSurvey?.status !== "submitted"}
+            electrician={isElectrician}
           />
           {isBoiler ? (
             <BoilerSurveyCard survey={survey} documentUrl={surveyDocumentUrl} />
           ) : (
             <>
-              <InstallerSolarSurveyCard quoteId={job.quoteId} survey={solarSurvey} />
+              {!isElectrician && <InstallerSolarSurveyCard quoteId={job.quoteId} survey={solarSurvey} />}
               {checklist && <InstallerChecklistGalleryCard quoteId={job.quoteId} checklist={checklist} />}
             </>
           )}

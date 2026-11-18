@@ -13,6 +13,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: "admin", label: "Admin" },
   { value: "rep", label: "Rep" },
   { value: "installer", label: "Installer" },
+  { value: "electrician", label: "Electrician" },
 ];
 
 export function UserRoleManager({

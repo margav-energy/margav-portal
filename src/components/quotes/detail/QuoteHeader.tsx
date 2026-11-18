@@ -20,12 +20,14 @@ import {
   toggleQuoteFavourite,
   assignQuoteRepresentative,
   assignQuoteInstaller,
+  assignQuoteElectrician,
 } from "@/components/quotes/actions";
 import type { RepProfile } from "@/data/profiles-service";
 import type { QuotePipelineStatus } from "@/types/quote";
 import type { InstallAcceptanceStatus } from "@/types/installer-availability";
 
 const UNASSIGN_INSTALLER_OPTION = "No installer";
+const UNASSIGN_ELECTRICIAN_OPTION = "No electrician";
 
 function initialsFor(name: string): string {
   return name
@@ -223,6 +225,10 @@ export function QuoteHeader({
   installAcceptanceStatus,
   installers,
   onChangeInstaller,
+  electricianName,
+  electricianAcceptanceStatus,
+  electricians,
+  onChangeElectrician,
 }: {
   quoteId: string;
   customerName: string;
@@ -259,6 +265,11 @@ export function QuoteHeader({
   installers?: RepProfile[];
   /** Called optimistically with the new installer (or `null` when unassigned). */
   onChangeInstaller?: (installer: { id: string; name: string } | null) => void;
+  /** Solar only: the electrician on the job (adds photos to the install checklist), and the electricians an admin can pick from. */
+  electricianName?: string;
+  electricianAcceptanceStatus?: InstallAcceptanceStatus;
+  electricians?: RepProfile[];
+  onChangeElectrician?: (electrician: { id: string; name: string } | null) => void;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -303,6 +314,23 @@ export function QuoteHeader({
     onChangeInstaller({ id: installer.id, name: installer.fullName });
     startTransition(() => {
       void assignQuoteInstaller(quoteId, installer.id, customerName);
+    });
+  }
+
+  function handleChangeElectrician(option: string) {
+    if (!onChangeElectrician) return;
+    if (option === UNASSIGN_ELECTRICIAN_OPTION) {
+      onChangeElectrician(null);
+      startTransition(() => {
+        void assignQuoteElectrician(quoteId, null, customerName);
+      });
+      return;
+    }
+    const electrician = electricians?.find((candidate) => candidate.fullName === option);
+    if (!electrician) return;
+    onChangeElectrician({ id: electrician.id, name: electrician.fullName });
+    startTransition(() => {
+      void assignQuoteElectrician(quoteId, electrician.id, customerName);
     });
   }
 
@@ -410,6 +438,41 @@ export function QuoteHeader({
                   className={cn("ml-0.5", INSTALL_ACCEPTANCE_STATUS_STYLES[installAcceptanceStatus].className)}
                 />
               )}
+            </div>
+          )}
+          {electricians && isAdmin ? (
+            <DropdownButton
+              label={electricianName ?? "Assign electrician"}
+              icon={
+                electricianName ? (
+                  <InitialsAvatar
+                    name={electricianName}
+                    initials={getInitials(electricianName) || electricianName[0]?.toUpperCase() || "?"}
+                    className="h-5 w-5 text-[10px]"
+                  />
+                ) : (
+                  <Wrench className="h-3.5 w-3.5 text-slate-400" />
+                )
+              }
+              statusDot={
+                electricianName && electricianAcceptanceStatus
+                  ? {
+                      title: `Electrician: ${INSTALL_ACCEPTANCE_STATUS_STYLES[electricianAcceptanceStatus].label}`,
+                      className: INSTALL_ACCEPTANCE_STATUS_STYLES[electricianAcceptanceStatus].className
+                        .split(" ")
+                        .filter((cls) => cls.startsWith("text-"))
+                        .join(" "),
+                    }
+                  : undefined
+              }
+              options={[...electricians.map((electrician) => electrician.fullName), ...(electricianName ? [UNASSIGN_ELECTRICIAN_OPTION] : [])]}
+              optionDescriptions={{ [UNASSIGN_ELECTRICIAN_OPTION]: "Remove the electrician from this quote" }}
+              onSelect={handleChangeElectrician}
+            />
+          ) : electricianName && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700">
+              <Wrench className="h-3.5 w-3.5 text-slate-400" />
+              {electricianName}
             </div>
           )}
           {isAdmin ? (

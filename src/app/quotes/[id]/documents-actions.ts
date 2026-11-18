@@ -50,7 +50,7 @@ export async function uploadQuoteDocumentAction(
 ): Promise<QuoteDocumentActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can upload documents." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can upload documents." };
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file to upload." };
@@ -105,7 +105,7 @@ export async function deleteQuoteDocumentAction(
 ): Promise<QuoteDocumentActionResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can remove documents." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can remove documents." };
 
   const supabase = await createClient();
   const { data: existing, error: fetchError } = await supabase

@@ -65,6 +65,31 @@ export const CHECKLIST_ITEMS: ChecklistItem[] = [
   { key: "post-warning-stickers", stage: "post", label: "All electrical warning stickers" },
 ];
 
+/** Checklist keys an electrician may add photos to / mark N/A. Installers can edit every item. */
+const ELECTRICIAN_ITEM_KEYS = new Set([
+  "pre-consumer-unit",
+  "pre-existing-damage",
+  "mid-cu-cover-off",
+  "mid-acdc-cover-off",
+  "post-earthing",
+  "post-inverter-serial",
+  "post-battery-serial",
+  "post-meter-serial",
+  "post-wifi-serial",
+  "post-cu-cover-on",
+  "post-isolators-cover-on",
+  "post-all-electrical",
+  "post-signage",
+  "post-warning-stickers",
+]);
+
+export type ChecklistEditorRole = "installer" | "electrician";
+
+/** Whether `role` may add/remove photos or toggle N/A on the item. Shared by the form (read-only items) and the server actions (the real gate). */
+export function canEditChecklistItem(role: ChecklistEditorRole, itemKey: string): boolean {
+  return role === "installer" || ELECTRICIAN_ITEM_KEYS.has(itemKey);
+}
+
 export function getChecklistItem(key: string): ChecklistItem | undefined {
   return CHECKLIST_ITEMS.find((item) => item.key === key);
 }

@@ -17,8 +17,9 @@ export function parseOrientationDegrees(text: string): number | undefined {
   if (!value) return undefined;
 
   // The direction word may come before or after the number ("45° North", "North 45°").
-  const withDegrees = /(\d+(?:\.\d+)?)/.exec(value);
-  if (withDegrees && /°|south|north|east|west|deg/.test(value)) {
+  // Only a number written as a degree value counts ("45°", "45 deg", "45 degrees"), or the whole text being a bare number — so "Roof 2 South" isn't read as 2°.
+  const withDegrees = /(\d+(?:\.\d+)?)\s*(?:°|º|deg)/.exec(value) ?? /^(\d+(?:\.\d+)?)\s*(?:south|north|east|west)?$/.exec(value);
+  if (withDegrees) {
     const degrees = Number(withDegrees[1]);
     if (Number.isFinite(degrees) && degrees <= 360) {
       const fromSouth = /\bnorth\b/.test(value) ? 180 - degrees : degrees;
@@ -27,8 +28,8 @@ export function parseOrientationDegrees(text: string): number | undefined {
   }
 
   const compass: [RegExp, number][] = [
-    [/north[\s-]*(east|west)|(north|n)[\s-]*(e|w)\b|\bn[ew]\b/, 135],
-    [/south[\s-]*(east|west)|(south|s)[\s-]*(e|w)\b|\bs[ew]\b/, 45],
+    [/\bnorth[\s-]*(east|west)|\bn[\s-]*(e|w)\b/, 135],
+    [/\bsouth[\s-]*(east|west)|\bs[\s-]*(e|w)\b/, 45],
     [/\b(east|west|e|w)\b/, 90],
     [/\bnorth|\bn\b/, 180],
     [/\bsouth|\bs\b/, 0],

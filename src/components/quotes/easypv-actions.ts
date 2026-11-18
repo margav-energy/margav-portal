@@ -40,7 +40,7 @@ interface QuoteRow {
 async function authorise(quoteId: string): Promise<{ quote: QuoteRow; userId: string } | { error: string }> {
   if (!isEasyPvConfigured()) return { error: "Easy PV isn't set up on this server yet." };
   const user = await getCurrentUser();
-  if (!user || user.role === "installer") return { error: "Not allowed." };
+  if (!user || (user.role === "installer" || user.role === "electrician")) return { error: "Not allowed." };
 
   const supabase = await createClient();
   const { data } = await supabase
@@ -213,6 +213,28 @@ export async function unlinkEasyPvProject(quoteId: string): Promise<ActionResult
   if (!(await clearEasyPvFiles(quoteId))) console.error("unlinkEasyPvProject: stored files not cleared", quoteId);
   revalidatePath(`/quotes/${quoteId}`);
   await record(quoteId, auth.userId, auth.quote.customer_name, "Easy PV project unlinked");
+  return { ok: true };
+}
+
+/**
+ * "Fetch from Easy PV" on the Solar design card: re-syncs the linked project's design views and makes the newest
+ * one the quote's solar design image, replacing whatever is there (an explicit request, unlike the automatic apply).
+ */
+export async function fetchDesignImageFromEasyPv(quoteId: string): Promise<ActionResult> {
+  const auth = await authorise(quoteId);
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const projectId = auth.quote.easypv_project_id ? Number(auth.quote.easypv_project_id) : 0;
+  if (!projectId) return { ok: false, error: "Link this quote to an Easy PV project first." };
+  try {
+    await syncEasyPvFiles(quoteId, projectId);
+    if (!(await applyNewestDesignPhoto(quoteId, true))) {
+      return { ok: false, error: "No design image yet." };
+    }
+  } catch (error) {
+    return { ok: false, error: message(error) };
+  }
+  await record(quoteId, auth.userId, auth.quote.customer_name, "Solar design image fetched from Easy PV");
+  revalidatePath(`/quotes/${quoteId}`);
   return { ok: true };
 }
 

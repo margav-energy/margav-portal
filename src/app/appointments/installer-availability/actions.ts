@@ -24,7 +24,7 @@ export async function getAssignableInstallersForDateAction(
   date: string,
 ): Promise<{ id: string; fullName: string }[]> {
   const user = await getCurrentUser();
-  if (!user || user.role === "installer") return [];
+  if (!user || user.role === "installer" || user.role === "electrician") return [];
 
   const supabase = await createClient();
   const [{ data: availableRows, error: availableError }, { data: bookedRows, error: bookedError }] =
@@ -68,7 +68,7 @@ export async function assignInstallerToJobAction(
 ): Promise<AssignInstallerResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can assign installers to jobs." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can assign installers to jobs." };
 
   const installer = await getProfileById(installerId);
   if (!installer) return { error: "Installer not found." };
@@ -186,7 +186,7 @@ export async function assignInstallerToJobAction(
 export async function unassignInstallerFromJobAction(quoteId: string): Promise<AssignInstallerResult> {
   const user = await getCurrentUser();
   if (!user) return { error: "You must be signed in to do that." };
-  if (user.role === "installer") return { error: "Only admins and reps can unassign installers from jobs." };
+  if (user.role === "installer" || user.role === "electrician") return { error: "Only admins and reps can unassign installers from jobs." };
 
   const supabase = await createClient();
   const { data: existing, error: fetchError } = await supabase

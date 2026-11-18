@@ -19,7 +19,7 @@ export async function deleteSolarSurveyFile(
   fileId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const user = await getCurrentUser();
-  if (!user || user.role === "installer") return { ok: false, error: "You don't have permission to do that." };
+  if (!user || (user.role === "installer" || user.role === "electrician")) return { ok: false, error: "You don't have permission to do that." };
 
   const supabase = await createClient();
 

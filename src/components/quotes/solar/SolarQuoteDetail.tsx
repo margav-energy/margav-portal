@@ -88,6 +88,8 @@ export function SolarQuoteDetail({
   const [favorite, setFavorite] = useState(detail.isFavourite);
   const [assignedRep, setAssignedRep] = useState(detail.assignedRep);
   const [installerName, setInstallerName] = useState(detail.installerName);
+  const [electricianName, setElectricianName] = useState(detail.electricianName);
+  const [electricianAcceptance, setElectricianAcceptance] = useState(detail.electricianAcceptanceStatus);
   const [acceptanceStatus, setAcceptanceStatus] = useState(detail.installAcceptanceStatus);
   const [customer, setCustomer] = useState<CustomerDetails>(detail.customer);
   const [property, setProperty] = useState(detail.property);
@@ -228,6 +230,13 @@ export function SolarQuoteDetail({
         installerName={installerName}
         installAcceptanceStatus={acceptanceStatus}
         installers={reps.filter((profile) => profile.role === "installer")}
+        electricianName={electricianName}
+        electricianAcceptanceStatus={electricianAcceptance}
+        electricians={reps.filter((profile) => profile.role === "electrician")}
+        onChangeElectrician={(electrician) => {
+          setElectricianName(electrician?.name);
+          setElectricianAcceptance(electrician ? "pending" : undefined);
+        }}
         onChangeInstaller={(installer) => {
           setInstallerName(installer?.name);
           setAcceptanceStatus(installer ? "pending" : undefined);
@@ -242,6 +251,7 @@ export function SolarQuoteDetail({
               customerName={customer.name}
               photoUrl={propertyPhotoUrl}
               canEdit={isAdmin}
+              easyPvLinked={Boolean(easyPvLink.projectId) && easyPvLink.configured}
             />
             <CustomerCard
               quoteId={detail.quoteId}

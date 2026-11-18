@@ -86,7 +86,7 @@ export function lookupSelfConsumption(input: SelfConsumptionInput): SelfConsumpt
 /** Maps the free-text "Occupancy Archetype" on the quote to an MCS archetype; unknown → "Home half day" (MGD 003 Table 1). */
 export function parseOccupancyArchetype(text: string): { archetype: OccupancyArchetype; known: boolean } {
   const value = text.toLowerCase();
-  if (/out/.test(value)) return { archetype: "out_all_day", known: true };
+  if (/\bout\b/.test(value)) return { archetype: "out_all_day", known: true };
   if (/half/.test(value)) return { archetype: "in_half_day", known: true };
   if (/home|all day|in all|most of the day/.test(value)) return { archetype: "home_all_day", known: true };
   return { archetype: "in_half_day", known: false };
